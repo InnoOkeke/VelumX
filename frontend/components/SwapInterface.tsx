@@ -175,58 +175,30 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      const { openContractCall } = await import('@stacks/connect');
-      const { STACKS_TESTNET } = await import('@stacks/network');
-      const { uintCV, principalCV, PostConditionMode } = await import('@stacks/transactions');
+      // Use Velar SDK to execute swap
+      const { VelarSDK } = await import('@velarprotocol/velar-sdk');
+      const sdk = new VelarSDK();
       
-      const inputAmountInMicroUnits = parseUnits(state.inputAmount, state.inputToken.decimals);
-      const minOutputAmount = BigInt(state.quote.outputAmount);
-
-      const dexContractAddress = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1';
-      const dexContractName = 'velar-swap-v1';
-
-      // Use principalCV which works for both mainnet and testnet addresses
-      const functionArgs = [
-        uintCV(Number(inputAmountInMicroUnits)),
-        uintCV(Number(minOutputAmount)),
-        principalCV(stacksAddress), // This works for both ST and SP addresses
-      ];
-
-      await new Promise<string>((resolve, reject) => {
-        openContractCall({
-          contractAddress: dexContractAddress,
-          contractName: dexContractName,
-          functionName: 'swap',
-          functionArgs,
-          network: STACKS_TESTNET,
-          postConditionMode: PostConditionMode.Allow,
-          sponsored: state.gaslessMode,
-          appDetails: {
-            name: 'VelumX Swap',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          onFinish: (data: any) => {
-            const txId = data.txId;
-            setState(prev => ({
-              ...prev,
-              isProcessing: false,
-              success: `Swap initiated! Transaction ID: ${txId}`,
-              inputAmount: '',
-              outputAmount: '',
-              quote: null,
-            }));
-            resolve(txId);
-          },
-          onCancel: () => {
-            setState(prev => ({
-              ...prev,
-              isProcessing: false,
-              error: 'Transaction cancelled',
-            }));
-            reject(new Error('User cancelled transaction'));
-          },
-        });
+      const swapInstance = await sdk.getSwapInstance({
+        account: stacksAddress,
+        inToken: state.inputToken.symbol,
+        outToken: state.outputToken.symbol,
       });
+
+      // Execute the swap with the SDK
+      const result = await swapInstance.swap({
+        amount: parseFloat(state.inputAmount),
+        slippage: state.slippage,
+      });
+
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        success: `Swap initiated! Transaction ID: ${result.txId || 'pending'}`,
+        inputAmount: '',
+        outputAmount: '',
+        quote: null,
+      }));
     } catch (error) {
       console.error('Swap error:', error);
       setState(prev => ({
