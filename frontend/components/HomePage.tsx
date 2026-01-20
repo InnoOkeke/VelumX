@@ -1,6 +1,6 @@
 /**
  * HomePage Component
- * Main landing page with wallet integration
+ * Professional DeFi Interface
  */
 
 'use client';
@@ -11,196 +11,241 @@ import { BridgeInterface } from './BridgeInterface';
 import { SwapInterface } from './SwapInterface';
 import { TransactionHistory } from './TransactionHistory';
 import { NotificationContainer } from './NotificationContainer';
-import { useWallet } from '../lib/hooks/useWallet';
-import {
-  ArrowLeftRight,
-  Zap,
-  History,
-  Repeat,
-  Shield,
-  Github,
-  Twitter,
-  MessageCircle,
-} from 'lucide-react';
+import { ArrowLeftRight, Zap, History, Repeat, Shield, Moon, Sun } from 'lucide-react';
 
 export default function HomePage() {
-  const { ethereumConnected, stacksConnected } = useWallet();
   const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'history'>('bridge');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Initialize dark mode from localStorage
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedMode = localStorage.getItem('darkMode') === 'true';
+      setIsDarkMode(savedMode);
+      if (savedMode) {
+        document.documentElement.classList.add('dark');
+      }
+    }
+  });
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('darkMode', String(newMode));
+    if (newMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30">
-      {/* Notification Container */}
+    <div className="min-h-screen mesh-gradient transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <NotificationContainer />
       
       {/* Header */}
-      <nav className="sticky top-0 z-50 glass-effect backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-50 w-full backdrop-blur-2xl transition-all duration-300" style={{ borderBottom: `1px solid var(--border-color)`, backgroundColor: 'rgba(var(--bg-surface-rgb), 0.7)' }}>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/velumx-icon.svg" alt="VelumX" className="w-10 h-10" />
-              <div>
-                <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  VelumX
-                </span>
-                <span className="ml-2 text-xs bg-yellow-400/20 text-yellow-400 px-2 py-0.5 rounded-full font-semibold">
-                  TESTNET
-                </span>
+              <div className="relative glow-ring rounded-lg p-1">
+                <img src="/velumx-icon.svg" alt="VelumX" className="h-7 w-7" />
               </div>
+              <span className="text-xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+                VelumX
+              </span>
+              <span className="ml-2 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-sm">
+                TESTNET
+              </span>
             </div>
-            <WalletButton />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleDarkMode}
+                className="p-2.5 rounded-xl transition-all duration-300 group hover:scale-110" 
+                style={{ backgroundColor: 'var(--bg-surface)', border: `1px solid var(--border-color)` }}
+                aria-label="Toggle dark mode"
+              >
+                {isDarkMode ? (
+                  <Sun className="h-5 w-5 text-yellow-500 group-hover:rotate-180 transition-transform duration-500" />
+                ) : (
+                  <Moon className="h-5 w-5 text-purple-600 group-hover:-rotate-12 transition-transform duration-300" />
+                )}
+              </button>
+              <WalletButton />
+            </div>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        {/* Hero */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Gas-Free DeFi on Bitcoin L2
+      {/* Main Content */}
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Hero Section */}
+        <div className="text-center mb-12 relative">
+          <div className="absolute inset-0 flex items-center justify-center opacity-20 dark:opacity-10">
+            <div className="w-96 h-96 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full blur-3xl"></div>
+          </div>
+          <h1 className="relative text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+            <span className="bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 bg-clip-text text-transparent animate-gradient">
+              Gas-Free DeFi
+            </span>
+            <br />
+            <span style={{ color: 'var(--text-primary)' }}>on Bitcoin L2</span>
           </h1>
-          <p className="text-lg text-white/60 max-w-2xl mx-auto">
-            Bridge and swap assets on Stacks without paying gas fees in STX. Pay with USDCx instead.
+          <p className="relative text-xl md:text-2xl max-w-2xl mx-auto font-light" style={{ color: 'var(--text-secondary)' }}>
+            Bridge and swap assets on Stacks without paying gas fees in STX
           </p>
         </div>
 
-        {/* Main Interface */}
-        <div className="mb-12">
-          {/* Tabs */}
-          <div className="flex justify-center mb-8">
-            <div className="inline-flex glass-effect rounded-2xl p-1.5 border border-white/10">
-              <button
-                onClick={() => setActiveTab('bridge')}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all ${
-                  activeTab === 'bridge'
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <ArrowLeftRight className="w-4 h-4" />
-                Bridge
-              </button>
-              <button
-                onClick={() => setActiveTab('swap')}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all ${
-                  activeTab === 'swap'
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Repeat className="w-4 h-4" />
-                Swap
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all ${
-                  activeTab === 'history'
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <History className="w-4 h-4" />
-                History
-              </button>
-            </div>
+        {/* Tab Navigation */}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex rounded-2xl border border-gray-200/50 dark:border-gray-800/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-1.5 shadow-xl shadow-purple-500/10 dark:shadow-purple-500/5 transition-all duration-300">
+            <button
+              onClick={() => setActiveTab('bridge')}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
+                activeTab === 'bridge'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              Bridge
+            </button>
+            <button
+              onClick={() => setActiveTab('swap')}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
+                activeTab === 'swap'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Repeat className="h-4 w-4" />
+              Swap
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
+                activeTab === 'history'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <History className="h-4 w-4" />
+              History
+            </button>
           </div>
-
-          {/* Content */}
-          {activeTab === 'bridge' ? (
-            <BridgeInterface />
-          ) : activeTab === 'swap' ? (
-            <SwapInterface />
-          ) : (
-            <TransactionHistory />
-          )}
         </div>
 
-        {/* Features */}
-        <div className="grid md:grid-cols-3 gap-4 mb-12">
-          <div className="glass-effect rounded-xl p-5 text-center border border-white/10 hover:border-purple-500/30 transition-all">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <ArrowLeftRight className="w-5 h-5 text-white" />
+        {/* Tab Content */}
+        <div className="mb-16">
+          {activeTab === 'bridge' && <BridgeInterface />}
+          {activeTab === 'swap' && <SwapInterface />}
+          {activeTab === 'history' && <TransactionHistory />}
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid md:grid-cols-3 gap-6 mb-16">
+          <div className="group rounded-2xl vellum-shadow transition-all duration-300 hover:-translate-y-1 p-8" style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid var(--border-color)`
+          }}>
+            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 mb-5 shadow-lg shadow-purple-500/50 group-hover:scale-110 transition-transform duration-300">
+              <ArrowLeftRight className="h-7 w-7 text-white" />
             </div>
-            <h3 className="font-semibold mb-1 text-sm">Cross-Chain Bridge</h3>
-            <p className="text-xs text-white/60">Transfer USDC between Ethereum & Stacks via Circle xReserve</p>
+            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Cross-Chain Bridge</h3>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              Transfer USDC between Ethereum & Stacks via Circle xReserve
+            </p>
           </div>
 
-          <div className="glass-effect rounded-xl p-5 text-center border border-white/10 hover:border-blue-500/30 transition-all">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Zap className="w-5 h-5 text-yellow-400" />
+          <div className="group rounded-2xl vellum-shadow transition-all duration-300 hover:-translate-y-1 p-8" style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid var(--border-color)`
+          }}>
+            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 mb-5 shadow-lg shadow-blue-500/50 group-hover:scale-110 transition-transform duration-300">
+              <Zap className="h-7 w-7 text-white" />
             </div>
-            <h3 className="font-semibold mb-1 text-sm">Zero Gas Fees</h3>
-            <p className="text-xs text-white/60">Pay transaction fees with USDCx instead of STX</p>
+            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Zero Gas Fees</h3>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              Pay transaction fees with USDCx instead of STX
+            </p>
           </div>
 
-          <div className="glass-effect rounded-xl p-5 text-center border border-white/10 hover:border-green-500/30 transition-all">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Repeat className="w-5 h-5 text-white" />
+          <div className="group rounded-2xl vellum-shadow transition-all duration-300 hover:-translate-y-1 p-8" style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid var(--border-color)`
+          }}>
+            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 mb-5 shadow-lg shadow-green-500/50 group-hover:scale-110 transition-transform duration-300">
+              <Repeat className="h-7 w-7 text-white" />
             </div>
-            <h3 className="font-semibold mb-1 text-sm">Token Swaps</h3>
-            <p className="text-xs text-white/60">Swap tokens on ALEX DEX with gasless transactions</p>
+            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Token Swaps</h3>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              Swap tokens on ALEX DEX with gasless transactions
+            </p>
           </div>
         </div>
 
         {/* Trust Indicators */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="glass-effect rounded-xl p-4 text-center border border-white/10">
-            <Shield className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-            <h4 className="font-semibold text-sm mb-1">Secure</h4>
-            <p className="text-xs text-white/60">Audited smart contracts</p>
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="text-center group">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 group-hover:scale-110 transition-transform duration-300" style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: `1px solid var(--border-color)`
+            }}>
+              <Shield className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+            </div>
+            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Secure</h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Audited smart contracts</p>
           </div>
-          <div className="glass-effect rounded-xl p-4 text-center border border-white/10">
-            <Zap className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
-            <h4 className="font-semibold text-sm mb-1">Fast</h4>
-            <p className="text-xs text-white/60">Instant transactions</p>
+          <div className="text-center group">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 group-hover:scale-110 transition-transform duration-300" style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: `1px solid var(--border-color)`
+            }}>
+              <Zap className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Fast</h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Instant transactions</p>
           </div>
-          <div className="glass-effect rounded-xl p-4 text-center border border-white/10">
-            <ArrowLeftRight className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-            <h4 className="font-semibold text-sm mb-1">Seamless</h4>
-            <p className="text-xs text-white/60">No native tokens needed</p>
+          <div className="text-center group">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 group-hover:scale-110 transition-transform duration-300" style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: `1px solid var(--border-color)`
+            }}>
+              <ArrowLeftRight className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Seamless</h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No native tokens needed</p>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/10 mt-16 glass-effect">
-        <div className="max-w-5xl mx-auto px-6 py-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
-            {/* Brand */}
+      <footer className="mt-16 backdrop-blur-xl transition-all duration-300" style={{
+        borderTop: `1px solid var(--border-color)`,
+        backgroundColor: 'var(--bg-surface)'
+      }}>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img src="/velumx-icon.svg" alt="VelumX" className="w-8 h-8" />
-              <div>
-                <span className="text-sm font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  VelumX
-                </span>
-                <p className="text-xs text-white/40">Powered by Circle xReserve & Stacks</p>
-              </div>
+              <img src="/velumx-icon.svg" alt="VelumX" className="h-6 w-6" />
+              <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>VelumX</span>
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Powered by Circle xReserve & Stacks
+              </span>
             </div>
 
-            {/* Links */}
-            <div className="flex items-center gap-6 text-sm text-white/60">
-              <a href="#" className="hover:text-purple-400 transition-colors">Docs</a>
-              <a href="#" className="hover:text-purple-400 transition-colors">GitHub</a>
-              <a href="#" className="hover:text-blue-400 transition-colors">Twitter</a>
-              <a href="#" className="hover:text-blue-400 transition-colors">Discord</a>
-            </div>
-
-            {/* Social Icons */}
-            <div className="flex items-center gap-4">
-              <a href="#" className="text-white/40 hover:text-purple-400 transition-colors">
-                <Github className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-white/40 hover:text-blue-400 transition-colors">
-                <Twitter className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-white/40 hover:text-blue-400 transition-colors">
-                <MessageCircle className="w-5 h-5" />
-              </a>
+            <div className="flex items-center gap-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium">Docs</a>
+              <a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium">GitHub</a>
+              <a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium">Twitter</a>
+              <a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium">Discord</a>
             </div>
           </div>
 
-          <div className="text-center pt-6 border-t border-white/10">
-            <p className="text-xs text-white/40">
-              © 2024 VelumX • <span className="text-yellow-400">Testnet Only - Not for Production</span>
+          <div className="text-center pt-6 mt-6" style={{ borderTop: `1px solid var(--border-color)` }}>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              © 2024 VelumX • <span className="text-orange-600 dark:text-orange-400 font-semibold">Testnet Only - Not for Production</span>
             </p>
           </div>
         </div>

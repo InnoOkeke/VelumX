@@ -192,205 +192,224 @@ export function SwapInterface() {
   };
 
   return (
-    <div className="glass-effect border border-white/10 rounded-3xl p-6 md:p-8 max-w-lg mx-auto shadow-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-          Swap Tokens
-        </h2>
-        <button className="p-2 hover:bg-white/10 rounded-lg transition-colors group">
-          <Settings className="w-5 h-5 text-white/60 group-hover:text-white group-hover:rotate-90 transition-all" />
-        </button>
-      </div>
-
-      {/* Input Token */}
-      <div className="bg-gradient-to-br from-purple-900/20 to-black/40 rounded-2xl p-5 mb-3 border border-purple-500/20 hover:border-purple-500/40 transition-all">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold text-white/50 uppercase tracking-wide">From</span>
-          <span className="text-xs text-white/50">
-            Balance: <span className="text-white/70 font-mono">{parseFloat(getBalance(state.inputToken)).toFixed(4)}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            value={state.inputAmount}
-            onChange={(e) => setState(prev => ({ ...prev, inputAmount: e.target.value, error: null }))}
-            placeholder="0.00"
-            className="flex-1 bg-transparent text-3xl md:text-4xl font-mono outline-none text-white placeholder:text-white/20"
-            disabled={state.isProcessing}
-          />
-          <select
-            value={state.inputToken?.symbol || ''}
-            onChange={(e) => {
-              const token = tokens.find(t => t.symbol === e.target.value);
-              setState(prev => ({ ...prev, inputToken: token || null }));
-            }}
-            className="bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2.5 rounded-xl font-bold outline-none cursor-pointer shadow-lg hover:from-purple-500 hover:to-blue-500 transition-all"
-            disabled={state.isProcessing}
-          >
-            {tokens.map(token => (
-              <option key={token.symbol} value={token.symbol} className="bg-gray-900">
-                {token.symbol}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          onClick={() => setState(prev => ({ ...prev, inputAmount: getBalance(state.inputToken) }))}
-          className="text-xs text-purple-400 hover:text-purple-300 mt-2 font-semibold transition-colors"
-          disabled={state.isProcessing}
-        >
-          MAX
-        </button>
-      </div>
-
-      {/* Switch Button */}
-      <div className="flex justify-center -my-2 relative z-10">
-        <button
-          onClick={switchTokens}
-          disabled={state.isProcessing}
-          className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 border-2 border-white/20 rounded-full p-3 transition-all disabled:opacity-50 shadow-lg hover:shadow-purple-500/50 hover:scale-110"
-        >
-          <ArrowDownUp className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Output Token */}
-      <div className="bg-gradient-to-br from-blue-900/20 to-black/40 rounded-2xl p-5 mb-6 border border-blue-500/20">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold text-white/50 uppercase tracking-wide">To</span>
-          {state.isFetchingQuote && (
-            <span className="text-xs text-blue-400 flex items-center gap-2">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Fetching...
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex-1 text-3xl md:text-4xl font-mono text-white/60">
-            {state.outputAmount || '0.00'}
-          </div>
-          <select
-            value={state.outputToken?.symbol || ''}
-            onChange={(e) => {
-              const token = tokens.find(t => t.symbol === e.target.value);
-              setState(prev => ({ ...prev, outputToken: token || null }));
-            }}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2.5 rounded-xl font-bold outline-none cursor-pointer shadow-lg hover:from-blue-500 hover:to-purple-500 transition-all"
-            disabled={state.isProcessing}
-          >
-            {tokens.map(token => (
-              <option key={token.symbol} value={token.symbol} className="bg-gray-900">
-                {token.symbol}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Quote Details */}
-      {state.quote && (
-        <div className="bg-black/30 border border-white/10 rounded-xl p-4 mb-6 space-y-2.5 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-white/50">Rate</span>
-            <span className="font-mono">
-              1 {state.inputToken?.symbol} ≈{' '}
-              <span className="text-purple-400">{(parseFloat(state.outputAmount) / parseFloat(state.inputAmount)).toFixed(6)}</span>{' '}
-              {state.outputToken?.symbol}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-white/50">Price Impact</span>
-            <span className={`font-semibold ${state.quote.priceImpact > 1 ? 'text-yellow-400' : 'text-green-400'}`}>
-              {state.quote.priceImpact > 1 ? '⚠ ' : '✓ '}{state.quote.priceImpact.toFixed(2)}%
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-white/50">Route</span>
-            <span className="text-xs font-mono text-blue-400">{state.quote.route.map(r => r.split('.').pop()).join(' → ')}</span>
-          </div>
-          {state.gaslessMode && (
-            <div className="flex justify-between items-center pt-2 border-t border-white/10">
-              <span className="text-white/50">Fee (USDCx)</span>
-              <span className="font-mono text-yellow-400">{formatUnits(BigInt(state.quote.estimatedFee), 6)}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Gasless Mode Toggle */}
-      <div className="bg-gradient-to-r from-green-500/10 via-yellow-500/10 to-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6 hover:border-green-500/50 transition-all">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-green-500 rounded-lg flex items-center justify-center">
-              <Zap className="w-5 h-5 text-black" />
-            </div>
-            <div>
-              <span className="font-semibold text-sm">Gasless Mode</span>
-              <p className="text-xs text-white/50">Pay fees in USDCx</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setState(prev => ({ ...prev, gaslessMode: !prev.gaslessMode }))}
-            className={`relative w-14 h-7 rounded-full transition-all ${
-              state.gaslessMode ? 'bg-gradient-to-r from-green-500 to-green-600 shadow-lg shadow-green-500/50' : 'bg-white/20'
-            }`}
-            disabled={state.isProcessing}
-          >
-            <div
-              className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform shadow-lg ${
-                state.gaslessMode ? 'translate-x-7' : ''
-              }`}
-            />
+    <div className="max-w-lg mx-auto">
+      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
+        backgroundColor: 'var(--bg-surface)', 
+        border: `1px solid var(--border-color)`,
+        padding: '2rem'
+      }}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            Swap Tokens
+          </h2>
+          <button className="p-2 rounded-lg transition-colors group hover:bg-gray-100 dark:hover:bg-gray-800">
+            <Settings className="w-5 h-5 group-hover:rotate-90 transition-all" style={{ color: 'var(--text-secondary)' }} />
           </button>
         </div>
-      </div>
 
-      {/* Error Message */}
-      {state.error && (
-        <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 animate-pulse">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-200">{state.error}</p>
+        {/* Input Token */}
+        <div className="rounded-2xl p-6 mb-3 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
+          border: `2px solid var(--border-color)`,
+          backgroundColor: 'var(--bg-surface)'
+        }}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>From</span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Balance: <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(getBalance(state.inputToken)).toFixed(4)}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <input
+              type="number"
+              value={state.inputAmount}
+              onChange={(e) => setState(prev => ({ ...prev, inputAmount: e.target.value, error: null }))}
+              placeholder="0.00"
+              className="flex-1 bg-transparent text-4xl font-mono outline-none placeholder:opacity-30"
+              style={{ color: 'var(--text-primary)' }}
+              disabled={state.isProcessing}
+            />
+            <select
+              value={state.inputToken?.symbol || ''}
+              onChange={(e) => {
+                const token = tokens.find(t => t.symbol === e.target.value);
+                setState(prev => ({ ...prev, inputToken: token || null }));
+              }}
+              className="bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3.5 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg shadow-purple-500/50"
+              disabled={state.isProcessing}
+            >
+              {tokens.map(token => (
+                <option key={token.symbol} value={token.symbol} className="bg-gray-900">
+                  {token.symbol}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => setState(prev => ({ ...prev, inputAmount: getBalance(state.inputToken) }))}
+            className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 mt-4 font-bold transition-colors"
+            disabled={state.isProcessing}
+          >
+            MAX
+          </button>
         </div>
-      )}
 
-      {/* Success Message */}
-      {state.success && (
-        <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6">
-          <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-200">{state.success}</p>
+        {/* Switch Button */}
+        <div className="flex justify-center -my-1 relative z-10">
+          <button
+            onClick={switchTokens}
+            disabled={state.isProcessing}
+            className="bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-full p-2 transition-all disabled:opacity-50 hover:border-purple-600 dark:hover:border-purple-400"
+          >
+            <ArrowDownUp className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+          </button>
         </div>
-      )}
 
-      {/* Swap Button */}
-      <button
-        onClick={handleSwap}
-        disabled={!stacksConnected || state.isProcessing || !state.inputAmount || !state.outputAmount}
-        className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 hover:from-purple-500 hover:via-blue-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
-      >
-        {state.isProcessing ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Processing...
-          </>
-        ) : !stacksConnected ? (
-          'Connect Stacks Wallet'
-        ) : (
-          <>
-            <Repeat className="w-5 h-5" />
-            Swap Tokens
-          </>
+        {/* Output Token */}
+        <div className="rounded-2xl p-6 mb-6" style={{
+          border: `2px solid var(--border-color)`,
+          backgroundColor: 'var(--bg-surface)'
+        }}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>To</span>
+            {state.isFetchingQuote && (
+              <span className="text-xs text-blue-600 flex items-center gap-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Fetching...
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1 text-4xl font-mono" style={{ color: 'var(--text-secondary)' }}>
+              {state.outputAmount || '0.00'}
+            </div>
+            <select
+              value={state.outputToken?.symbol || ''}
+              onChange={(e) => {
+                const token = tokens.find(t => t.symbol === e.target.value);
+                setState(prev => ({ ...prev, outputToken: token || null }));
+              }}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3.5 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg shadow-blue-500/50"
+              disabled={state.isProcessing}
+            >
+              {tokens.map(token => (
+                <option key={token.symbol} value={token.symbol} className="bg-gray-900">
+                  {token.symbol}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Quote Details */}
+        {state.quote && (
+          <div className="rounded-xl p-4 mb-6 space-y-2.5 text-sm" style={{
+            border: `1px solid var(--border-color)`,
+            backgroundColor: 'var(--bg-surface)'
+          }}>
+            <div className="flex justify-between items-center">
+              <span style={{ color: 'var(--text-secondary)' }}>Rate</span>
+              <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                1 {state.inputToken?.symbol} ≈{' '}
+                <span className="text-purple-600 dark:text-purple-400">{(parseFloat(state.outputAmount) / parseFloat(state.inputAmount)).toFixed(6)}</span>{' '}
+                {state.outputToken?.symbol}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span style={{ color: 'var(--text-secondary)' }}>Price Impact</span>
+              <span className={`font-semibold ${state.quote.priceImpact > 1 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                {state.quote.priceImpact > 1 ? '⚠ ' : '✓ '}{state.quote.priceImpact.toFixed(2)}%
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span style={{ color: 'var(--text-secondary)' }}>Route</span>
+              <span className="text-xs font-mono text-blue-600 dark:text-blue-400">{state.quote.route.map(r => r.split('.').pop()).join(' → ')}</span>
+            </div>
+            {state.gaslessMode && (
+              <div className="flex justify-between items-center pt-2" style={{ borderTop: `1px solid var(--border-color)` }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Fee (USDCx)</span>
+                <span className="font-mono text-yellow-600 dark:text-yellow-400">{formatUnits(BigInt(state.quote.estimatedFee), 6)}</span>
+              </div>
+            )}
+          </div>
         )}
-      </button>
 
-      {/* Info */}
-      <div className="mt-6 pt-6 border-t border-white/10 text-xs text-white/40 text-center space-y-1">
-        <p className="flex items-center justify-center gap-2">
-          <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
-          Powered by ALEX DEX
-        </p>
-        <p>Slippage tolerance: {state.slippage}%</p>
+        {/* Gasless Mode Toggle */}
+        <div className="rounded-lg border border-green-200 dark:border-green-900/30 bg-green-50 dark:bg-green-900/10 p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <Zap className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <span className="font-semibold text-sm text-gray-900 dark:text-white">Gasless Mode</span>
+                <p className="text-xs text-gray-600 dark:text-gray-400">Pay fees in USDCx</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setState(prev => ({ ...prev, gaslessMode: !prev.gaslessMode }))}
+              className={`relative w-14 h-7 rounded-full transition-all ${
+                state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
+              }`}
+              disabled={state.isProcessing}
+            >
+              <div
+                className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${
+                  state.gaslessMode ? 'translate-x-7' : ''
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {state.error && (
+          <div className="flex items-start gap-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg p-4 mb-6">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 dark:text-red-300">{state.error}</p>
+          </div>
+        )}
+
+        {/* Success Message */}
+        {state.success && (
+          <div className="flex items-start gap-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-lg p-4 mb-6">
+            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-green-700 dark:text-green-300">{state.success}</p>
+          </div>
+        )}
+
+        {/* Swap Button */}
+        <button
+          onClick={handleSwap}
+          disabled={!stacksConnected || state.isProcessing || !state.inputAmount || !state.outputAmount}
+          className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 dark:from-purple-600 dark:via-blue-600 dark:to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          {state.isProcessing ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Processing...
+            </>
+          ) : !stacksConnected ? (
+            'Connect Stacks Wallet'
+          ) : (
+            <>
+              <Repeat className="w-5 h-5" />
+              Swap Tokens
+            </>
+          )}
+        </button>
+
+        {/* Info */}
+        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{ 
+          borderTop: `1px solid var(--border-color)`,
+          color: 'var(--text-secondary)'
+        }}>
+          <p className="flex items-center justify-center gap-2">
+            <span className="w-1.5 h-1.5 bg-blue-600 dark:bg-blue-400 rounded-full dark:animate-pulse-glow animate-slide-progress"></span>
+            Powered by ALEX DEX
+          </p>
+          <p>Slippage tolerance: {state.slippage}%</p>
+        </div>
       </div>
     </div>
   );
