@@ -48,7 +48,7 @@ function decodeStacksAddress(bytes32) {
     return (0, transactions_1.addressToString)({
         hash160,
         version,
-        type: transactions_1.StacksWireType.Address,
+        type: transactions_1.StacksMessageType.Address,
     });
 }
 /**
@@ -59,10 +59,19 @@ function decodeStacksAddress(bytes32) {
  * @returns 32-byte hex string
  */
 function encodeEthereumAddress(address) {
-    // Remove 0x prefix and convert to bytes
-    const addressBytes = (0, viem_1.toBytes)(address);
-    // Pad to 32 bytes (left-padded with zeros)
-    return (0, viem_1.pad)(addressBytes, { size: 32 });
+    // Ensure address is lowercase and has 0x prefix
+    const normalizedAddress = address.toLowerCase().startsWith('0x')
+        ? address.toLowerCase()
+        : `0x${address.toLowerCase()}`;
+    // Convert to bytes, pad to 32 bytes, then convert back to hex
+    const addressBytes = (0, viem_1.toBytes)(normalizedAddress);
+    const paddedBytes = new Uint8Array(32);
+    paddedBytes.fill(0); // Fill with zeros
+    paddedBytes.set(addressBytes, 12); // Place address at the end (left-padded)
+    console.log('Before toHex, paddedBytes:', paddedBytes);
+    const result = (0, viem_1.toHex)(paddedBytes);
+    console.log('After toHex, result type:', typeof result, 'value:', result);
+    return result;
 }
 /**
  * Decodes a bytes32 value back to an Ethereum address
@@ -107,7 +116,7 @@ function isValidEthereumAddress(address) {
 function hexToBytes(hex) {
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < hex.length; i += 2) {
-        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
     }
     return bytes;
 }

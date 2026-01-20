@@ -10,9 +10,6 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { openContractCall } from '@stacks/connect';
-import { STACKS_TESTNET } from '@stacks/network';
-import { uintCV, bufferCV, PostConditionMode } from '@stacks/transactions';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap } from 'lucide-react';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
@@ -260,6 +257,11 @@ export function BridgeInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      // Dynamic imports for Stacks libraries
+      const { openContractCall } = await import('@stacks/connect');
+      const { STACKS_TESTNET } = await import('@stacks/network');
+      const { uintCV, bufferCV, PostConditionMode } = await import('@stacks/transactions');
+      
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);
 

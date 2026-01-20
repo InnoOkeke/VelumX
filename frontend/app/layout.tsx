@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   title: "VelumX - Gas-Free DeFi on Bitcoin L2",
   description: "VelumX is a Gas-Abstraction protocol on Stacks (Bitcoin L2) that enables gasless transactions. Pay fees in USDCx instead of STX for seamless DeFi experiences including bridging, swaps, and more.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/velumx-icon.svg",
+    shortcut: "/velumx-icon.svg",
     apple: "/velumx-icon.svg",
   },
   openGraph: {
@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/velumx-icon.svg" type="image/svg+xml" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

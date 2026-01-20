@@ -40,10 +40,17 @@ export interface WalletState {
   isFetchingBalances: boolean;
 }
 
-const appConfig = new AppConfig(['store_write', 'publish_data']);
-const userSession = new UserSession({ appConfig });
-
 const STORAGE_KEY = 'velumx_wallet_state';
+
+// Initialize Stacks session only on client side
+let appConfig: any = null;
+let userSession: any = null;
+
+if (typeof window !== 'undefined') {
+  const { AppConfig, UserSession } = require('@stacks/connect');
+  appConfig = new AppConfig(['store_write', 'publish_data']);
+  userSession = new UserSession({ appConfig });
+}
 
 // Detect available Ethereum wallets
 function detectEthereumWallets() {
@@ -113,24 +120,26 @@ export function useWallet() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
         const parsed = JSON.parse(stored);
         setState(prev => ({ ...prev, ...parsed }));
-      } catch (error) {
-        console.error('Failed to restore wallet state:', error);
       }
-    }
-    
-    // Check if Stacks wallet is already connected
-    if (userSession.isUserSignedIn()) {
-      const userData = userSession.loadUserData();
-      setState(prev => ({
-        ...prev,
-        stacksAddress: userData.profile.stxAddress.testnet,
-        stacksConnected: true,
-      }));
+      
+      // Check if Stacks wallet is already connected
+      if (userSession && userSession.isUserSignedIn()) {
+        const userData = userSession.loadUserData();
+        setState(prev => ({
+          ...prev,
+          stacksAddress: userData.profile.stxAddress.testnet,
+          stacksConnected: true,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to restore wallet state:', error);
+      // Clear corrupted state
+      localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
 
@@ -138,15 +147,19 @@ export function useWallet() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const toPersist = {
-      ethereumAddress: state.ethereumAddress,
-      ethereumConnected: state.ethereumConnected,
-      ethereumWalletType: state.ethereumWalletType,
-      stacksAddress: state.stacksAddress,
-      stacksConnected: state.stacksConnected,
-      stacksWalletType: state.stacksWalletType,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
+    try {
+      const toPersist = {
+        ethereumAddress: state.ethereumAddress,
+        ethereumConnected: state.ethereumConnected,
+        ethereumWalletType: state.ethereumWalletType,
+        stacksAddress: state.stacksAddress,
+        stacksConnected: state.stacksConnected,
+        stacksWalletType: state.stacksWalletType,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
+    } catch (error) {
+      console.error('Failed to persist wallet state:', error);
+    }
   }, [state.ethereumAddress, state.ethereumConnected, state.ethereumWalletType, state.stacksAddress, state.stacksConnected, state.stacksWalletType]);
 
   // Connect Ethereum wallet (Rabby, MetaMask, or any injected wallet)
@@ -229,9 +242,15 @@ export function useWallet() {
 
   // Connect Stacks wallet (Xverse, Leather, or Hiro)
   const connectStacks = useCallback(async (preferredWallet?: StacksWalletType) => {
+    if (!userSession) {
+      throw new Error('Stacks wallet not available');
+    }
+
     setState(prev => ({ ...prev, isConnecting: true }));
 
     try {
+      const { showConnect } = await import('@stacks/connect');
+      
       await new Promise<void>((resolve, reject) => {
         showConnect({
           appDetails: {
@@ -278,7 +297,9 @@ export function useWallet() {
 
   // Disconnect Stacks wallet
   const disconnectStacks = useCallback(() => {
-    userSession.signUserOut();
+    if (userSession) {
+      userSession.signUserOut();
+    }
     setState(prev => ({
       ...prev,
       stacksAddress: null,

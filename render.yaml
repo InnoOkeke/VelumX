@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: usdcx-bridge-backend
+    env: node
+    region: oregon
+    rootDir: backend
+    buildCommand: bash build.sh
+    startCommand: bash start.sh
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001

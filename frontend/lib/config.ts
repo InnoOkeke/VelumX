@@ -6,31 +6,43 @@
 import { FrontendConfig } from './types';
 
 /**
+ * Safely get environment variable with fallback
+ */
+function getEnv(key: string, fallback: string): string {
+  if (typeof window === 'undefined') {
+    // Server-side: use process.env
+    return process.env[key] || fallback;
+  }
+  // Client-side: use process.env (bundled at build time)
+  return process.env[key] || fallback;
+}
+
+/**
  * Loads frontend configuration from environment variables
  */
 export function getConfig(): FrontendConfig {
   return {
     // API endpoint
-    backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001',
+    backendUrl: getEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001'),
     
     // Network configuration
-    ethereumChainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_CHAIN_ID || '11155111'), // Sepolia
-    stacksNetwork: (process.env.NEXT_PUBLIC_STACKS_NETWORK as 'testnet' | 'mainnet') || 'testnet',
+    ethereumChainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_CHAIN_ID', '11155111')), // Sepolia
+    stacksNetwork: (getEnv('NEXT_PUBLIC_STACKS_NETWORK', 'testnet') as 'testnet' | 'mainnet'),
     
     // Contract addresses (testnet defaults)
-    ethereumUsdcAddress: process.env.NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS || '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    ethereumXReserveAddress: process.env.NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS || '0x008888878f94C0d87defdf0B07f46B93C1934442',
-    stacksUsdcxAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
-    stacksUsdcxProtocolAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1',
-    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v3',
+    ethereumUsdcAddress: getEnv('NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'),
+    ethereumXReserveAddress: getEnv('NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS', '0x008888878f94C0d87defdf0B07f46B93C1934442'),
+    stacksUsdcxAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx'),
+    stacksUsdcxProtocolAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1'),
+    stacksPaymasterAddress: getEnv('NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v3'),
     
     // Domain IDs
-    ethereumDomainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_DOMAIN_ID || '0'),
-    stacksDomainId: parseInt(process.env.NEXT_PUBLIC_STACKS_DOMAIN_ID || '10003'),
+    ethereumDomainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_DOMAIN_ID', '0')),
+    stacksDomainId: parseInt(getEnv('NEXT_PUBLIC_STACKS_DOMAIN_ID', '10003')),
     
     // Explorer URLs
-    ethereumExplorerUrl: process.env.NEXT_PUBLIC_ETHEREUM_EXPLORER_URL || 'https://sepolia.etherscan.io',
-    stacksExplorerUrl: process.env.NEXT_PUBLIC_STACKS_EXPLORER_URL || 'https://explorer.hiro.so',
+    ethereumExplorerUrl: getEnv('NEXT_PUBLIC_ETHEREUM_EXPLORER_URL', 'https://sepolia.etherscan.io'),
+    stacksExplorerUrl: getEnv('NEXT_PUBLIC_STACKS_EXPLORER_URL', 'https://explorer.hiro.so'),
   };
 }
 
@@ -41,6 +53,7 @@ let configInstance: FrontendConfig | null = null;
 
 /**
  * Gets the frontend configuration
+ * Safe to call on both server and client
  */
 export function useConfig(): FrontendConfig {
   if (!configInstance) {

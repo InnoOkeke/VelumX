@@ -147,6 +147,7 @@ export interface FrontendConfig {
     ethereumXReserveAddress: string;
     stacksUsdcxAddress: string;
     stacksUsdcxProtocolAddress: string;
+    stacksPaymasterAddress: string;
     ethereumDomainId: number;
     stacksDomainId: number;
     ethereumExplorerUrl: string;

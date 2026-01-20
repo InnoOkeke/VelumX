@@ -1,0 +1,9 @@
+backend
+stacks-contracts
+node_modules
+.git
+.kiro
+scan-reports
+*.log
+.env
+.env.local
