@@ -1,0 +1,12 @@
+{
+  "name": "velumx-contracts",
+  "version": "1.0.0",
+  "description": "Stacks smart contracts for VelumX Bridge",
+  "scripts": {
+    "deploy": "node deploy-paymaster.js"
+  },
+  "dependencies": {
+    "@stacks/transactions": "^6.16.1",
+    "@stacks/network": "^6.16.1"
+  }
+}
