@@ -58,6 +58,12 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
     setError(null);
     try {
       await connectEthereum(walletType);
+      // Close modal after successful connection
+      if (onClose) {
+        setTimeout(() => {
+          onClose();
+        }, 500); // Small delay to show success state
+      }
     } catch (err) {
       setError((err as Error).message);
     }

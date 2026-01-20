@@ -167,61 +167,70 @@ export function SwapInterface() {
       return;
     }
 
+    if (!state.quote) {
+      setState(prev => ({ ...prev, error: 'Please wait for quote to load' }));
+      return;
+    }
+
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      // Dynamic imports for Stacks libraries
+      const { openContractCall } = await import('@stacks/connect');
+      const { STACKS_TESTNET } = await import('@stacks/network');
+      const { uintCV, standardPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
+      
       const inputAmountInMicroUnits = parseUnits(state.inputAmount, state.inputToken.decimals);
+      const minOutputAmount = BigInt(state.quote.outputAmount);
 
-      // Get swap quote from backend (send symbols only)
-      const quoteResponse = await fetch(`${config.backendUrl}/api/swap/quote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inputToken: state.inputToken.symbol,
-          outputToken: state.outputToken.symbol,
-          inputAmount: inputAmountInMicroUnits.toString(),
-        }),
+      // For demo: Use Velar DEX contract (this would be the actual DEX contract address)
+      // In production, you'd get this from the backend or config
+      const dexContractAddress = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1';
+      const dexContractName = 'velar-swap-v1';
+
+      // Prepare function arguments for swap
+      const functionArgs = [
+        uintCV(Number(inputAmountInMicroUnits)),
+        uintCV(Number(minOutputAmount)),
+        standardPrincipalCV(stacksAddress),
+      ];
+
+      // Open wallet to sign transaction
+      await new Promise<string>((resolve, reject) => {
+        openContractCall({
+          contractAddress: dexContractAddress,
+          contractName: dexContractName,
+          functionName: 'swap',
+          functionArgs,
+          network: STACKS_TESTNET,
+          postConditionMode: PostConditionMode.Allow,
+          sponsored: state.gaslessMode,
+          appDetails: {
+            name: 'VelumX Swap',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
+          onFinish: (data: any) => {
+            const txId = data.txId;
+            setState(prev => ({
+              ...prev,
+              isProcessing: false,
+              success: `Swap initiated! Transaction ID: ${txId}`,
+              inputAmount: '',
+              outputAmount: '',
+              quote: null,
+            }));
+            resolve(txId);
+          },
+          onCancel: () => {
+            setState(prev => ({
+              ...prev,
+              isProcessing: false,
+              error: 'Transaction cancelled',
+            }));
+            reject(new Error('User cancelled transaction'));
+          },
+        });
       });
-
-      if (!quoteResponse.ok) {
-        throw new Error('Failed to get swap quote');
-      }
-
-      const quoteData = await quoteResponse.json();
-      if (!quoteData.success) {
-        throw new Error(quoteData.error || 'Failed to get swap quote');
-      }
-
-      // Execute swap via backend (send symbols only)
-      const swapResponse = await fetch(`${config.backendUrl}/api/swap/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userAddress: stacksAddress,
-          inputToken: state.inputToken.symbol,
-          outputToken: state.outputToken.symbol,
-          inputAmount: inputAmountInMicroUnits.toString(),
-          minOutputAmount: quoteData.data.outputAmount,
-          gaslessMode: state.gaslessMode,
-        }),
-      });
-
-      if (!swapResponse.ok) {
-        throw new Error('Failed to execute swap');
-      }
-
-      const swapData = await swapResponse.json();
-      if (!swapData.success) {
-        throw new Error(swapData.error || 'Failed to execute swap');
-      }
-
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        success: `Swap prepared successfully! ${swapData.data.message}`,
-        inputAmount: '',
-        outputAmount: '',
-      }));
     } catch (error) {
       console.error('Swap error:', error);
       setState(prev => ({
