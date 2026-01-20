@@ -116,26 +116,69 @@ export function useWallet() {
     isFetchingBalances: false,
   });
 
-  // Restore wallet state from localStorage
+  // Restore wallet state from localStorage and reconnect
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
     const restoreState = async () => {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
+        let restoredEthAddress: string | null = null;
+        let restoredStacksAddress: string | null = null;
+        
         if (stored) {
           const parsed = JSON.parse(stored);
           setState(prev => ({ ...prev, ...parsed }));
+          restoredEthAddress = parsed.ethereumAddress;
         }
         
         // Check if Stacks wallet is already connected
         if (userSession && userSession.isUserSignedIn()) {
           const userData = userSession.loadUserData();
+          restoredStacksAddress = userData.profile.stxAddress.testnet;
           setState(prev => ({
             ...prev,
-            stacksAddress: userData.profile.stxAddress.testnet,
+            stacksAddress: restoredStacksAddress,
             stacksConnected: true,
           }));
+        }
+        
+        // Verify Ethereum connection is still active
+        if (restoredEthAddress && typeof window !== 'undefined') {
+          const ethereum = (window as any).ethereum;
+          if (ethereum) {
+            try {
+              const accounts = await ethereum.request({ method: 'eth_accounts' });
+              console.log('Restored Ethereum accounts:', accounts);
+              console.log('Expected address:', restoredEthAddress);
+              if (accounts && accounts.length > 0 && accounts[0].toLowerCase() === restoredEthAddress.toLowerCase()) {
+                // Connection is still active, fetch balances
+                console.log('Ethereum connection verified, fetching balances...');
+                setTimeout(() => {
+                  fetchEthereumBalances(restoredEthAddress!);
+                }, 500);
+              } else {
+                // Connection lost, clear state
+                console.log('Ethereum connection lost, clearing state');
+                setState(prev => ({
+                  ...prev,
+                  ethereumAddress: null,
+                  ethereumConnected: false,
+                  ethereumChainId: null,
+                  ethereumWalletType: null,
+                }));
+              }
+            } catch (error) {
+              console.error('Failed to verify Ethereum connection:', error);
+            }
+          }
+        }
+        
+        // Fetch Stacks balances if connected
+        if (restoredStacksAddress) {
+          setTimeout(() => {
+            fetchStacksBalances(restoredStacksAddress!);
+          }, 500);
         }
       } catch (error) {
         console.error('Failed to restore wallet state:', error);
@@ -145,7 +188,7 @@ export function useWallet() {
     };
     
     restoreState();
-  }, []);
+  }, [fetchEthereumBalances, fetchStacksBalances]);
 
   // Persist wallet state to localStorage
   useEffect(() => {
@@ -170,6 +213,9 @@ export function useWallet() {
   const fetchEthereumBalances = useCallback(async (address: string) => {
     if (!address) return;
 
+    console.log('Fetching Ethereum balances for:', address);
+    console.log('USDC contract address:', config.ethereumUsdcAddress);
+
     try {
       const publicClient = createPublicClient({
         chain: sepolia,
@@ -180,6 +226,7 @@ export function useWallet() {
       const ethBalance = await publicClient.getBalance({
         address: address as `0x${string}`,
       });
+      console.log('ETH balance (raw):', ethBalance.toString());
 
       // Fetch USDC balance
       const usdcBalance = await publicClient.readContract({
@@ -188,13 +235,20 @@ export function useWallet() {
         functionName: 'balanceOf',
         args: [address as `0x${string}`],
       });
+      console.log('USDC balance (raw):', usdcBalance.toString());
+
+      const formattedEth = formatUnits(ethBalance, TOKEN_DECIMALS.eth);
+      const formattedUsdc = formatUnits(usdcBalance as bigint, TOKEN_DECIMALS.usdc);
+      
+      console.log('Formatted ETH:', formattedEth);
+      console.log('Formatted USDC:', formattedUsdc);
 
       setState(prev => ({
         ...prev,
         balances: {
           ...prev.balances,
-          eth: formatUnits(ethBalance, TOKEN_DECIMALS.eth),
-          usdc: formatUnits(usdcBalance as bigint, TOKEN_DECIMALS.usdc),
+          eth: formattedEth,
+          usdc: formattedUsdc,
         },
       }));
     } catch (error) {
@@ -444,13 +498,6 @@ export function useWallet() {
     
     setState(prev => ({ ...prev, isFetchingBalances: false }));
   }, [state.ethereumAddress, state.stacksAddress, fetchEthereumBalances, fetchStacksBalances]);
-
-  // Auto-fetch balances when addresses change
-  useEffect(() => {
-    if (state.ethereumAddress || state.stacksAddress) {
-      fetchBalances();
-    }
-  }, [state.ethereumAddress, state.stacksAddress]);
 
   // Disconnect all wallets
   const disconnectAll = useCallback(() => {
