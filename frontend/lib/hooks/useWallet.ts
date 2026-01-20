@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createWalletClient, createPublicClient, custom, http, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { AppConfig, UserSession, showConnect } from '@stacks/connect';
+import { AppConfig, UserSession } from '@stacks/connect';
 import { STACKS_TESTNET } from '@stacks/network';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
 
@@ -206,7 +206,18 @@ export function useWallet() {
       // Listen for account changes
       provider.on('accountsChanged', (accounts: string[]) => {
         if (accounts.length === 0) {
-          disconnectEthereum();
+          setState(prev => ({
+            ...prev,
+            ethereumAddress: null,
+            ethereumConnected: false,
+            ethereumChainId: null,
+            ethereumWalletType: null,
+            balances: {
+              ...prev.balances,
+              eth: '0',
+              usdc: '0',
+            },
+          }));
         } else {
           setState(prev => ({ ...prev, ethereumAddress: accounts[0] }));
         }
@@ -249,10 +260,19 @@ export function useWallet() {
     setState(prev => ({ ...prev, isConnecting: true }));
 
     try {
-      const { showConnect } = await import('@stacks/connect');
+      // Try dynamic import first, fallback to require for dev environment
+      let showConnectFn;
+      try {
+        const module = await import('@stacks/connect');
+        showConnectFn = module.showConnect;
+      } catch (importError) {
+        // Fallback for development environment
+        const { showConnect: sc } = require('@stacks/connect');
+        showConnectFn = sc;
+      }
       
       await new Promise<void>((resolve, reject) => {
-        showConnect({
+        showConnectFn({
           appDetails: {
             name: 'VelumX Bridge',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',

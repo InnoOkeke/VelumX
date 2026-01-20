@@ -58,10 +58,6 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
     setError(null);
     try {
       await connectEthereum(walletType);
-      // Close modal after successful connection
-      if (onClose) {
-        onClose();
-      }
     } catch (err) {
       setError((err as Error).message);
     }
@@ -70,16 +66,9 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
   const handleConnectStacks = async (walletType?: StacksWalletType) => {
     setError(null);
     try {
-      // Close modal immediately when Stacks wallet popup opens
-      // The connection will complete in the background
-      if (onClose) {
-        onClose();
-      }
       await connectStacks(walletType);
     } catch (err) {
       setError((err as Error).message);
-      // Reopen modal if there was an error
-      // (user will see the error message)
     }
   };
 
