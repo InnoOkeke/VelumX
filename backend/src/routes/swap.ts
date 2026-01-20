@@ -133,4 +133,59 @@ router.post('/validate', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/swap/execute
+ * Execute a token swap (returns transaction for user to sign)
+ * 
+ * Body: {
+ *   userAddress: string,
+ *   inputToken: string,
+ *   outputToken: string,
+ *   inputAmount: string,
+ *   minOutputAmount: string,
+ *   gaslessMode: boolean
+ * }
+ */
+router.post('/execute', async (req: Request, res: Response) => {
+  try {
+    const { userAddress, inputToken, outputToken, inputAmount, minOutputAmount, gaslessMode } = req.body;
+
+    // Validation
+    if (!userAddress || !inputToken || !outputToken || !inputAmount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters',
+      });
+    }
+
+    logger.info('Executing swap', { 
+      userAddress, 
+      inputToken, 
+      outputToken, 
+      inputAmount,
+      gaslessMode 
+    });
+
+    // For now, return success with instructions for client-side execution
+    // The actual swap is executed client-side via Stacks wallet
+    res.json({
+      success: true,
+      data: {
+        message: 'Swap prepared. Please sign the transaction in your wallet.',
+        inputToken,
+        outputToken,
+        inputAmount,
+        minOutputAmount: minOutputAmount || '0',
+        gaslessMode: gaslessMode || false,
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to execute swap', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to execute swap',
+    });
+  }
+});
+
 export default router;

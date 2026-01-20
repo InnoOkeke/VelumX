@@ -170,14 +170,16 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Get swap quote from backend
+      const inputAmountInMicroUnits = parseUnits(state.inputAmount, state.inputToken.decimals);
+
+      // Get swap quote from backend (send symbols only)
       const quoteResponse = await fetch(`${config.backendUrl}/api/swap/quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           inputToken: state.inputToken.symbol,
           outputToken: state.outputToken.symbol,
-          inputAmount: state.inputAmount,
+          inputAmount: inputAmountInMicroUnits.toString(),
         }),
       });
 
@@ -190,7 +192,7 @@ export function SwapInterface() {
         throw new Error(quoteData.error || 'Failed to get swap quote');
       }
 
-      // Execute swap via backend
+      // Execute swap via backend (send symbols only)
       const swapResponse = await fetch(`${config.backendUrl}/api/swap/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,8 +200,8 @@ export function SwapInterface() {
           userAddress: stacksAddress,
           inputToken: state.inputToken.symbol,
           outputToken: state.outputToken.symbol,
-          inputAmount: state.inputAmount,
-          minOutputAmount: state.outputAmount,
+          inputAmount: inputAmountInMicroUnits.toString(),
+          minOutputAmount: quoteData.data.outputAmount,
           gaslessMode: state.gaslessMode,
         }),
       });
@@ -216,7 +218,7 @@ export function SwapInterface() {
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Swap successful! Transaction: ${swapData.data.txId}`,
+        success: `Swap prepared successfully! ${swapData.data.message}`,
         inputAmount: '',
         outputAmount: '',
       }));

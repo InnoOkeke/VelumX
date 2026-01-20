@@ -299,17 +299,25 @@ export class SwapService {
    * Get token symbol from address
    */
   private getTokenSymbol(tokenAddress: string): string {
+    // Handle direct symbol input
+    if (!tokenAddress.includes('.') && !tokenAddress.includes('0x')) {
+      return tokenAddress;
+    }
+    
     if (tokenAddress === 'STX') return 'STX';
-    if (tokenAddress.includes('usdcx')) return 'USDCx';
-    if (tokenAddress.includes('velar-token')) return 'VELAR';
-    if (tokenAddress.includes('aeusdc')) return 'aeUSDC';
-    if (tokenAddress.includes('abtc')) return 'aBTC';
-    if (tokenAddress.includes('welsh')) return 'WELSH';
+    if (tokenAddress.toLowerCase().includes('usdcx')) return 'aeUSDC'; // Map USDCx to aeUSDC for Velar
+    if (tokenAddress.toLowerCase().includes('velar')) return 'VELAR';
+    if (tokenAddress.toLowerCase().includes('aeusdc')) return 'aeUSDC';
+    if (tokenAddress.toLowerCase().includes('abtc')) return 'aBTC';
+    if (tokenAddress.toLowerCase().includes('welsh')) return 'WELSH';
     
     // Extract token name from contract address
     const parts = tokenAddress.split('.');
     if (parts.length === 2) {
-      return parts[1].toUpperCase();
+      const tokenName = parts[1].toUpperCase();
+      // Map common tokens
+      if (tokenName === 'USDCX') return 'aeUSDC';
+      return tokenName;
     }
     
     return tokenAddress;
