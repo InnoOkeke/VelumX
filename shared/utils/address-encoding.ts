@@ -3,8 +3,8 @@
  * Handles conversion between Stacks addresses and bytes32 format
  */
 
-import { createAddress, addressToString, AddressVersion } from '@stacks/transactions';
-import { type Hex, pad, toHex, toBytes } from 'viem';
+import { createAddress, addressToString, AddressVersion, AddressHashMode } from '@stacks/transactions';
+import { type Hex, toHex, toBytes } from 'viem';
 
 /**
  * Encodes a Stacks address to bytes32 format for xReserve protocol
@@ -50,6 +50,7 @@ export function decodeStacksAddress(bytes32: Hex): string {
   return addressToString({
     hash160,
     version,
+    type: AddressHashMode.SerializeP2PKH,
   });
 }
 
@@ -126,7 +127,7 @@ export function isValidEthereumAddress(address: string): boolean {
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   }
   return bytes;
 }
