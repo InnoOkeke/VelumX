@@ -167,37 +167,15 @@ export function SwapInterface() {
       return;
     }
 
-    if (!state.quote) {
-      setState(prev => ({ ...prev, error: 'Please wait for quote to load' }));
-      return;
-    }
-
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Use Velar SDK to execute swap
-      const { VelarSDK } = await import('@velarprotocol/velar-sdk');
-      const sdk = new VelarSDK();
-      
-      const swapInstance = await sdk.getSwapInstance({
-        account: stacksAddress,
-        inToken: state.inputToken.symbol,
-        outToken: state.outputToken.symbol,
-      });
-
-      // Execute the swap with the SDK
-      const result = await swapInstance.swap({
-        amount: parseFloat(state.inputAmount),
-        slippage: state.slippage,
-      });
-
+      // USDCx is not supported by Velar DEX yet
+      // Show quote information for now
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Swap initiated successfully!`,
-        inputAmount: '',
-        outputAmount: '',
-        quote: null,
+        success: `Swap quote: You would receive approximately ${state.outputAmount} ${state.outputToken?.symbol}. Full swap execution coming soon when USDCx is listed on Velar DEX.`,
       }));
     } catch (error) {
       console.error('Swap error:', error);

@@ -216,6 +216,19 @@ export function BridgeInterface() {
         account: ethereumAddress as `0x${string}`,
       });
 
+      // Wait for transaction receipt to get message hash
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
+      
+      // Extract message hash from logs (MessageSent event)
+      let messageHash = '';
+      for (const log of receipt.logs) {
+        // MessageSent event signature: MessageSent(bytes32)
+        if (log.topics[0] === '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036') {
+          messageHash = log.topics[1] || '';
+          break;
+        }
+      }
+
       // Step 4: Submit to monitoring service
       await fetch(`${config.backendUrl}/api/transactions/monitor`, {
         method: 'POST',
@@ -229,8 +242,16 @@ export function BridgeInterface() {
           amount: state.amount,
           sender: ethereumAddress,
           recipient: stacksAddress,
+          ethereumAddress,
+          stacksAddress,
           status: 'pending',
+          currentStep: 'deposit',
           timestamp: Date.now(),
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          retryCount: 0,
+          isGasless: false,
+          messageHash: messageHash || undefined,
         }),
       });
 

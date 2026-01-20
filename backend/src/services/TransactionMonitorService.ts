@@ -9,6 +9,7 @@ import { BridgeTransaction, TransactionStatus } from '@shared/types';
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 import { attestationService } from './AttestationService';
+import { stacksMintService } from './StacksMintService';
 
 const QUEUE_FILE = path.join(process.cwd(), 'data', 'transaction-queue.json');
 
@@ -229,9 +230,17 @@ export class TransactionMonitorService {
     switch (tx.status) {
       case 'pending':
       case 'confirming':
-        // Wait for Ethereum confirmation
-        // TODO: Check Ethereum transaction status
-        // For now, move to attesting state
+        // Check if we have a message hash
+        if (!tx.messageHash) {
+          logger.error('Missing message hash for deposit', { id: tx.id });
+          await this.updateTransaction(tx.id, {
+            status: 'failed',
+            error: 'Missing message hash from Ethereum deposit',
+          });
+          return;
+        }
+
+        // Move to attesting state
         await this.updateTransaction(tx.id, {
           status: 'attesting',
           currentStep: 'attestation',
@@ -265,12 +274,47 @@ export class TransactionMonitorService {
 
       case 'minting':
         // Submit mint transaction to Stacks
-        // TODO: Implement Stacks mint transaction
-        // For now, mark as complete
-        await this.updateTransaction(tx.id, {
-          status: 'complete',
-          completedAt: Date.now(),
-        });
+        if (!tx.attestation || !tx.messageHash) {
+          logger.error('Missing attestation or message hash for minting', { id: tx.id });
+          return;
+        }
+
+        try {
+          // Validate relayer balance first
+          const hasBalance = await stacksMintService.validateRelayerBalance();
+          if (!hasBalance) {
+            logger.error('Insufficient relayer balance for minting', { id: tx.id });
+            await this.updateTransaction(tx.id, {
+              error: 'Insufficient relayer STX balance',
+            });
+            return;
+          }
+
+          // Mint USDCx on Stacks
+          const mintTxId = await stacksMintService.mintUsdcx(
+            tx.stacksAddress,
+            tx.amount,
+            tx.attestation,
+            tx.messageHash
+          );
+
+          logger.info('Mint transaction submitted', {
+            id: tx.id,
+            mintTxId,
+          });
+
+          await this.updateTransaction(tx.id, {
+            destinationTxHash: mintTxId,
+            status: 'complete',
+            completedAt: Date.now(),
+          });
+        } catch (error) {
+          logger.error('Failed to mint USDCx', {
+            id: tx.id,
+            error: (error as Error).message,
+          });
+          throw error; // Will be caught by processQueue and increment retry count
+        }
         break;
     }
   }
