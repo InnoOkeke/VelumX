@@ -23,7 +23,7 @@ function getEnv(key: string, fallback: string): string {
 export function getConfig(): FrontendConfig {
   return {
     // API endpoint
-    backendUrl: getEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001'),
+    backendUrl: getEnv('NEXT_PUBLIC_BACKEND_URL', 'https://velumx.onrender.com'),
     
     // Network configuration
     ethereumChainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_CHAIN_ID', '11155111')), // Sepolia
