@@ -5,8 +5,14 @@
   "main": "index.ts",
   "types": "types/index.ts",
   "private": true,
+  "scripts": {
+    "build": "tsc"
+  },
   "dependencies": {
     "@stacks/transactions": "^6.15.0",
     "viem": "^2.44.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }
