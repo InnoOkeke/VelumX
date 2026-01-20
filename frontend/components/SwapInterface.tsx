@@ -162,15 +162,61 @@ export function SwapInterface() {
       return;
     }
 
+    if (!state.inputAmount || parseFloat(state.inputAmount) <= 0) {
+      setState(prev => ({ ...prev, error: 'Please enter a valid amount' }));
+      return;
+    }
+
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // For testnet demo, show success message
-      // In production, this would call ALEX swap contracts via paymaster
+      // Get swap quote from backend
+      const quoteResponse = await fetch(`${config.backendUrl}/api/swap/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputToken: state.inputToken.symbol,
+          outputToken: state.outputToken.symbol,
+          inputAmount: state.inputAmount,
+        }),
+      });
+
+      if (!quoteResponse.ok) {
+        throw new Error('Failed to get swap quote');
+      }
+
+      const quoteData = await quoteResponse.json();
+      if (!quoteData.success) {
+        throw new Error(quoteData.error || 'Failed to get swap quote');
+      }
+
+      // Execute swap via backend
+      const swapResponse = await fetch(`${config.backendUrl}/api/swap/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userAddress: stacksAddress,
+          inputToken: state.inputToken.symbol,
+          outputToken: state.outputToken.symbol,
+          inputAmount: state.inputAmount,
+          minOutputAmount: state.outputAmount,
+          gaslessMode: state.gaslessMode,
+        }),
+      });
+
+      if (!swapResponse.ok) {
+        throw new Error('Failed to execute swap');
+      }
+
+      const swapData = await swapResponse.json();
+      if (!swapData.success) {
+        throw new Error(swapData.error || 'Failed to execute swap');
+      }
+
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: 'Swap feature coming soon! This is a demo interface.',
+        success: `Swap successful! Transaction: ${swapData.data.txId}`,
         inputAmount: '',
         outputAmount: '',
       }));

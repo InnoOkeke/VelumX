@@ -34,9 +34,17 @@ export function BridgeInterface() {
     stacksAddress,
     stacksConnected,
     balances,
+    fetchBalances,
   } = useWallet();
 
   const config = useConfig();
+
+  // Fetch balances when component mounts or wallets connect
+  useEffect(() => {
+    if ((ethereumConnected || stacksConnected) && fetchBalances) {
+      fetchBalances();
+    }
+  }, [ethereumConnected, stacksConnected]);
 
   const [state, setState] = useState<BridgeState>({
     amount: '',
