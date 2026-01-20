@@ -14,8 +14,24 @@ import { logger } from '../utils/logger';
 export function configureCors() {
   const config = getConfig();
   
+  // Normalize CORS origin by removing trailing slash
+  const normalizedOrigin = config.corsOrigin.replace(/\/$/, '');
+  
   return cors({
-    origin: config.corsOrigin,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Normalize the incoming origin by removing trailing slash
+      const normalizedIncomingOrigin = origin.replace(/\/$/, '');
+      
+      // Check if normalized origins match
+      if (normalizedIncomingOrigin === normalizedOrigin) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
