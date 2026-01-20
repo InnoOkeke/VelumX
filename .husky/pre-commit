@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run Avanasec security scan
+echo "🔒 Running Avanasec security scan..."
+npx avanasec scan --staged
+
+# Exit code 1 will block the commit

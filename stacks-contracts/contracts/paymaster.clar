@@ -37,3 +37,26 @@
     (contract-call? USDCX_PROTOCOL burn amount u0 recipient)
   )
 )
+
+;; 3. Gasless Token Swap
+;; Pays fee in USDCx, then executes swap on ALEX DEX
+;; Note: This is a simplified version for testnet demo
+;; In production, integrate with actual ALEX swap contracts
+(define-public (swap-gasless 
+    (token-in <sip-010>) 
+    (token-out <sip-010>) 
+    (amount-in uint) 
+    (min-amount-out uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Execute swap (simplified for demo)
+    ;; In production, this would call ALEX swap router
+    ;; For now, just transfer tokens as placeholder
+    (contract-call? token-in transfer amount-in tx-sender (as-contract tx-sender) none)
+  )
+)

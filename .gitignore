@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.pnpm-debug.log*
+
+# Environment Variables (SENSITIVE - NEVER COMMIT)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.*
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Deployment outputs
+backend/deploy_output.txt
+backend/output.txt
+stacks-contracts/check_output.txt
+stacks-contracts/deployment-info.json
+
+# Data files
+backend/data/*.json
+!backend/data/.gitignore
+
+# Private keys and sensitive data (CRITICAL - NEVER COMMIT)
+**/private-key*
+**/seed-phrase*
+**/mnemonic*
+**/*private*.key
+**/*secret*.key
+
+# Stacks contracts
+.cache/
+stacks-contracts/settings/Devnet.toml
+
+# Frontend
+frontend/.next/
+frontend/out/
+frontend/.env.local
+
+# Backend
+backend/dist/
+backend/logs/
+backend/.env
