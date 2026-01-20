@@ -3,7 +3,7 @@
  * Loads environment variables and provides typed config
  */
 
-import { FrontendConfig } from '../../shared/types';
+import { FrontendConfig } from './types';
 
 /**
  * Loads frontend configuration from environment variables
