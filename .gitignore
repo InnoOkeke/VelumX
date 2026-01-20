@@ -75,3 +75,11 @@ frontend/.env.local
 backend/dist/
 backend/logs/
 backend/.env
+
+# Kiro specs and documentation (will be pushed separately)
+.kiro/
+
+# Avanasec scan reports (contains detected secrets)
+scan-reports/
+# Avanasec cache (scan results cache)
+.avana-cache/
