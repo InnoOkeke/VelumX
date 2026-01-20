@@ -194,7 +194,7 @@ export function SwapInterface() {
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Swap initiated! Transaction ID: ${result.txId || 'pending'}`,
+        success: `Swap initiated successfully!`,
         inputAmount: '',
         outputAmount: '',
         quote: null,
