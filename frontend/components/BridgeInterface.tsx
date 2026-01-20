@@ -49,9 +49,7 @@ export function BridgeInterface() {
       stacksConnected 
     });
     console.log('BridgeInterface - Balance Display:', { 
-      rawBalances: balances,
-      sourceBalance: state.direction === 'eth-to-stacks' ? balances.usdc : balances.usdcx,
-      sourceToken: state.direction === 'eth-to-stacks' ? 'USDC' : 'USDCx'
+      rawBalances: balances
     });
     
     // Fetch balances if we have addresses (even if connected flags aren't set yet)
@@ -59,7 +57,7 @@ export function BridgeInterface() {
       console.log('Fetching balances from BridgeInterface...');
       fetchBalances();
     }
-  }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances, balances, state.direction]);
+  }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances, balances]);
 
   const [state, setState] = useState<BridgeState>({
     amount: '',
