@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useWallet, EthereumWalletType, StacksWalletType } from '../lib/hooks/useWallet';
 import { Wallet, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
@@ -33,8 +34,25 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ethereum' | 'stacks'>('ethereum');
+  const [mounted, setMounted] = useState(false);
 
   const availableWallets = getAvailableWallets();
+
+  // Handle mounting for portal
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = 'unset';
+      };
+    }
+  }, []);
 
   const handleConnectEthereum = async (walletType: EthereumWalletType) => {
     setError(null);
@@ -63,19 +81,42 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
     return num.toFixed(decimals);
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl max-w-md w-full shadow-2xl">
+  if (!mounted) return null;
+
+  const modalContent = (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 z-[9998]" 
+        style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(12px)'
+        }}
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+        <div className="relative w-full max-w-md rounded-3xl pointer-events-auto vellum-shadow" style={{
+          backgroundColor: 'var(--bg-surface)',
+          border: `1px solid var(--border-color)`,
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+        }}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
+        <div className="flex items-center justify-between p-6 pb-4">
           <div className="flex items-center gap-3">
-            <Wallet className="w-6 h-6 text-purple-400" />
-            <h2 className="text-xl font-bold">Connect Wallet</h2>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <Wallet className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Connect Wallet</h2>
           </div>
           {onClose && (
             <button
               onClick={onClose}
-              className="text-white/60 hover:text-white transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+              style={{ color: 'var(--text-secondary)' }}
             >
               <X className="w-5 h-5" />
             </button>
@@ -83,56 +124,71 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-white/10">
+        <div className="flex gap-2 px-6 mb-4">
           <button
             onClick={() => setActiveTab('ethereum')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-semibold rounded-xl transition-all ${
               activeTab === 'ethereum'
-                ? 'text-white border-b-2 border-purple-500'
-                : 'text-white/50 hover:text-white/70'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
+            style={{ color: activeTab === 'ethereum' ? '#FFFFFF' : 'var(--text-secondary)' }}
           >
-            Ethereum (Sepolia)
+            Ethereum
           </button>
           <button
             onClick={() => setActiveTab('stacks')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-semibold rounded-xl transition-all ${
               activeTab === 'stacks'
-                ? 'text-white border-b-2 border-purple-500'
-                : 'text-white/50 hover:text-white/70'
+                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/30'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
+            style={{ color: activeTab === 'stacks' ? '#FFFFFF' : 'var(--text-secondary)' }}
           >
-            Stacks (Testnet)
+            Stacks
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="px-6 pb-6 space-y-4">
           {error && (
-            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-200">{error}</p>
+            <div className="flex items-start gap-3 rounded-xl p-4" style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)'
+            }}>
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 dark:text-red-300 font-medium">{error}</p>
             </div>
           )}
 
           {activeTab === 'ethereum' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {ethereumConnected ? (
-                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-sm font-medium text-green-200">
-                      Connected with {ethereumWalletType}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/60">Address:</span>
-                      <span className="font-mono">{formatAddress(ethereumAddress!)}</span>
+                <div className="rounded-2xl p-5 space-y-4" style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)'
+                }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-white" />
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/60">ETH Balance:</span>
-                      <span className="font-mono">
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                        Connected
+                      </p>
+                      <p className="text-xs capitalize" style={{ color: 'var(--text-secondary)' }}>
+                        {ethereumWalletType}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 pt-3" style={{ borderTop: `1px solid var(--border-color)` }}>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Address</span>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{formatAddress(ethereumAddress!)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>ETH Balance</span>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                         {isFetchingBalances ? (
                           <Loader2 className="w-4 h-4 animate-spin inline" />
                         ) : (
@@ -140,9 +196,9 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                         )}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/60">USDC Balance:</span>
-                      <span className="font-mono">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>USDC Balance</span>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                         {isFetchingBalances ? (
                           <Loader2 className="w-4 h-4 animate-spin inline" />
                         ) : (
@@ -153,7 +209,11 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                   </div>
                   <button
                     onClick={disconnectEthereum}
-                    className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-sm font-medium transition-colors"
+                    className="w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-80"
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      color: '#EF4444'
+                    }}
                   >
                     Disconnect
                   </button>
@@ -161,14 +221,17 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
               ) : (
                 <div className="space-y-3">
                   {availableWallets.ethereum.length === 0 ? (
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
-                      <p className="text-sm text-yellow-200">
+                    <div className="rounded-xl p-4" style={{
+                      backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                      border: '1px solid rgba(251, 191, 36, 0.3)'
+                    }}>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
                         No Ethereum wallet detected. Please install{' '}
                         <a
                           href="https://rabby.io"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="underline hover:text-yellow-100"
+                          className="underline font-semibold hover:opacity-70"
                         >
                           Rabby
                         </a>{' '}
@@ -177,7 +240,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                           href="https://metamask.io"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="underline hover:text-yellow-100"
+                          className="underline font-semibold hover:opacity-70"
                         >
                           MetaMask
                         </a>
@@ -190,16 +253,24 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                         key={wallet}
                         onClick={() => handleConnectEthereum(wallet)}
                         disabled={isConnecting}
-                        className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-between p-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                        style={{
+                          backgroundColor: 'var(--bg-surface)',
+                          border: `2px solid var(--border-color)`,
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                            <Wallet className="w-5 h-5" />
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                            <Wallet className="w-6 h-6 text-white" />
                           </div>
-                          <span className="font-medium capitalize">{wallet}</span>
+                          <div className="text-left">
+                            <p className="font-bold capitalize text-base" style={{ color: 'var(--text-primary)' }}>{wallet}</p>
+                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Ethereum Wallet</p>
+                          </div>
                         </div>
                         {isConnecting && (
-                          <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                          <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
                         )}
                       </button>
                     ))
@@ -210,23 +281,33 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
           )}
 
           {activeTab === 'stacks' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {stacksConnected ? (
-                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-sm font-medium text-green-200">
-                      Connected with {stacksWalletType}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/60">Address:</span>
-                      <span className="font-mono">{formatAddress(stacksAddress!)}</span>
+                <div className="rounded-2xl p-5 space-y-4" style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)'
+                }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-white" />
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/60">STX Balance:</span>
-                      <span className="font-mono">
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                        Connected
+                      </p>
+                      <p className="text-xs capitalize" style={{ color: 'var(--text-secondary)' }}>
+                        {stacksWalletType}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 pt-3" style={{ borderTop: `1px solid var(--border-color)` }}>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Address</span>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{formatAddress(stacksAddress!)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>STX Balance</span>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                         {isFetchingBalances ? (
                           <Loader2 className="w-4 h-4 animate-spin inline" />
                         ) : (
@@ -234,9 +315,9 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                         )}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/60">USDCx Balance:</span>
-                      <span className="font-mono">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>USDCx Balance</span>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                         {isFetchingBalances ? (
                           <Loader2 className="w-4 h-4 animate-spin inline" />
                         ) : (
@@ -247,31 +328,40 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                   </div>
                   <button
                     onClick={disconnectStacks}
-                    className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-sm font-medium transition-colors"
+                    className="w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-80"
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      color: '#EF4444'
+                    }}
                   >
                     Disconnect
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-white/60 mb-4">
-                    Connect with any Stacks wallet. We support Xverse, Leather, and Hiro.
-                  </p>
                   {(['xverse', 'leather', 'hiro'] as StacksWalletType[]).map((wallet) => (
                     <button
                       key={wallet}
                       onClick={() => handleConnectStacks(wallet)}
                       disabled={isConnecting}
-                      className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-between p-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                      style={{
+                        backgroundColor: 'var(--bg-surface)',
+                        border: `2px solid var(--border-color)`,
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
-                          <Wallet className="w-5 h-5" />
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                          <Wallet className="w-6 h-6 text-white" />
                         </div>
-                        <span className="font-medium capitalize">{wallet}</span>
+                        <div className="text-left">
+                          <p className="font-bold capitalize text-base" style={{ color: 'var(--text-primary)' }}>{wallet}</p>
+                          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Stacks Wallet</p>
+                        </div>
                       </div>
                       {isConnecting && (
-                        <Loader2 className="w-5 h-5 animate-spin text-orange-400" />
+                        <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
                       )}
                     </button>
                   ))}
@@ -282,12 +372,18 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-white/10">
-          <p className="text-xs text-white/40 text-center">
-            By connecting, you agree to our Terms of Service and Privacy Policy
+        <div className="px-6 pb-6 pt-2">
+          <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            By connecting, you agree to our{' '}
+            <span className="text-purple-600 dark:text-purple-400 font-medium">Terms of Service</span>
+            {' '}and{' '}
+            <span className="text-purple-600 dark:text-purple-400 font-medium">Privacy Policy</span>
           </p>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
+
+  return createPortal(modalContent, document.body);
 }
