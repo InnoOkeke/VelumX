@@ -8,6 +8,7 @@
     "build": "npm run build:shared && tsc",
     "build:shared": "cd ../shared && npm install && npm run build",
     "start": "node dist/index.js",
+    "postinstall": "npm run build:shared || true",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
