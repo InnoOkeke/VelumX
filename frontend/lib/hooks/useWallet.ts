@@ -424,7 +424,7 @@ export function useWallet() {
     if (state.ethereumAddress || state.stacksAddress) {
       fetchBalances();
     }
-  }, [state.ethereumAddress, state.stacksAddress]);
+  }, [state.ethereumAddress, state.stacksAddress, fetchBalances]);
 
   // Disconnect all wallets
   const disconnectAll = useCallback(() => {

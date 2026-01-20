@@ -66,6 +66,10 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
   const handleConnectStacks = async (walletType?: StacksWalletType) => {
     setError(null);
     try {
+      // Close modal immediately when Stacks wallet popup opens
+      if (onClose) {
+        onClose();
+      }
       await connectStacks(walletType);
     } catch (err) {
       setError((err as Error).message);
