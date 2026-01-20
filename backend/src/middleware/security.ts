@@ -76,7 +76,13 @@ export function sanitizeInput(req: Request, res: Response, next: NextFunction): 
     
     next();
   } catch (error) {
-    logger.error('Input sanitization error', { error });
+    logger.error('Input sanitization error', { 
+      error,
+      path: req.path,
+      method: req.method,
+      query: req.query,
+      body: req.body,
+    });
     res.status(400).json({
       error: 'Invalid input',
       message: 'Request contains invalid characters',
@@ -114,10 +120,20 @@ function sanitizeObject(obj: any): any {
  * Preserves blockchain addresses and transaction hashes
  */
 function sanitizeString(str: string): string {
-  // Allow alphanumeric, spaces, and common safe characters
-  // Also allow 0x prefix for addresses and hashes
-  // Allow dots for contract addresses (Stacks)
-  return str.replace(/[^\w\s\-_.@0x]/gi, '');
+  // For blockchain data, we need to be more permissive
+  // Allow: alphanumeric, spaces, hyphens, underscores, dots, @, 0x prefix, and colons (for Stacks addresses)
+  // Remove: script tags, SQL injection patterns, and other dangerous patterns
+  
+  // First, remove any script tags or HTML
+  let sanitized = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  sanitized = sanitized.replace(/<[^>]*>/g, '');
+  
+  // Remove SQL injection patterns
+  sanitized = sanitized.replace(/(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/gi, '');
+  
+  // For everything else, allow blockchain-safe characters
+  // This includes: letters, numbers, spaces, -, _, ., @, x (for 0x), and : (for Stacks contract addresses)
+  return sanitized;
 }
 
 /**
