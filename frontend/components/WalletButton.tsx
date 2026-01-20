@@ -54,7 +54,12 @@ export function WalletButton() {
       <div className="relative">
         <button
           onClick={() => setShowDropdown(!showDropdown)}
-          className="flex items-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 rounded-full transition-colors"
+          className="flex items-center gap-3 px-4 py-2.5 rounded-full transition-colors hover:opacity-80"
+          style={{
+            backgroundColor: 'rgba(139, 92, 246, 0.15)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            color: 'var(--text-primary)'
+          }}
         >
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
@@ -66,7 +71,7 @@ export function WalletButton() {
                 : formatAddress(stacksAddress!)}
             </span>
           </div>
-          <ChevronDown size={16} className="text-white/60" />
+          <ChevronDown size={16} style={{ color: 'var(--text-secondary)' }} />
         </button>
 
         {showDropdown && (
@@ -75,28 +80,31 @@ export function WalletButton() {
               className="fixed inset-0 z-40"
               onClick={() => setShowDropdown(false)}
             />
-            <div className="absolute right-0 mt-2 w-80 bg-gray-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+            <div className="absolute right-0 mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden" style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: `1px solid var(--border-color)`
+            }}>
               {/* Ethereum Section */}
               {ethereumConnected && (
-                <div className="p-4 border-b border-white/10">
+                <div className="p-4" style={{ borderBottom: `1px solid var(--border-color)` }}>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-white/60 uppercase font-semibold">
+                    <span className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
                       Ethereum (Sepolia)
                     </span>
                     <div className="w-2 h-2 bg-green-400 rounded-full" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-white/60">Address:</span>
-                      <span className="font-mono">{formatAddress(ethereumAddress!)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Address:</span>
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{formatAddress(ethereumAddress!)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-white/60">ETH:</span>
-                      <span className="font-mono">{formatBalance(balances.eth)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>ETH:</span>
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{formatBalance(balances.eth)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-white/60">USDC:</span>
-                      <span className="font-mono">{formatBalance(balances.usdc)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>USDC:</span>
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{formatBalance(balances.usdc)}</span>
                     </div>
                   </div>
                 </div>
@@ -104,25 +112,25 @@ export function WalletButton() {
 
               {/* Stacks Section */}
               {stacksConnected && (
-                <div className="p-4 border-b border-white/10">
+                <div className="p-4" style={{ borderBottom: `1px solid var(--border-color)` }}>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-white/60 uppercase font-semibold">
+                    <span className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
                       Stacks (Testnet)
                     </span>
                     <div className="w-2 h-2 bg-green-400 rounded-full" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-white/60">Address:</span>
-                      <span className="font-mono">{formatAddress(stacksAddress!)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Address:</span>
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{formatAddress(stacksAddress!)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-white/60">STX:</span>
-                      <span className="font-mono">{formatBalance(balances.stx)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>STX:</span>
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{formatBalance(balances.stx)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-white/60">USDCx:</span>
-                      <span className="font-mono">{formatBalance(balances.usdcx)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>USDCx:</span>
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{formatBalance(balances.usdcx)}</span>
                     </div>
                   </div>
                 </div>
@@ -146,7 +154,11 @@ export function WalletButton() {
                     disconnectAll();
                     setShowDropdown(false);
                   }}
-                  className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-sm font-medium transition-colors"
+                  className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    color: '#EF4444'
+                  }}
                 >
                   Disconnect All
                 </button>
