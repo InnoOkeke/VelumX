@@ -3,7 +3,7 @@
  * Handles conversion between Stacks addresses and bytes32 format
  */
 
-import { createAddress, addressToString, AddressVersion, StacksWireType } from '@stacks/transactions';
+import { createAddress, addressToString, AddressVersion } from '@stacks/transactions';
 import { type Hex, pad, toHex, toBytes } from 'viem';
 
 /**
@@ -50,7 +50,6 @@ export function decodeStacksAddress(bytes32: Hex): string {
   return addressToString({
     hash160,
     version,
-    type: StacksWireType.Address,
   });
 }
 
