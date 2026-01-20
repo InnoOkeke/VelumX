@@ -387,7 +387,7 @@ export function BridgeInterface() {
         </div>
 
         {/* From Section */}
-        <div className="rounded-2xl p-6 mb-4 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
+        <div className="rounded-2xl p-6 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
           border: `2px solid var(--border-color)`,
           backgroundColor: 'var(--bg-surface)'
         }}>
@@ -403,11 +403,11 @@ export function BridgeInterface() {
               value={state.amount}
               onChange={(e) => setState(prev => ({ ...prev, amount: e.target.value, error: null }))}
               placeholder="0.00"
-              className="flex-1 bg-transparent text-4xl font-mono outline-none placeholder:opacity-30"
+              className="flex-1 bg-transparent text-4xl font-mono outline-none placeholder:opacity-30 min-w-0"
               style={{ color: 'var(--text-primary)' }}
               disabled={state.isProcessing}
             />
-            <div className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-purple-500/50">
+            <div className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
               <span className="font-bold text-sm text-white">{sourceToken}</span>
             </div>
           </div>
@@ -425,7 +425,7 @@ export function BridgeInterface() {
           <button
             onClick={switchDirection}
             disabled={state.isProcessing}
-            className="rounded-full p-3 transition-all disabled:opacity-50 hover:border-purple-600 dark:hover:border-purple-400 shadow-sm"
+            className="rounded-full p-3 transition-all disabled:opacity-50 hover:border-purple-600 dark:hover:border-purple-400 shadow-lg"
             style={{
               backgroundColor: 'var(--bg-surface)',
               border: `2px solid var(--border-color)`
@@ -444,10 +444,10 @@ export function BridgeInterface() {
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>To</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex-1 text-4xl font-mono" style={{ color: 'var(--text-secondary)' }}>
+            <div className="flex-1 text-4xl font-mono min-w-0" style={{ color: 'var(--text-secondary)' }}>
               {state.amount || '0.00'}
             </div>
-            <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/50">
+            <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
               <span className="font-bold text-sm text-white">{destToken}</span>
             </div>
           </div>
@@ -455,15 +455,20 @@ export function BridgeInterface() {
 
         {/* Gasless Mode Toggle (only for Stacks → Ethereum) */}
         {state.direction === 'stacks-to-eth' && (
-          <div className="rounded-lg border border-green-200 dark:border-green-900/30 bg-green-50 dark:bg-green-900/10 p-4 mb-6">
+          <div className="rounded-lg p-4 mb-6" style={{
+            border: `1px solid var(--border-color)`,
+            backgroundColor: 'rgba(16, 185, 129, 0.05)'
+          }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)'
+                }}>
                   <Zap className="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <span className="font-semibold text-sm text-gray-900 dark:text-white">Gasless Mode</span>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Pay fees in USDCx</p>
+                  <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Gasless Mode</span>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pay fees in USDCx</p>
                 </div>
               </div>
               <button
