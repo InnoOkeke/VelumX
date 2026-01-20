@@ -120,27 +120,31 @@ export function useWallet() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setState(prev => ({ ...prev, ...parsed }));
+    const restoreState = async () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setState(prev => ({ ...prev, ...parsed }));
+        }
+        
+        // Check if Stacks wallet is already connected
+        if (userSession && userSession.isUserSignedIn()) {
+          const userData = userSession.loadUserData();
+          setState(prev => ({
+            ...prev,
+            stacksAddress: userData.profile.stxAddress.testnet,
+            stacksConnected: true,
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to restore wallet state:', error);
+        // Clear corrupted state
+        localStorage.removeItem(STORAGE_KEY);
       }
-      
-      // Check if Stacks wallet is already connected
-      if (userSession && userSession.isUserSignedIn()) {
-        const userData = userSession.loadUserData();
-        setState(prev => ({
-          ...prev,
-          stacksAddress: userData.profile.stxAddress.testnet,
-          stacksConnected: true,
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to restore wallet state:', error);
-      // Clear corrupted state
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    };
+    
+    restoreState();
   }, []);
 
   // Persist wallet state to localStorage
@@ -203,6 +207,11 @@ export function useWallet() {
         isConnecting: false,
       }));
 
+      // Fetch balances immediately after connection
+      setTimeout(() => {
+        fetchEthereumBalances(address);
+      }, 100);
+
       // Listen for account changes
       provider.on('accountsChanged', (accounts: string[]) => {
         if (accounts.length === 0) {
@@ -233,7 +242,7 @@ export function useWallet() {
       setState(prev => ({ ...prev, isConnecting: false }));
       throw error;
     }
-  }, [config.ethereumChainId]);
+  }, [config.ethereumChainId, fetchEthereumBalances]);
 
   // Disconnect Ethereum wallet
   const disconnectEthereum = useCallback(() => {
@@ -300,6 +309,12 @@ export function useWallet() {
               stacksWalletType: preferredWallet || detectedWallet,
               isConnecting: false,
             }));
+            
+            // Fetch balances immediately after connection
+            setTimeout(() => {
+              fetchStacksBalances(userData.profile.stxAddress.testnet);
+            }, 100);
+            
             resolve();
           },
           onCancel: () => {
@@ -313,7 +328,7 @@ export function useWallet() {
       setState(prev => ({ ...prev, isConnecting: false }));
       throw error;
     }
-  }, []);
+  }, [fetchStacksBalances]);
 
   // Disconnect Stacks wallet
   const disconnectStacks = useCallback(() => {
@@ -334,8 +349,8 @@ export function useWallet() {
   }, []);
 
   // Fetch Ethereum balances
-  const fetchEthereumBalances = useCallback(async () => {
-    if (!state.ethereumAddress) return;
+  const fetchEthereumBalances = useCallback(async (address: string) => {
+    if (!address) return;
 
     try {
       const publicClient = createPublicClient({
@@ -345,7 +360,7 @@ export function useWallet() {
 
       // Fetch ETH balance
       const ethBalance = await publicClient.getBalance({
-        address: state.ethereumAddress as `0x${string}`,
+        address: address as `0x${string}`,
       });
 
       // Fetch USDC balance
@@ -353,7 +368,7 @@ export function useWallet() {
         address: config.ethereumUsdcAddress as `0x${string}`,
         abi: USDC_ABI,
         functionName: 'balanceOf',
-        args: [state.ethereumAddress as `0x${string}`],
+        args: [address as `0x${string}`],
       });
 
       setState(prev => ({
@@ -367,11 +382,11 @@ export function useWallet() {
     } catch (error) {
       console.error('Failed to fetch Ethereum balances:', error);
     }
-  }, [state.ethereumAddress, config.ethereumUsdcAddress]);
+  }, [config.ethereumUsdcAddress]);
 
   // Fetch Stacks balances
-  const fetchStacksBalances = useCallback(async () => {
-    if (!state.stacksAddress) return;
+  const fetchStacksBalances = useCallback(async (address: string) => {
+    if (!address) return;
 
     try {
       // Use Stacks testnet API URL directly
@@ -379,14 +394,14 @@ export function useWallet() {
       
       // Fetch STX balance
       const stxResponse = await fetch(
-        `${apiUrl}/extended/v1/address/${state.stacksAddress}/balances`
+        `${apiUrl}/extended/v1/address/${address}/balances`
       );
       const stxData = await stxResponse.json();
       const stxBalance = BigInt(stxData.stx.balance);
 
       // Fetch USDCx balance (SIP-010 token)
       const usdcxResponse = await fetch(
-        `${apiUrl}/extended/v1/address/${state.stacksAddress}/balances`
+        `${apiUrl}/extended/v1/address/${address}/balances`
       );
       const usdcxData = await usdcxResponse.json();
       
@@ -405,26 +420,31 @@ export function useWallet() {
     } catch (error) {
       console.error('Failed to fetch Stacks balances:', error);
     }
-  }, [state.stacksAddress, config.stacksUsdcxAddress]);
+  }, [config.stacksUsdcxAddress]);
 
   // Fetch all balances
   const fetchBalances = useCallback(async () => {
     setState(prev => ({ ...prev, isFetchingBalances: true }));
     
-    await Promise.all([
-      fetchEthereumBalances(),
-      fetchStacksBalances(),
-    ]);
+    const promises = [];
+    if (state.ethereumAddress) {
+      promises.push(fetchEthereumBalances(state.ethereumAddress));
+    }
+    if (state.stacksAddress) {
+      promises.push(fetchStacksBalances(state.stacksAddress));
+    }
+    
+    await Promise.all(promises);
     
     setState(prev => ({ ...prev, isFetchingBalances: false }));
-  }, [fetchEthereumBalances, fetchStacksBalances]);
+  }, [state.ethereumAddress, state.stacksAddress, fetchEthereumBalances, fetchStacksBalances]);
 
   // Auto-fetch balances when addresses change
   useEffect(() => {
     if (state.ethereumAddress || state.stacksAddress) {
       fetchBalances();
     }
-  }, [state.ethereumAddress, state.stacksAddress, fetchBalances]);
+  }, [state.ethereumAddress, state.stacksAddress]);
 
   // Disconnect all wallets
   const disconnectAll = useCallback(() => {
