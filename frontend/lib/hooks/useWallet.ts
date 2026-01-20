@@ -197,58 +197,26 @@ export function useWallet() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
+    let mounted = true;
+    
     const restoreState = async () => {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        let restoredEthAddress: string | null = null;
-        let restoredStacksAddress: string | null = null;
+        if (!stored) return;
         
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setState(prev => ({ ...prev, ...parsed }));
-          restoredEthAddress = parsed.ethereumAddress;
-        }
+        const parsed = JSON.parse(stored);
+        const restoredEthAddress = parsed.ethereumAddress;
+        const restoredStacksAddress = parsed.stacksAddress;
         
-        // Check if Stacks wallet is already connected
-        if (userSession && userSession.isUserSignedIn()) {
-          const userData = userSession.loadUserData();
-          restoredStacksAddress = userData.profile.stxAddress.testnet;
-          setState(prev => ({
-            ...prev,
-            stacksAddress: restoredStacksAddress,
-            stacksConnected: true,
-          }));
-        }
-        
-        // Verify Ethereum connection is still active
+        // Verify Ethereum connection BEFORE setting state
+        let ethConnected = false;
         if (restoredEthAddress && typeof window !== 'undefined') {
           const ethereum = (window as any).ethereum;
           if (ethereum) {
             try {
               const accounts = await ethereum.request({ method: 'eth_accounts' });
-              console.log('Restored Ethereum accounts:', accounts);
-              console.log('Expected address:', restoredEthAddress);
               if (accounts && accounts.length > 0 && accounts[0].toLowerCase() === restoredEthAddress.toLowerCase()) {
-                // Connection is still active, ensure state is set and fetch balances
-                console.log('Ethereum connection verified, fetching balances...');
-                setState(prev => ({
-                  ...prev,
-                  ethereumConnected: true,
-                  ethereumAddress: restoredEthAddress,
-                }));
-                setTimeout(() => {
-                  fetchEthereumBalances(restoredEthAddress!);
-                }, 500);
-              } else {
-                // Connection lost, clear state
-                console.log('Ethereum connection lost, clearing state');
-                setState(prev => ({
-                  ...prev,
-                  ethereumAddress: null,
-                  ethereumConnected: false,
-                  ethereumChainId: null,
-                  ethereumWalletType: null,
-                }));
+                ethConnected = true;
               }
             } catch (error) {
               console.error('Failed to verify Ethereum connection:', error);
@@ -256,20 +224,47 @@ export function useWallet() {
           }
         }
         
-        // Fetch Stacks balances if connected
-        if (restoredStacksAddress) {
-          setTimeout(() => {
-            fetchStacksBalances(restoredStacksAddress!);
-          }, 500);
+        // Check if Stacks wallet is still connected
+        let stacksConnected = false;
+        let stacksAddr = restoredStacksAddress;
+        if (userSession && userSession.isUserSignedIn()) {
+          const userData = userSession.loadUserData();
+          stacksAddr = userData.profile.stxAddress.testnet;
+          stacksConnected = true;
+        }
+        
+        // Only update state once with verified data
+        if (mounted) {
+          setState(prev => ({
+            ...prev,
+            ethereumAddress: ethConnected ? restoredEthAddress : null,
+            ethereumConnected: ethConnected,
+            ethereumWalletType: ethConnected ? parsed.ethereumWalletType : null,
+            ethereumChainId: ethConnected ? parsed.ethereumChainId : null,
+            stacksAddress: stacksConnected ? stacksAddr : null,
+            stacksConnected: stacksConnected,
+            stacksWalletType: stacksConnected ? parsed.stacksWalletType : null,
+          }));
+          
+          // Fetch balances after state is set
+          if (ethConnected && restoredEthAddress) {
+            fetchEthereumBalances(restoredEthAddress);
+          }
+          if (stacksConnected && stacksAddr) {
+            fetchStacksBalances(stacksAddr);
+          }
         }
       } catch (error) {
         console.error('Failed to restore wallet state:', error);
-        // Clear corrupted state
         localStorage.removeItem(STORAGE_KEY);
       }
     };
     
     restoreState();
+    
+    return () => {
+      mounted = false;
+    };
   }, [fetchEthereumBalances, fetchStacksBalances]);
 
   // Persist wallet state to localStorage

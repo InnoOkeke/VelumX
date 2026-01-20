@@ -41,23 +41,11 @@ export function BridgeInterface() {
 
   // Fetch balances when component mounts or wallets connect
   useEffect(() => {
-    console.log('BridgeInterface - Wallet State:', { ethereumConnected, stacksConnected, ethereumAddress, stacksAddress });
-    console.log('BridgeInterface - Connection Check:', { 
-      hasEthAddress: !!ethereumAddress, 
-      hasStacksAddress: !!stacksAddress,
-      ethereumConnected,
-      stacksConnected 
-    });
-    console.log('BridgeInterface - Balance Display:', { 
-      rawBalances: balances
-    });
-    
     // Fetch balances if we have addresses (even if connected flags aren't set yet)
     if ((ethereumAddress || stacksAddress) && fetchBalances) {
-      console.log('Fetching balances from BridgeInterface...');
       fetchBalances();
     }
-  }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances, balances]);
+  }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances]);
 
   const [state, setState] = useState<BridgeState>({
     amount: '',
