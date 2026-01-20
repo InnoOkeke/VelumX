@@ -41,10 +41,25 @@ export function BridgeInterface() {
 
   // Fetch balances when component mounts or wallets connect
   useEffect(() => {
-    if ((ethereumConnected || stacksConnected) && fetchBalances) {
+    console.log('BridgeInterface - Wallet State:', { ethereumConnected, stacksConnected, ethereumAddress, stacksAddress });
+    console.log('BridgeInterface - Connection Check:', { 
+      hasEthAddress: !!ethereumAddress, 
+      hasStacksAddress: !!stacksAddress,
+      ethereumConnected,
+      stacksConnected 
+    });
+    console.log('BridgeInterface - Balance Display:', { 
+      rawBalances: balances,
+      sourceBalance: state.direction === 'eth-to-stacks' ? balances.usdc : balances.usdcx,
+      sourceToken: state.direction === 'eth-to-stacks' ? 'USDC' : 'USDCx'
+    });
+    
+    // Fetch balances if we have addresses (even if connected flags aren't set yet)
+    if ((ethereumAddress || stacksAddress) && fetchBalances) {
+      console.log('Fetching balances from BridgeInterface...');
       fetchBalances();
     }
-  }, [ethereumConnected, stacksConnected]);
+  }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances, balances, state.direction]);
 
   const [state, setState] = useState<BridgeState>({
     amount: '',
@@ -365,9 +380,10 @@ export function BridgeInterface() {
     }
   };
 
+  // Check if both wallets are connected based on addresses (more reliable than flags during restoration)
   const isConnected = state.direction === 'eth-to-stacks' 
-    ? ethereumConnected && stacksConnected
-    : stacksConnected && ethereumConnected;
+    ? (ethereumConnected || !!ethereumAddress) && (stacksConnected || !!stacksAddress)
+    : (stacksConnected || !!stacksAddress) && (ethereumConnected || !!ethereumAddress);
 
   const sourceBalance = state.direction === 'eth-to-stacks' ? balances.usdc : balances.usdcx;
   const sourceToken = state.direction === 'eth-to-stacks' ? 'USDC' : 'USDCx';
