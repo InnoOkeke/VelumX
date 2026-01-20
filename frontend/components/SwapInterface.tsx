@@ -175,27 +175,23 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Dynamic imports for Stacks libraries
       const { openContractCall } = await import('@stacks/connect');
       const { STACKS_TESTNET } = await import('@stacks/network');
-      const { uintCV, standardPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
+      const { uintCV, principalCV, PostConditionMode } = await import('@stacks/transactions');
       
       const inputAmountInMicroUnits = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minOutputAmount = BigInt(state.quote.outputAmount);
 
-      // For demo: Use Velar DEX contract (this would be the actual DEX contract address)
-      // In production, you'd get this from the backend or config
       const dexContractAddress = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1';
       const dexContractName = 'velar-swap-v1';
 
-      // Prepare function arguments for swap
+      // Use principalCV which works for both mainnet and testnet addresses
       const functionArgs = [
         uintCV(Number(inputAmountInMicroUnits)),
         uintCV(Number(minOutputAmount)),
-        standardPrincipalCV(stacksAddress),
+        principalCV(stacksAddress), // This works for both ST and SP addresses
       ];
 
-      // Open wallet to sign transaction
       await new Promise<string>((resolve, reject) => {
         openContractCall({
           contractAddress: dexContractAddress,

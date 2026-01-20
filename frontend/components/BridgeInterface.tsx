@@ -240,6 +240,13 @@ export function BridgeInterface() {
         success: `Deposit initiated! Transaction: ${depositHash}`,
         amount: '',
       }));
+
+      // Refresh balances after successful transaction
+      if (fetchBalances) {
+        setTimeout(() => {
+          fetchBalances();
+        }, 3000); // Wait 3 seconds for initial confirmation
+      }
     } catch (error) {
       console.error('Deposit error:', error);
       setState(prev => ({
@@ -347,6 +354,13 @@ export function BridgeInterface() {
         success: 'Withdrawal initiated! Check transaction history for status.',
         amount: '',
       }));
+
+      // Refresh balances after successful transaction
+      if (fetchBalances) {
+        setTimeout(() => {
+          fetchBalances();
+        }, 3000); // Wait 3 seconds for initial confirmation
+      }
     } catch (error) {
       console.error('Withdrawal error:', error);
       setState(prev => ({
