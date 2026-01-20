@@ -120,9 +120,6 @@ export function useWallet() {
   const fetchEthereumBalances = useCallback(async (address: string) => {
     if (!address) return;
 
-    console.log('Fetching Ethereum balances for:', address);
-    console.log('USDC contract address:', config.ethereumUsdcAddress);
-
     try {
       const publicClient = createPublicClient({
         chain: sepolia,
@@ -133,7 +130,6 @@ export function useWallet() {
       const ethBalance = await publicClient.getBalance({
         address: address as `0x${string}`,
       });
-      console.log('ETH balance (raw):', ethBalance.toString());
 
       // Fetch USDC balance
       const usdcBalance = await publicClient.readContract({
@@ -142,13 +138,9 @@ export function useWallet() {
         functionName: 'balanceOf',
         args: [address as `0x${string}`],
       });
-      console.log('USDC balance (raw):', usdcBalance.toString());
 
       const formattedEth = formatUnits(ethBalance, TOKEN_DECIMALS.eth);
       const formattedUsdc = formatUnits(usdcBalance as bigint, TOKEN_DECIMALS.usdc);
-      
-      console.log('Formatted ETH:', formattedEth);
-      console.log('Formatted USDC:', formattedUsdc);
 
       setState(prev => ({
         ...prev,
@@ -237,8 +229,13 @@ export function useWallet() {
               console.log('Restored Ethereum accounts:', accounts);
               console.log('Expected address:', restoredEthAddress);
               if (accounts && accounts.length > 0 && accounts[0].toLowerCase() === restoredEthAddress.toLowerCase()) {
-                // Connection is still active, fetch balances
+                // Connection is still active, ensure state is set and fetch balances
                 console.log('Ethereum connection verified, fetching balances...');
+                setState(prev => ({
+                  ...prev,
+                  ethereumConnected: true,
+                  ethereumAddress: restoredEthAddress,
+                }));
                 setTimeout(() => {
                   fetchEthereumBalances(restoredEthAddress!);
                 }, 500);

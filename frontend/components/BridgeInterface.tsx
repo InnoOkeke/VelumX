@@ -38,15 +38,6 @@ export function BridgeInterface() {
 
   const config = useConfig();
 
-  // Debug logging
-  console.log('BridgeInterface - Wallet State:', {
-    ethereumAddress,
-    ethereumConnected,
-    stacksAddress,
-    stacksConnected,
-    balances,
-  });
-
   const [state, setState] = useState<BridgeState>({
     amount: '',
     direction: 'eth-to-stacks',
@@ -370,22 +361,9 @@ export function BridgeInterface() {
     ? ethereumConnected && stacksConnected
     : stacksConnected && ethereumConnected;
 
-  console.log('BridgeInterface - Connection Check:', {
-    direction: state.direction,
-    ethereumConnected,
-    stacksConnected,
-    isConnected,
-  });
-
   const sourceBalance = state.direction === 'eth-to-stacks' ? balances.usdc : balances.usdcx;
   const sourceToken = state.direction === 'eth-to-stacks' ? 'USDC' : 'USDCx';
   const destToken = state.direction === 'eth-to-stacks' ? 'USDCx' : 'USDC';
-
-  console.log('BridgeInterface - Balance Display:', {
-    sourceBalance,
-    sourceToken,
-    rawBalances: balances,
-  });
 
   return (
     <div className="max-w-lg mx-auto">
