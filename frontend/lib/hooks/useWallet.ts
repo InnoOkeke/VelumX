@@ -116,6 +116,91 @@ export function useWallet() {
     isFetchingBalances: false,
   });
 
+  // Fetch Ethereum balances
+  const fetchEthereumBalances = useCallback(async (address: string) => {
+    if (!address) return;
+
+    console.log('Fetching Ethereum balances for:', address);
+    console.log('USDC contract address:', config.ethereumUsdcAddress);
+
+    try {
+      const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http(),
+      });
+
+      // Fetch ETH balance
+      const ethBalance = await publicClient.getBalance({
+        address: address as `0x${string}`,
+      });
+      console.log('ETH balance (raw):', ethBalance.toString());
+
+      // Fetch USDC balance
+      const usdcBalance = await publicClient.readContract({
+        address: config.ethereumUsdcAddress as `0x${string}`,
+        abi: USDC_ABI,
+        functionName: 'balanceOf',
+        args: [address as `0x${string}`],
+      });
+      console.log('USDC balance (raw):', usdcBalance.toString());
+
+      const formattedEth = formatUnits(ethBalance, TOKEN_DECIMALS.eth);
+      const formattedUsdc = formatUnits(usdcBalance as bigint, TOKEN_DECIMALS.usdc);
+      
+      console.log('Formatted ETH:', formattedEth);
+      console.log('Formatted USDC:', formattedUsdc);
+
+      setState(prev => ({
+        ...prev,
+        balances: {
+          ...prev.balances,
+          eth: formattedEth,
+          usdc: formattedUsdc,
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to fetch Ethereum balances:', error);
+    }
+  }, [config.ethereumUsdcAddress]);
+
+  // Fetch Stacks balances
+  const fetchStacksBalances = useCallback(async (address: string) => {
+    if (!address) return;
+
+    try {
+      // Use Stacks testnet API URL directly
+      const apiUrl = 'https://api.testnet.hiro.so';
+      
+      // Fetch STX balance
+      const stxResponse = await fetch(
+        `${apiUrl}/extended/v1/address/${address}/balances`
+      );
+      const stxData = await stxResponse.json();
+      const stxBalance = BigInt(stxData.stx.balance);
+
+      // Fetch USDCx balance (SIP-010 token)
+      const usdcxResponse = await fetch(
+        `${apiUrl}/extended/v1/address/${address}/balances`
+      );
+      const usdcxData = await usdcxResponse.json();
+      
+      // Find USDCx in fungible tokens
+      const usdcxToken = usdcxData.fungible_tokens?.[config.stacksUsdcxAddress];
+      const usdcxBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
+
+      setState(prev => ({
+        ...prev,
+        balances: {
+          ...prev.balances,
+          stx: formatUnits(stxBalance, TOKEN_DECIMALS.stx),
+          usdcx: formatUnits(usdcxBalance, TOKEN_DECIMALS.usdcx),
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to fetch Stacks balances:', error);
+    }
+  }, [config.stacksUsdcxAddress]);
+
   // Restore wallet state from localStorage and reconnect
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -208,91 +293,6 @@ export function useWallet() {
       console.error('Failed to persist wallet state:', error);
     }
   }, [state.ethereumAddress, state.ethereumConnected, state.ethereumWalletType, state.stacksAddress, state.stacksConnected, state.stacksWalletType]);
-
-  // Fetch Ethereum balances
-  const fetchEthereumBalances = useCallback(async (address: string) => {
-    if (!address) return;
-
-    console.log('Fetching Ethereum balances for:', address);
-    console.log('USDC contract address:', config.ethereumUsdcAddress);
-
-    try {
-      const publicClient = createPublicClient({
-        chain: sepolia,
-        transport: http(),
-      });
-
-      // Fetch ETH balance
-      const ethBalance = await publicClient.getBalance({
-        address: address as `0x${string}`,
-      });
-      console.log('ETH balance (raw):', ethBalance.toString());
-
-      // Fetch USDC balance
-      const usdcBalance = await publicClient.readContract({
-        address: config.ethereumUsdcAddress as `0x${string}`,
-        abi: USDC_ABI,
-        functionName: 'balanceOf',
-        args: [address as `0x${string}`],
-      });
-      console.log('USDC balance (raw):', usdcBalance.toString());
-
-      const formattedEth = formatUnits(ethBalance, TOKEN_DECIMALS.eth);
-      const formattedUsdc = formatUnits(usdcBalance as bigint, TOKEN_DECIMALS.usdc);
-      
-      console.log('Formatted ETH:', formattedEth);
-      console.log('Formatted USDC:', formattedUsdc);
-
-      setState(prev => ({
-        ...prev,
-        balances: {
-          ...prev.balances,
-          eth: formattedEth,
-          usdc: formattedUsdc,
-        },
-      }));
-    } catch (error) {
-      console.error('Failed to fetch Ethereum balances:', error);
-    }
-  }, [config.ethereumUsdcAddress]);
-
-  // Fetch Stacks balances
-  const fetchStacksBalances = useCallback(async (address: string) => {
-    if (!address) return;
-
-    try {
-      // Use Stacks testnet API URL directly
-      const apiUrl = 'https://api.testnet.hiro.so';
-      
-      // Fetch STX balance
-      const stxResponse = await fetch(
-        `${apiUrl}/extended/v1/address/${address}/balances`
-      );
-      const stxData = await stxResponse.json();
-      const stxBalance = BigInt(stxData.stx.balance);
-
-      // Fetch USDCx balance (SIP-010 token)
-      const usdcxResponse = await fetch(
-        `${apiUrl}/extended/v1/address/${address}/balances`
-      );
-      const usdcxData = await usdcxResponse.json();
-      
-      // Find USDCx in fungible tokens
-      const usdcxToken = usdcxData.fungible_tokens?.[config.stacksUsdcxAddress];
-      const usdcxBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
-
-      setState(prev => ({
-        ...prev,
-        balances: {
-          ...prev.balances,
-          stx: formatUnits(stxBalance, TOKEN_DECIMALS.stx),
-          usdcx: formatUnits(usdcxBalance, TOKEN_DECIMALS.usdcx),
-        },
-      }));
-    } catch (error) {
-      console.error('Failed to fetch Stacks balances:', error);
-    }
-  }, [config.stacksUsdcxAddress]);
 
   // Connect Ethereum wallet (Rabby, MetaMask, or any injected wallet)
   const connectEthereum = useCallback(async (preferredWallet?: EthereumWalletType) => {
