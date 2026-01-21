@@ -246,7 +246,7 @@ export function useWallet() {
             stacksWalletType: stacksConnected ? parsed.stacksWalletType : null,
           }));
           
-          // Fetch balances after state is set
+          // Fetch balances immediately after state is set
           if (ethConnected && restoredEthAddress) {
             fetchEthereumBalances(restoredEthAddress);
           }
@@ -266,6 +266,125 @@ export function useWallet() {
       mounted = false;
     };
   }, [fetchEthereumBalances, fetchStacksBalances]);
+
+  // Fetch balances immediately when addresses are available
+  useEffect(() => {
+    if (state.ethereumAddress) {
+      fetchEthereumBalances(state.ethereumAddress);
+    }
+  }, [state.ethereumAddress, fetchEthereumBalances]);
+
+  useEffect(() => {
+    if (state.stacksAddress) {
+      fetchStacksBalances(state.stacksAddress);
+    }
+  }, [state.stacksAddress, fetchStacksBalances]);
+
+  // Set up polling for balance updates (every 10 seconds)
+  useEffect(() => {
+    if (!state.ethereumAddress && !state.stacksAddress) return;
+
+    const interval = setInterval(() => {
+      if (state.ethereumAddress) {
+        fetchEthereumBalances(state.ethereumAddress);
+      }
+      if (state.stacksAddress) {
+        fetchStacksBalances(state.stacksAddress);
+      }
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [state.ethereumAddress, state.stacksAddress, fetchEthereumBalances, fetchStacksBalances]);
+
+  // Set up Ethereum wallet event listeners for auto-detection
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) return;
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length === 0) {
+        // User disconnected wallet
+        setState(prev => ({
+          ...prev,
+          ethereumAddress: null,
+          ethereumConnected: false,
+          ethereumChainId: null,
+          ethereumWalletType: null,
+          balances: {
+            ...prev.balances,
+            eth: '0',
+            usdc: '0',
+          },
+        }));
+      } else {
+        // User switched accounts or connected
+        const newAddress = accounts[0];
+        setState(prev => ({
+          ...prev,
+          ethereumAddress: newAddress,
+          ethereumConnected: true,
+        }));
+        fetchEthereumBalances(newAddress);
+      }
+    };
+
+    const handleChainChanged = () => {
+      // Reload page on chain change to avoid state inconsistencies
+      window.location.reload();
+    };
+
+    ethereum.on('accountsChanged', handleAccountsChanged);
+    ethereum.on('chainChanged', handleChainChanged);
+
+    return () => {
+      ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener('chainChanged', handleChainChanged);
+    };
+  }, [fetchEthereumBalances]);
+
+  // Monitor Stacks wallet session
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userSession) return;
+
+    const checkStacksSession = () => {
+      if (userSession.isUserSignedIn()) {
+        const userData = userSession.loadUserData();
+        const stacksAddr = userData.profile.stxAddress.testnet;
+        
+        setState(prev => {
+          // Only update if address changed
+          if (prev.stacksAddress !== stacksAddr) {
+            return {
+              ...prev,
+              stacksAddress: stacksAddr,
+              stacksConnected: true,
+            };
+          }
+          return prev;
+        });
+      } else if (state.stacksConnected) {
+        // Session ended
+        setState(prev => ({
+          ...prev,
+          stacksAddress: null,
+          stacksConnected: false,
+          stacksWalletType: null,
+          balances: {
+            ...prev.balances,
+            stx: '0',
+            usdcx: '0',
+          },
+        }));
+      }
+    };
+
+    // Check session every 5 seconds
+    const interval = setInterval(checkStacksSession, 5000);
+
+    return () => clearInterval(interval);
+  }, [state.stacksConnected]);
 
   // Persist wallet state to localStorage
   useEffect(() => {
@@ -328,40 +447,7 @@ export function useWallet() {
       }));
 
       // Fetch balances immediately after connection
-      setTimeout(() => {
-        fetchEthereumBalances(address);
-      }, 100);
-
-      // Listen for account changes (only set up once)
-      if (!provider._accountsChangedListenerSet) {
-        provider._accountsChangedListenerSet = true;
-        provider.on('accountsChanged', (accounts: string[]) => {
-          if (accounts.length === 0) {
-            // User disconnected from wallet
-            setState(prev => ({
-              ...prev,
-              ethereumAddress: null,
-              ethereumConnected: false,
-              ethereumChainId: null,
-              ethereumWalletType: null,
-              balances: {
-                ...prev.balances,
-                eth: '0',
-                usdc: '0',
-              },
-            }));
-          } else if (accounts[0] !== address) {
-            // User switched accounts
-            setState(prev => ({ ...prev, ethereumAddress: accounts[0] }));
-            fetchEthereumBalances(accounts[0]);
-          }
-        });
-
-        // Listen for chain changes
-        provider.on('chainChanged', () => {
-          window.location.reload();
-        });
-      }
+      fetchEthereumBalances(address);
 
       return address;
     } catch (error) {
@@ -437,9 +523,7 @@ export function useWallet() {
             }));
             
             // Fetch balances immediately after connection
-            setTimeout(() => {
-              fetchStacksBalances(userData.profile.stxAddress.testnet);
-            }, 100);
+            fetchStacksBalances(userData.profile.stxAddress.testnet);
             
             resolve();
           },

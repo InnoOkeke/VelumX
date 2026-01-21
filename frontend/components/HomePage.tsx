@@ -9,12 +9,14 @@ import { useState } from 'react';
 import { WalletButton } from './WalletButton';
 import { BridgeInterface } from './BridgeInterface';
 import { SwapInterface } from './SwapInterface';
+import { LiquidityInterface } from './LiquidityInterface';
+import { PoolBrowser } from './PoolBrowser';
 import { TransactionHistory } from './TransactionHistory';
 import { NotificationContainer } from './NotificationContainer';
-import { ArrowLeftRight, Zap, History, Repeat, Shield, Moon, Sun } from 'lucide-react';
+import { ArrowLeftRight, Zap, History, Repeat, Shield, Moon, Sun, Droplets, BarChart3 } from 'lucide-react';
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'history'>('bridge');
+  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'liquidity' | 'pools' | 'history'>('bridge');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Initialize dark mode from localStorage
@@ -123,6 +125,28 @@ export default function HomePage() {
               Swap
             </button>
             <button
+              onClick={() => setActiveTab('liquidity')}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
+                activeTab === 'liquidity'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Droplets className="h-4 w-4" />
+              Liquidity
+            </button>
+            <button
+              onClick={() => setActiveTab('pools')}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
+                activeTab === 'pools'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              Pools
+            </button>
+            <button
               onClick={() => setActiveTab('history')}
               className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
                 activeTab === 'history'
@@ -140,6 +164,8 @@ export default function HomePage() {
         <div className="mb-16">
           {activeTab === 'bridge' && <BridgeInterface />}
           {activeTab === 'swap' && <SwapInterface />}
+          {activeTab === 'liquidity' && <LiquidityInterface />}
+          {activeTab === 'pools' && <PoolBrowser />}
           {activeTab === 'history' && <TransactionHistory />}
         </div>
 

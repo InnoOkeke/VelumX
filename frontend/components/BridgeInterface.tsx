@@ -10,7 +10,7 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap } from 'lucide-react';
+import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
 import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../../shared/utils/address-encoding';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
@@ -36,6 +36,7 @@ export function BridgeInterface() {
     stacksConnected,
     balances,
     fetchBalances,
+    isFetchingBalances,
   } = useWallet();
 
   const config = useConfig();
@@ -48,6 +49,24 @@ export function BridgeInterface() {
     }
   }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances]);
 
+  // Manual refresh handler
+  const handleRefreshBalances = async () => {
+    if (fetchBalances) {
+      await fetchBalances();
+    }
+  };
+
+  // Format time ago
+  const getTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 10) return 'just now';
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  };
+
   const [state, setState] = useState<BridgeState>({
     amount: '',
     direction: 'eth-to-stacks',
@@ -57,6 +76,13 @@ export function BridgeInterface() {
     success: null,
     feeEstimate: null,
   });
+
+  const [lastBalanceUpdate, setLastBalanceUpdate] = useState<number>(Date.now());
+
+  // Update last balance update timestamp when balances change
+  useEffect(() => {
+    setLastBalanceUpdate(Date.now());
+  }, [balances]);
 
   // Validate amount
   const validateAmount = (amount: string): string | null => {
@@ -215,13 +241,34 @@ export function BridgeInterface() {
       // Wait for transaction receipt to get message hash
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
       
-      // Extract message hash from logs (MessageSent event)
+      // Extract message hash from logs using parseEventLogs
       let messageHash = '';
-      for (const log of receipt.logs) {
-        // MessageSent event signature: MessageSent(bytes32)
-        if (log.topics[0] === '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036') {
-          messageHash = log.topics[1] || '';
-          break;
+      try {
+        const logs = await publicClient.getLogs({
+          address: config.ethereumXReserveAddress as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'MessageSent',
+            inputs: [
+              { name: 'message', type: 'bytes32', indexed: true },
+            ],
+          },
+          fromBlock: receipt.blockNumber,
+          toBlock: receipt.blockNumber,
+        });
+        
+        if (logs.length > 0 && logs[0].topics[1]) {
+          messageHash = logs[0].topics[1];
+        }
+      } catch (error) {
+        console.error('Failed to extract message hash from logs:', error);
+        // Fallback: try to find MessageSent event in receipt logs
+        for (const log of receipt.logs) {
+          // MessageSent event signature: keccak256("MessageSent(bytes32)")
+          if (log.topics[0] === '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036') {
+            messageHash = log.topics[1] || '';
+            break;
+          }
         }
       }
 
@@ -434,9 +481,23 @@ export function BridgeInterface() {
         }}>
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>From</span>
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Balance: <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(sourceBalance).toFixed(4)}</span> {sourceToken}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Balance: {isFetchingBalances ? (
+                  <Loader2 className="inline w-3 h-3 animate-spin ml-1" />
+                ) : (
+                  <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(sourceBalance).toFixed(4)}</span>
+                )} {sourceToken}
+              </span>
+              <button
+                onClick={handleRefreshBalances}
+                disabled={isFetchingBalances}
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                title={`Last updated ${getTimeAgo(lastBalanceUpdate)}`}
+              >
+                <RefreshCw className={`w-3 h-3 ${isFetchingBalances ? 'animate-spin' : ''}`} style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <input

@@ -129,4 +129,12 @@ export const XRESERVE_ABI = [
     ],
     outputs: [],
   },
+  {
+    name: 'MessageSent',
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'message', type: 'bytes32', indexed: true },
+    ],
+  },
 ] as const;
