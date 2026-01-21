@@ -11,7 +11,7 @@ import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
-import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../../shared/utils/address-encoding';
+import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 
