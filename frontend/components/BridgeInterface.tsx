@@ -164,10 +164,16 @@ export function BridgeInterface() {
     return encodeStacksAddressUtil(address);
   };
 
-  // Encode Ethereum address to bytes32
-  const encodeEthereumAddress = (address: string): Buffer => {
+  // Encode Ethereum address to bytes32 for Stacks contract
+  const encodeEthereumAddress = (address: string): Uint8Array => {
     const hex = encodeEthereumAddressUtil(address);
-    return Buffer.from(hex.slice(2), 'hex');
+    // Convert hex string to Uint8Array (remove 0x prefix)
+    const hexWithoutPrefix = hex.slice(2);
+    const bytes = new Uint8Array(hexWithoutPrefix.length / 2);
+    for (let i = 0; i < hexWithoutPrefix.length; i += 2) {
+      bytes[i / 2] = parseInt(hexWithoutPrefix.substring(i, i + 2), 16);
+    }
+    return bytes;
   };
 
   // Handle Ethereum to Stacks deposit

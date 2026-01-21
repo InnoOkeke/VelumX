@@ -1,10 +1,11 @@
 /**
  * Address encoding utilities for cross-chain bridge
  * Handles conversion between Stacks addresses and bytes32 format
+ * Based on official Stacks documentation: https://docs.stacks.co/more-guides/bridging-usdcx
  */
 
-import { createAddress, addressToString, AddressVersion } from '@stacks/transactions';
-import { type Hex, toHex, toBytes } from 'viem';
+import { createAddress, addressToString, AddressVersion, StacksWireType } from '@stacks/transactions';
+import { type Hex, toHex, toBytes, pad } from 'viem';
 
 /**
  * Encodes a Stacks address to bytes32 format for xReserve protocol
@@ -48,15 +49,15 @@ export function decodeStacksAddress(bytes32: Hex): string {
   const hash160 = bytesToHex(hash);
   
   return addressToString({
-    type: 0, // Address type
     hash160,
     version,
+    type: StacksWireType.Address,
   });
 }
 
 /**
  * Encodes an Ethereum address to bytes32 format
- * Left-padded with zeros
+ * Left-padded with zeros using viem's pad function
  * 
  * @param address - Ethereum address (e.g., "0x1234...")
  * @returns 32-byte hex string
@@ -67,13 +68,8 @@ export function encodeEthereumAddress(address: string): Hex {
     ? address.toLowerCase() 
     : `0x${address.toLowerCase()}`;
   
-  // Convert to bytes, pad to 32 bytes, then convert back to hex
-  const addressBytes: Uint8Array = toBytes(normalizedAddress as Hex);
-  const paddedBytes: Uint8Array = new Uint8Array(32);
-  paddedBytes.fill(0); // Fill with zeros
-  paddedBytes.set(addressBytes, 12); // Place address at the end (left-padded)
-  
-  return toHex(paddedBytes);
+  // Use viem's pad function to left-pad to 32 bytes
+  return pad(normalizedAddress as Hex, { size: 32 });
 }
 
 /**
