@@ -19,6 +19,7 @@ export interface FrontendConfig {
   stacksUsdcxAddress: string;
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
+  stacksSwapContractAddress: string;
   
   // Domain IDs
   ethereumDomainId: number;

@@ -1,5 +1,5 @@
-// Deploy Paymaster Contract to Stacks Testnet
-// Uses manual network configuration to resolve SDK version conflicts
+// Deploy SIP-010 Trait Contract to Stacks Testnet
+// This trait must be deployed before the swap contract
 
 require('dotenv').config();
 const fs = require('fs');
@@ -36,7 +36,7 @@ const network = {
 
 async function deploy() {
     try {
-        console.log("🚀 Deploying Paymaster Contract to Stacks Testnet\n");
+        console.log("🚀 Deploying SIP-010 Trait Contract to Stacks Testnet\n");
         
         console.log("Step 1: Generating wallet...");
         const wallet = await generateWallet({ secretKey: SEED_PHRASE, password: '' });
@@ -50,8 +50,8 @@ async function deploy() {
         }
         console.log("Key length:", privateKey.length);
 
-        console.log("\nStep 2: Reading paymaster contract...");
-        const contractPath = path.join(__dirname, '../stacks-contracts/contracts/paymaster.clar');
+        console.log("\nStep 2: Reading SIP-010 trait contract...");
+        const contractPath = path.join(__dirname, '../stacks-contracts/contracts/traits/sip-010-trait-ft-standard.clar');
         const codeBody = fs.readFileSync(contractPath, 'utf8');
         console.log("Contract bytes:", codeBody.length);
 
@@ -63,13 +63,13 @@ async function deploy() {
 
         console.log("\nStep 4: Building transaction...");
         const tx = await makeContractDeploy({
-            contractName: 'paymaster-v4',
+            contractName: 'sip-010-trait-ft-standard-v3',
             codeBody: codeBody,
             senderKey: privateKey,
             network: network,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
-            fee: 200000n, // 0.2 STX fee
+            fee: 100000n, // 0.1 STX fee (small contract)
             nonce: BigInt(nonceData.possible_next_nonce)
         });
         console.log("Transaction built!");
@@ -91,37 +91,19 @@ async function deploy() {
         if (response.ok) {
             const txid = result.replace(/"/g, '');
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            console.log("✅ SUCCESS - Paymaster Contract Deployed!");
+            console.log("✅ SUCCESS - SIP-010 Trait Deployed!");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("📋 Transaction ID:", txid);
             console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/" + txid + "?chain=testnet");
-            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".paymaster-v4");
+            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".sip-010-trait-ft-standard-v3");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             
-            console.log("⏳ Waiting for confirmation (10-20 minutes)...");
+            console.log("⏳ Waiting for confirmation (5-10 minutes)...");
             console.log("💡 Check status at the explorer link above\n");
             
-            console.log("📝 Next Steps:");
-            console.log("1. Wait for transaction confirmation");
-            console.log("2. Update backend/.env:");
-            console.log(`   STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v4`);
-            console.log("3. Update frontend/.env.local:");
-            console.log(`   NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v4`);
-            console.log("4. Test gasless swaps with USDCx fees\n");
-            
-            // Save deployment info
-            const deploymentInfo = {
-                txid: txid,
-                contractAddress: `${TESTNET_ADDRESS}.paymaster-v4`,
-                deployerAddress: TESTNET_ADDRESS,
-                network: 'testnet',
-                timestamp: new Date().toISOString(),
-                explorerUrl: `https://explorer.hiro.so/txid/${txid}?chain=testnet`,
-            };
-            
-            const outputPath = path.join(__dirname, 'paymaster-deployment-info.json');
-            fs.writeFileSync(outputPath, JSON.stringify(deploymentInfo, null, 2));
-            console.log('💾 Deployment info saved to:', outputPath, '\n');
+            console.log("📝 Next Step:");
+            console.log("Once confirmed, deploy the swap contract:");
+            console.log("  node deploy-swap.js\n");
             
         } else {
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

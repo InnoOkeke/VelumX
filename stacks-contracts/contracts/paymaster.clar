@@ -5,6 +5,9 @@
 
 (use-trait sip-010 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)
 
+;; Import swap contract
+(define-constant SWAP-CONTRACT 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-contract-v12)
+
 (define-constant ERR-NOT-SPONSORED (err u200))
 (define-constant ERR-WRONG-SPONSOR (err u201))
 
@@ -39,9 +42,7 @@
 )
 
 ;; 3. Gasless Token Swap
-;; Pays fee in USDCx, then executes swap on ALEX DEX
-;; Note: This is a simplified version for testnet demo
-;; In production, integrate with actual ALEX swap contracts
+;; Pays fee in USDCx, then executes swap on our DEX
 (define-public (swap-gasless 
     (token-in <sip-010>) 
     (token-out <sip-010>) 
@@ -54,9 +55,55 @@
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
-    ;; 2. Execute swap (simplified for demo)
-    ;; In production, this would call ALEX swap router
-    ;; For now, just transfer tokens as placeholder
-    (contract-call? token-in transfer amount-in tx-sender (as-contract tx-sender) none)
+    ;; 2. Execute swap on our DEX contract
+    ;; Note: User must have already approved token-in for the swap contract
+    (contract-call? SWAP-CONTRACT swap token-in token-out amount-in min-amount-out)
+  )
+)
+
+;; 4. Gasless Add Liquidity
+;; Pays fee in USDCx, then adds liquidity to our DEX
+(define-public (add-liquidity-gasless
+    (token-a <sip-010>)
+    (token-b <sip-010>)
+    (amount-a-desired uint)
+    (amount-b-desired uint)
+    (amount-a-min uint)
+    (amount-b-min uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Add liquidity to our DEX contract
+    (contract-call? SWAP-CONTRACT add-liquidity 
+      token-a token-b 
+      amount-a-desired amount-b-desired 
+      amount-a-min amount-b-min)
+  )
+)
+
+;; 5. Gasless Remove Liquidity
+;; Pays fee in USDCx, then removes liquidity from our DEX
+(define-public (remove-liquidity-gasless
+    (token-a <sip-010>)
+    (token-b <sip-010>)
+    (liquidity uint)
+    (amount-a-min uint)
+    (amount-b-min uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Remove liquidity from our DEX contract
+    (contract-call? SWAP-CONTRACT remove-liquidity 
+      token-a token-b 
+      liquidity 
+      amount-a-min amount-b-min)
   )
 )

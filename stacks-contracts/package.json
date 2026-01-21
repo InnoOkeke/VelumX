@@ -6,7 +6,10 @@
     "deploy": "node deploy-paymaster.js"
   },
   "dependencies": {
+    "@scure/bip32": "^2.0.1",
+    "@stacks/network": "^6.16.1",
     "@stacks/transactions": "^6.16.1",
-    "@stacks/network": "^6.16.1"
+    "bip39": "^3.1.0",
+    "dotenv": "^16.4.5"
   }
 }

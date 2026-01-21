@@ -48,8 +48,10 @@ coverage/
 # Deployment outputs
 backend/deploy_output.txt
 backend/output.txt
+backend/*-deployment-info.json
 stacks-contracts/check_output.txt
 stacks-contracts/deployment-info.json
+stacks-contracts/*-deployment-info.json
 
 # Data files
 backend/data/*.json

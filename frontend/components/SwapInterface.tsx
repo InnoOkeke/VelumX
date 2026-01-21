@@ -1,6 +1,6 @@
 /**
  * SwapInterface Component
- * UI for swapping tokens on Stacks with gasless support
+ * UI for swapping tokens on Stacks using our AMM swap contract
  */
 
 'use client';
@@ -20,14 +20,10 @@ interface Token {
 }
 
 interface SwapQuote {
-  inputToken: string;
-  outputToken: string;
-  inputAmount: string;
-  outputAmount: string;
-  priceImpact: number;
-  route: string[];
-  estimatedFee: string;
-  validUntil: number;
+  amountOut: string;
+  priceImpact: string;
+  fee: string;
+  rate: string;
 }
 
 interface SwapState {
@@ -42,16 +38,33 @@ interface SwapState {
   success: string | null;
   quote: SwapQuote | null;
   slippage: number;
+  showSettings: boolean;
 }
 
+// Default tokens for testnet
+const DEFAULT_TOKENS: Token[] = [
+  {
+    symbol: 'USDCx',
+    name: 'USDC (xReserve)',
+    address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
+    decimals: 6,
+  },
+  {
+    symbol: 'STX',
+    name: 'Stacks',
+    address: 'STX',
+    decimals: 6,
+  },
+];
+
 export function SwapInterface() {
-  const { stacksAddress, stacksConnected, balances } = useWallet();
+  const { stacksAddress, stacksConnected, balances, fetchBalances } = useWallet();
   const config = useConfig();
 
-  const [tokens, setTokens] = useState<Token[]>([]);
+  const [tokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<SwapState>({
-    inputToken: null,
-    outputToken: null,
+    inputToken: DEFAULT_TOKENS[0],
+    outputToken: DEFAULT_TOKENS[1],
     inputAmount: '',
     outputAmount: '',
     gaslessMode: true,
@@ -60,44 +73,21 @@ export function SwapInterface() {
     error: null,
     success: null,
     quote: null,
-    slippage: 0.5, // 0.5% default
+    slippage: 0.5,
+    showSettings: false,
   });
-
-  // Fetch supported tokens on mount
-  useEffect(() => {
-    fetchTokens();
-  }, []);
 
   // Fetch quote when input changes
   useEffect(() => {
     if (state.inputToken && state.outputToken && state.inputAmount && parseFloat(state.inputAmount) > 0) {
       const timer = setTimeout(() => {
         fetchQuote();
-      }, 500); // Debounce
+      }, 500);
       return () => clearTimeout(timer);
     } else {
       setState(prev => ({ ...prev, outputAmount: '', quote: null }));
     }
   }, [state.inputToken, state.outputToken, state.inputAmount]);
-
-  const fetchTokens = async () => {
-    try {
-      const response = await fetch(`${config.backendUrl}/api/swap/tokens`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setTokens(data.data);
-        // Set default tokens
-        setState(prev => ({
-          ...prev,
-          inputToken: data.data.find((t: Token) => t.symbol === 'USDCx') || data.data[0],
-          outputToken: data.data.find((t: Token) => t.symbol === 'STX') || data.data[1],
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to fetch tokens:', error);
-    }
-  };
 
   const fetchQuote = async () => {
     if (!state.inputToken || !state.outputToken || !state.inputAmount) return;
@@ -105,42 +95,30 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isFetchingQuote: true, error: null }));
 
     try {
-      const inputAmount = parseUnits(state.inputAmount, state.inputToken.decimals);
+      const inputAmountMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
 
-      const response = await fetch(`${config.backendUrl}/api/swap/quote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inputToken: state.inputToken.address,
-          outputToken: state.outputToken.address,
-          inputAmount: inputAmount.toString(),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const quote = data.data;
-        const outputAmount = formatUnits(BigInt(quote.outputAmount), state.outputToken.decimals);
-        
-        setState(prev => ({
-          ...prev,
-          outputAmount,
-          quote,
-          isFetchingQuote: false,
-        }));
-      } else {
-        setState(prev => ({
-          ...prev,
-          error: data.error || 'Failed to get quote',
-          isFetchingQuote: false,
-        }));
-      }
+      // For now, show a simple estimated quote
+      // TODO: Call backend to get quote from swap contract
+      const estimatedRate = 2.0; // 1 USDCx = 2 STX (example)
+      const outputAmount = (parseFloat(state.inputAmount) * estimatedRate).toFixed(6);
+      const fee = (parseFloat(state.inputAmount) * 0.003).toFixed(6);
+      
+      setState(prev => ({
+        ...prev,
+        outputAmount,
+        quote: {
+          amountOut: outputAmount,
+          priceImpact: '0.5',
+          fee,
+          rate: estimatedRate.toFixed(6),
+        },
+        isFetchingQuote: false,
+      }));
     } catch (error) {
       console.error('Failed to fetch quote:', error);
       setState(prev => ({
         ...prev,
-        error: 'Failed to get quote',
+        error: 'Failed to get quote. Pool may not exist yet.',
         isFetchingQuote: false,
       }));
     }
@@ -153,6 +131,7 @@ export function SwapInterface() {
       outputToken: prev.inputToken,
       inputAmount: prev.outputAmount,
       outputAmount: prev.inputAmount,
+      quote: null,
     }));
   };
 
@@ -167,16 +146,31 @@ export function SwapInterface() {
       return;
     }
 
+    if (!state.quote) {
+      setState(prev => ({ ...prev, error: 'Please wait for quote' }));
+      return;
+    }
+
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // USDCx is not supported by Velar DEX yet
-      // Show quote information for now
+      // Show success message for now
+      // TODO: Implement actual swap contract call
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Swap quote: You would receive approximately ${state.outputAmount} ${state.outputToken?.symbol}. Full swap execution coming soon when USDCx is listed on Velar DEX.`,
+        success: `Swap functionality coming soon! You would receive approximately ${state.outputAmount} ${state.outputToken?.symbol}. Please deploy the swap contract first.`,
+        inputAmount: '',
+        outputAmount: '',
+        quote: null,
       }));
+
+      // Refresh balances after successful transaction
+      if (fetchBalances) {
+        setTimeout(() => {
+          fetchBalances();
+        }, 3000);
+      }
     } catch (error) {
       console.error('Swap error:', error);
       setState(prev => ({
@@ -206,10 +200,55 @@ export function SwapInterface() {
           <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
             Swap Tokens
           </h2>
-          <button className="p-2 rounded-lg transition-colors group hover:bg-gray-100 dark:hover:bg-gray-800">
-            <Settings className="w-5 h-5 group-hover:rotate-90 transition-all" style={{ color: 'var(--text-secondary)' }} />
+          <button 
+            onClick={() => setState(prev => ({ ...prev, showSettings: !prev.showSettings }))}
+            className="p-2 rounded-lg transition-colors group hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <Settings className={`w-5 h-5 transition-all ${state.showSettings ? 'rotate-90' : ''}`} style={{ color: 'var(--text-secondary)' }} />
           </button>
         </div>
+
+        {/* Settings Panel */}
+        {state.showSettings && (
+          <div className="rounded-xl p-4 mb-6" style={{
+            border: `1px solid var(--border-color)`,
+            backgroundColor: 'var(--bg-surface)'
+          }}>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-semibold mb-2 block" style={{ color: 'var(--text-primary)' }}>
+                  Slippage Tolerance
+                </label>
+                <div className="flex gap-2">
+                  {[0.1, 0.5, 1.0].map(value => (
+                    <button
+                      key={value}
+                      onClick={() => setState(prev => ({ ...prev, slippage: value }))}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                        state.slippage === value
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                      style={state.slippage !== value ? { color: 'var(--text-secondary)' } : {}}
+                    >
+                      {value}%
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    value={state.slippage}
+                    onChange={(e) => setState(prev => ({ ...prev, slippage: parseFloat(e.target.value) || 0.5 }))}
+                    className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-800 outline-none"
+                    style={{ color: 'var(--text-primary)' }}
+                    step="0.1"
+                    min="0.1"
+                    max="50"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Input Token */}
         <div className="rounded-2xl p-6 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
@@ -287,7 +326,7 @@ export function SwapInterface() {
             )}
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex-1 text-4xl font-mono min-w-0" style={{ color: 'var(--text-secondary)' }}>
+            <div className="flex-1 text-4xl font-mono min-w-0" style={{ color: state.outputAmount ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
               {state.outputAmount || '0.00'}
             </div>
             <select
@@ -318,26 +357,26 @@ export function SwapInterface() {
               <span style={{ color: 'var(--text-secondary)' }}>Rate</span>
               <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
                 1 {state.inputToken?.symbol} ≈{' '}
-                <span className="text-purple-600 dark:text-purple-400">{(parseFloat(state.outputAmount) / parseFloat(state.inputAmount)).toFixed(6)}</span>{' '}
+                <span className="text-purple-600 dark:text-purple-400">{state.quote.rate}</span>{' '}
                 {state.outputToken?.symbol}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span style={{ color: 'var(--text-secondary)' }}>Price Impact</span>
-              <span className={`font-semibold ${state.quote.priceImpact > 1 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
-                {state.quote.priceImpact > 1 ? '⚠ ' : '✓ '}{state.quote.priceImpact.toFixed(2)}%
+              <span className={`font-semibold ${parseFloat(state.quote.priceImpact) > 1 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                {parseFloat(state.quote.priceImpact) > 1 ? '⚠ ' : '✓ '}{state.quote.priceImpact}%
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span style={{ color: 'var(--text-secondary)' }}>Route</span>
-              <span className="text-xs font-mono text-blue-600 dark:text-blue-400">{state.quote.route.map(r => r.split('.').pop()).join(' → ')}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>Fee (0.3%)</span>
+              <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{state.quote.fee} {state.inputToken?.symbol}</span>
             </div>
-            {state.gaslessMode && (
-              <div className="flex justify-between items-center pt-2" style={{ borderTop: `1px solid var(--border-color)` }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Fee (USDCx)</span>
-                <span className="font-mono text-yellow-600 dark:text-yellow-400">{formatUnits(BigInt(state.quote.estimatedFee), 6)}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center">
+              <span style={{ color: 'var(--text-secondary)' }}>Minimum Received</span>
+              <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                {(parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6)} {state.outputToken?.symbol}
+              </span>
+            </div>
           </div>
         )}
 
@@ -376,17 +415,21 @@ export function SwapInterface() {
 
         {/* Error Message */}
         {state.error && (
-          <div className="flex items-start gap-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg p-4 mb-6">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700 dark:text-red-300">{state.error}</p>
+          <div className="flex items-start gap-3 bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 font-medium">{state.error}</p>
           </div>
         )}
 
         {/* Success Message */}
         {state.success && (
-          <div className="flex items-start gap-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-lg p-4 mb-6">
-            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-green-700 dark:text-green-300">{state.success}</p>
+          <div className="flex items-start gap-3 rounded-xl p-4 mb-6 border" style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            borderColor: 'var(--success-color)',
+            color: 'var(--success-color)'
+          }}>
+            <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--success-color)' }} />
+            <p className="text-sm font-medium">{state.success}</p>
           </div>
         )}
 
@@ -418,7 +461,7 @@ export function SwapInterface() {
         }}>
           <p className="flex items-center justify-center gap-2">
             <span className="w-1.5 h-1.5 bg-blue-600 dark:bg-blue-400 rounded-full dark:animate-pulse-glow animate-slide-progress"></span>
-            Powered by ALEX DEX
+            Powered by VelumX AMM
           </p>
           <p>Slippage tolerance: {state.slippage}%</p>
         </div>

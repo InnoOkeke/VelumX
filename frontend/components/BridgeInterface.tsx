@@ -11,6 +11,7 @@ import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap } from 'lucide-react';
+import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../../shared/utils/address-encoding';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 
@@ -134,18 +135,13 @@ export function BridgeInterface() {
 
   // Encode Stacks address to bytes32
   const encodeStacksAddress = (address: string): `0x${string}` => {
-    // Simple encoding: pad with zeros (production would use proper c32 decoding)
-    // For testnet demo, we'll use a placeholder encoding
-    const paddedAddress = address.padEnd(64, '0');
-    return `0x${Buffer.from(paddedAddress).toString('hex').slice(0, 64)}` as `0x${string}`;
+    return encodeStacksAddressUtil(address);
   };
 
   // Encode Ethereum address to bytes32
   const encodeEthereumAddress = (address: string): Buffer => {
-    // Remove 0x prefix and pad to 32 bytes
-    const cleanAddress = address.replace('0x', '');
-    const paddedAddress = '0'.repeat(24) + cleanAddress;
-    return Buffer.from(paddedAddress, 'hex');
+    const hex = encodeEthereumAddressUtil(address);
+    return Buffer.from(hex.slice(2), 'hex');
   };
 
   // Handle Ethereum to Stacks deposit

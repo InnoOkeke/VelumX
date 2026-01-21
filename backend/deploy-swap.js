@@ -1,4 +1,4 @@
-// Deploy Paymaster Contract to Stacks Testnet
+// Deploy Swap Contract to Stacks Testnet
 // Uses manual network configuration to resolve SDK version conflicts
 
 require('dotenv').config();
@@ -36,7 +36,7 @@ const network = {
 
 async function deploy() {
     try {
-        console.log("🚀 Deploying Paymaster Contract to Stacks Testnet\n");
+        console.log("🚀 Deploying Swap Contract to Stacks Testnet\n");
         
         console.log("Step 1: Generating wallet...");
         const wallet = await generateWallet({ secretKey: SEED_PHRASE, password: '' });
@@ -50,8 +50,8 @@ async function deploy() {
         }
         console.log("Key length:", privateKey.length);
 
-        console.log("\nStep 2: Reading paymaster contract...");
-        const contractPath = path.join(__dirname, '../stacks-contracts/contracts/paymaster.clar');
+        console.log("\nStep 2: Reading swap contract...");
+        const contractPath = path.join(__dirname, '../stacks-contracts/contracts/swap-contract.clar');
         const codeBody = fs.readFileSync(contractPath, 'utf8');
         console.log("Contract bytes:", codeBody.length);
 
@@ -63,13 +63,13 @@ async function deploy() {
 
         console.log("\nStep 4: Building transaction...");
         const tx = await makeContractDeploy({
-            contractName: 'paymaster-v4',
+            contractName: 'swap-contract-v12',
             codeBody: codeBody,
             senderKey: privateKey,
             network: network,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
-            fee: 200000n, // 0.2 STX fee
+            fee: 500000n, // 0.5 STX fee (higher for larger contract)
             nonce: BigInt(nonceData.possible_next_nonce)
         });
         console.log("Transaction built!");
@@ -91,11 +91,11 @@ async function deploy() {
         if (response.ok) {
             const txid = result.replace(/"/g, '');
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            console.log("✅ SUCCESS - Paymaster Contract Deployed!");
+            console.log("✅ SUCCESS - Swap Contract Deployed!");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("📋 Transaction ID:", txid);
             console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/" + txid + "?chain=testnet");
-            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".paymaster-v4");
+            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".swap-contract-v12");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             
             console.log("⏳ Waiting for confirmation (10-20 minutes)...");
@@ -104,22 +104,22 @@ async function deploy() {
             console.log("📝 Next Steps:");
             console.log("1. Wait for transaction confirmation");
             console.log("2. Update backend/.env:");
-            console.log(`   STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v4`);
+            console.log(`   STACKS_SWAP_CONTRACT_ADDRESS=${TESTNET_ADDRESS}.swap-contract-v12`);
             console.log("3. Update frontend/.env.local:");
-            console.log(`   NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v4`);
-            console.log("4. Test gasless swaps with USDCx fees\n");
+            console.log(`   NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS=${TESTNET_ADDRESS}.swap-contract-v12`);
+            console.log("4. Begin Phase 2 backend integration\n");
             
             // Save deployment info
             const deploymentInfo = {
                 txid: txid,
-                contractAddress: `${TESTNET_ADDRESS}.paymaster-v4`,
+                contractAddress: `${TESTNET_ADDRESS}.swap-contract-v12`,
                 deployerAddress: TESTNET_ADDRESS,
                 network: 'testnet',
                 timestamp: new Date().toISOString(),
                 explorerUrl: `https://explorer.hiro.so/txid/${txid}?chain=testnet`,
             };
             
-            const outputPath = path.join(__dirname, 'paymaster-deployment-info.json');
+            const outputPath = path.join(__dirname, 'swap-deployment-info.json');
             fs.writeFileSync(outputPath, JSON.stringify(deploymentInfo, null, 2));
             console.log('💾 Deployment info saved to:', outputPath, '\n');
             
