@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { Plus, Minus, Loader2, AlertCircle, CheckCircle, Zap, Info } from 'lucide-react';
+import { Plus, Minus, Loader2, AlertCircle, CheckCircle, Zap, Info, Search, X } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 
 interface Token {
@@ -32,6 +32,9 @@ interface LiquidityState {
   poolExists: boolean;
   userLpBalance: string;
   poolShare: string;
+  showImportModal: boolean;
+  importAddress: string;
+  importingToken: 'A' | 'B' | null;
 }
 
 // Default tokens for testnet
@@ -54,7 +57,7 @@ export function LiquidityInterface() {
   const { stacksAddress, stacksConnected, balances, fetchBalances } = useWallet();
   const config = useConfig();
 
-  const [tokens] = useState<Token[]>(DEFAULT_TOKENS);
+  const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<LiquidityState>({
     mode: 'add',
     tokenA: DEFAULT_TOKENS[0],
@@ -69,6 +72,9 @@ export function LiquidityInterface() {
     poolExists: false,
     userLpBalance: '0',
     poolShare: '0',
+    showImportModal: false,
+    importAddress: '',
+    importingToken: null,
   });
 
   // Fetch pool info when tokens change
@@ -196,6 +202,116 @@ export function LiquidityInterface() {
     return '0';
   };
 
+  const openImportModal = (tokenSlot: 'A' | 'B') => {
+    setState(prev => ({
+      ...prev,
+      showImportModal: true,
+      importingToken: tokenSlot,
+      importAddress: '',
+      error: null,
+    }));
+  };
+
+  const closeImportModal = () => {
+    setState(prev => ({
+      ...prev,
+      showImportModal: false,
+      importingToken: null,
+      importAddress: '',
+    }));
+  };
+
+  const validateStacksContractAddress = (address: string): boolean => {
+    // Format: PRINCIPAL.CONTRACT-NAME
+    const parts = address.split('.');
+    if (parts.length !== 2) return false;
+    
+    // Check principal (address) format
+    const principal = parts[0];
+    if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/)) return false;
+    
+    // Check contract name format
+    const contractName = parts[1];
+    if (!contractName.match(/^[a-z][a-z0-9-]{0,39}$/)) return false;
+    
+    return true;
+  };
+
+  const handleImportToken = async () => {
+    if (!state.importAddress.trim()) {
+      setState(prev => ({ ...prev, error: 'Please enter a token address' }));
+      return;
+    }
+
+    // Validate address format
+    if (!validateStacksContractAddress(state.importAddress.trim())) {
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Invalid Stacks contract address. Format: PRINCIPAL.CONTRACT-NAME' 
+      }));
+      return;
+    }
+
+    // Check if token already exists
+    const existingToken = tokens.find(t => t.address.toLowerCase() === state.importAddress.trim().toLowerCase());
+    if (existingToken) {
+      // Just select the existing token
+      if (state.importingToken === 'A') {
+        setState(prev => ({ ...prev, tokenA: existingToken }));
+      } else {
+        setState(prev => ({ ...prev, tokenB: existingToken }));
+      }
+      closeImportModal();
+      return;
+    }
+
+    setState(prev => ({ ...prev, isProcessing: true, error: null }));
+
+    try {
+      // TODO: Fetch token metadata from contract (name, symbol, decimals)
+      // For now, create a basic token entry
+      const parts = state.importAddress.trim().split('.');
+      const contractName = parts[1];
+      
+      const newToken: Token = {
+        symbol: contractName.toUpperCase().substring(0, 6),
+        name: contractName,
+        address: state.importAddress.trim(),
+        decimals: 6, // Default to 6 decimals
+      };
+
+      // Add to tokens list
+      setTokens(prev => [...prev, newToken]);
+
+      // Select the new token
+      if (state.importingToken === 'A') {
+        setState(prev => ({ ...prev, tokenA: newToken }));
+      } else {
+        setState(prev => ({ ...prev, tokenB: newToken }));
+      }
+
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        success: `Token ${newToken.symbol} imported successfully!`,
+      }));
+
+      closeImportModal();
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setState(prev => ({ ...prev, success: null }));
+      }, 3000);
+    } catch (error) {
+      console.error('Import token error:', error);
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: (error as Error).message || 'Failed to import token',
+      }));
+    }
+  };
+
   return (
     <div className="max-w-lg mx-auto">
       <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
@@ -286,6 +402,7 @@ export function LiquidityInterface() {
                   style={{ color: 'var(--text-primary)' }}
                   disabled={state.isProcessing}
                 />
+              <div className="flex items-center gap-2">
                 <select
                   value={state.tokenA?.symbol || ''}
                   onChange={(e) => {
@@ -301,6 +418,16 @@ export function LiquidityInterface() {
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={() => openImportModal('A')}
+                  className="p-3 rounded-xl transition-all hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                  style={{ border: `1px solid var(--border-color)` }}
+                  title="Import custom token"
+                  disabled={state.isProcessing}
+                >
+                  <Search className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                </button>
+              </div>
               </div>
               <button
                 onClick={() => setState(prev => ({ ...prev, amountA: getBalance(state.tokenA) }))}
@@ -342,6 +469,7 @@ export function LiquidityInterface() {
                   style={{ color: 'var(--text-primary)' }}
                   disabled={state.isProcessing || state.poolExists}
                 />
+              <div className="flex items-center gap-2">
                 <select
                   value={state.tokenB?.symbol || ''}
                   onChange={(e) => {
@@ -357,6 +485,16 @@ export function LiquidityInterface() {
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={() => openImportModal('B')}
+                  className="p-3 rounded-xl transition-all hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                  style={{ border: `1px solid var(--border-color)` }}
+                  title="Import custom token"
+                  disabled={state.isProcessing}
+                >
+                  <Search className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </button>
+              </div>
               </div>
               <button
                 onClick={() => setState(prev => ({ ...prev, amountB: getBalance(state.tokenB) }))}
@@ -541,6 +679,107 @@ export function LiquidityInterface() {
           <p>LP tokens represent your share of the pool</p>
         </div>
       </div>
+
+      {/* Import Token Modal */}
+      {state.showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="rounded-2xl max-w-md w-full p-6 shadow-2xl" style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid var(--border-color)`
+          }}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                Import Token
+              </h3>
+              <button
+                onClick={closeImportModal}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                disabled={state.isProcessing}
+              >
+                <X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+
+            {/* Token Address Input */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+                Token Contract Address
+              </label>
+              <input
+                type="text"
+                value={state.importAddress}
+                onChange={(e) => setState(prev => ({ ...prev, importAddress: e.target.value, error: null }))}
+                placeholder="PRINCIPAL.CONTRACT-NAME"
+                className="w-full px-4 py-3 rounded-xl outline-none transition-all font-mono text-sm"
+                style={{
+                  backgroundColor: 'var(--bg-primary)',
+                  border: `2px solid var(--border-color)`,
+                  color: 'var(--text-primary)'
+                }}
+                disabled={state.isProcessing}
+                autoFocus
+              />
+              <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
+                Example: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.my-token
+              </p>
+            </div>
+
+            {/* Warning */}
+            <div className="rounded-lg p-3 mb-4" style={{
+              backgroundColor: 'rgba(251, 191, 36, 0.1)',
+              border: `1px solid rgba(251, 191, 36, 0.3)`
+            }}>
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  Anyone can create a token with any name. Always verify the contract address before trading.
+                </p>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {state.error && (
+              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-700 dark:text-red-300">{state.error}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={closeImportModal}
+                className="flex-1 px-4 py-3 rounded-xl font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+                style={{
+                  border: `1px solid var(--border-color)`,
+                  color: 'var(--text-secondary)'
+                }}
+                disabled={state.isProcessing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportToken}
+                disabled={state.isProcessing || !state.importAddress.trim()}
+                className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {state.isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    Import
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
