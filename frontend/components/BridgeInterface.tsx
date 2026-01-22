@@ -265,23 +265,22 @@ export function BridgeInterface() {
         });
       });
       
-      // The MessageSent event is emitted by the MessageTransmitter contract
-      // MessageSent event signature: MessageSent(bytes message)
-      // Event signature hash: keccak256("MessageSent(bytes)")
+      // The MessageSent event signature: MessageSent(bytes message)
+      // Event topic hash (NOT a private key): keccak256("MessageSent(bytes)")
       const MESSAGE_SENT_TOPIC = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036';
       
-      // Find the MessageSent event - check ALL logs
+      // The DepositForBurn event signature from xReserve
+      // Event topic hash (NOT a private key): keccak256("DepositForBurn(...)")
+      const DEPOSIT_FOR_BURN_TOPIC = '0x2eef4ec627e0f99d1cc55f26e234a6066090b7bc0b3f61245f1f2d7c91d3e563';
+      
+      // Find the MessageSent event first
       for (const log of receipt.logs) {
-        // Check if this is a MessageSent event (topic[0] matches)
         if (log.topics[0]?.toLowerCase() === MESSAGE_SENT_TOPIC.toLowerCase()) {
           console.log('✅ Found MessageSent event!');
-          console.log('📦 Event address:', log.address);
           console.log('📦 Message bytes (data):', log.data);
           
           messageBytes = log.data;
           
-          // The message bytes are in the data field
-          // We need to hash them with keccak256 to get the message hash
           const { keccak256 } = await import('viem');
           messageHash = keccak256(log.data as `0x${string}`);
           
@@ -290,36 +289,60 @@ export function BridgeInterface() {
         }
       }
       
-      // If still not found, try alternative approach: use Circle's API with transaction hash
+      // If not found, try to extract from DepositForBurn event
       if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.warn('⚠️ Could not find MessageSent event, trying to fetch from Circle API...');
+        console.log('⚠️ MessageSent not found, checking DepositForBurn event...');
         
-        // Try to fetch message from Circle's API using transaction hash
-        try {
-          const circleResponse = await fetch(
-            `https://iris-api-sandbox.circle.com/v1/messages/0/${depositHash}`
-          );
-          
-          if (circleResponse.ok) {
-            const circleData = await circleResponse.json();
-            console.log('📡 Circle API response:', circleData);
+        for (const log of receipt.logs) {
+          if (log.topics[0]?.toLowerCase() === DEPOSIT_FOR_BURN_TOPIC.toLowerCase()) {
+            console.log('✅ Found DepositForBurn event!');
+            console.log('📦 Event data:', log.data);
+            console.log('📦 Event topics:', log.topics);
             
-            if (circleData.messages && circleData.messages.length > 0) {
-              const message = circleData.messages[0];
-              messageHash = message.messageHash;
-              console.log('✅ Got message hash from Circle API:', messageHash);
+            // The nonce is the first indexed parameter (topics[1])
+            const nonce = log.topics[1];
+            console.log('📦 Nonce from event:', nonce);
+            
+            // Wait a bit for Circle to index the transaction
+            console.log('⏳ Waiting 5 seconds for Circle to index transaction...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            // Try to fetch message from Circle API using transaction hash
+            try {
+              // Domain 0 = Ethereum Sepolia
+              const circleResponse = await fetch(
+                `https://iris-api-sandbox.circle.com/v1/messages/0/${depositHash}`
+              );
+              
+              if (circleResponse.ok) {
+                const circleData = await circleResponse.json();
+                console.log('📡 Circle API response:', circleData);
+                
+                if (circleData.messages && circleData.messages.length > 0) {
+                  const message = circleData.messages[0];
+                  messageHash = message.messageHash;
+                  console.log('✅ Got message hash from Circle API:', messageHash);
+                }
+              } else {
+                const errorText = await circleResponse.text();
+                console.error('❌ Circle API error:', errorText);
+                
+                // If Circle doesn't have it yet, we'll let the backend retry
+                console.log('⏳ Circle API doesn\'t have the message yet, backend will retry');
+              }
+            } catch (apiError) {
+              console.error('❌ Failed to fetch from Circle API:', apiError);
             }
-          } else {
-            console.error('❌ Circle API error:', await circleResponse.text());
+            
+            break;
           }
-        } catch (apiError) {
-          console.error('❌ Failed to fetch from Circle API:', apiError);
         }
       }
       
       // If STILL not found, use transaction hash as last resort
+      // The backend will try to fetch the real message hash from Circle later
       if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.warn('⚠️ Using transaction hash as message hash (last resort)');
+        console.warn('⚠️ Using transaction hash as message hash (backend will fetch real hash later)');
         messageHash = depositHash;
       }
       
