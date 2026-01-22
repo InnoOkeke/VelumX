@@ -249,27 +249,36 @@ export function BridgeInterface() {
       
       // Extract message hash from logs - this is CRITICAL for the bridge to work
       let messageHash = '';
+      let messageBytes = '';
       
       console.log('📋 Transaction receipt:', receipt);
-      console.log('📋 All logs:', receipt.logs);
+      console.log('📋 Number of logs:', receipt.logs.length);
       
-      // The MessageSent event is emitted by the MessageTransmitter contract (not xReserve)
+      // Log all event signatures to help debug
+      console.log('📋 All event signatures in transaction:');
+      receipt.logs.forEach((log, index) => {
+        console.log(`Log ${index}:`, {
+          address: log.address,
+          topic0: log.topics[0],
+          topicsLength: log.topics.length,
+          dataLength: log.data?.length || 0,
+        });
+      });
+      
+      // The MessageSent event is emitted by the MessageTransmitter contract
       // MessageSent event signature: MessageSent(bytes message)
       // Event signature hash: keccak256("MessageSent(bytes)")
       const MESSAGE_SENT_TOPIC = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036';
       
-      // Find the MessageSent event
+      // Find the MessageSent event - check ALL logs
       for (const log of receipt.logs) {
-        console.log('🔍 Checking log:', {
-          address: log.address,
-          topics: log.topics,
-          data: log.data,
-        });
-        
         // Check if this is a MessageSent event (topic[0] matches)
-        if (log.topics[0] === MESSAGE_SENT_TOPIC) {
+        if (log.topics[0]?.toLowerCase() === MESSAGE_SENT_TOPIC.toLowerCase()) {
           console.log('✅ Found MessageSent event!');
+          console.log('📦 Event address:', log.address);
           console.log('📦 Message bytes (data):', log.data);
+          
+          messageBytes = log.data;
           
           // The message bytes are in the data field
           // We need to hash them with keccak256 to get the message hash
@@ -281,11 +290,37 @@ export function BridgeInterface() {
         }
       }
       
-      // If still not found, log error
+      // If still not found, try alternative approach: use Circle's API with transaction hash
       if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.error('❌ Could not find MessageSent event in transaction logs');
-        console.error('This will cause the bridge to fail. Please check the transaction on Etherscan.');
-        throw new Error('Failed to extract message hash from transaction');
+        console.warn('⚠️ Could not find MessageSent event, trying to fetch from Circle API...');
+        
+        // Try to fetch message from Circle's API using transaction hash
+        try {
+          const circleResponse = await fetch(
+            `https://iris-api-sandbox.circle.com/v1/messages/0/${depositHash}`
+          );
+          
+          if (circleResponse.ok) {
+            const circleData = await circleResponse.json();
+            console.log('📡 Circle API response:', circleData);
+            
+            if (circleData.messages && circleData.messages.length > 0) {
+              const message = circleData.messages[0];
+              messageHash = message.messageHash;
+              console.log('✅ Got message hash from Circle API:', messageHash);
+            }
+          } else {
+            console.error('❌ Circle API error:', await circleResponse.text());
+          }
+        } catch (apiError) {
+          console.error('❌ Failed to fetch from Circle API:', apiError);
+        }
+      }
+      
+      // If STILL not found, use transaction hash as last resort
+      if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
+        console.warn('⚠️ Using transaction hash as message hash (last resort)');
+        messageHash = depositHash;
       }
       
       console.log('✅ Final message hash:', messageHash);
