@@ -253,7 +253,12 @@ export function BridgeInterface() {
       console.log('📋 Transaction receipt:', receipt);
       console.log('📋 All logs:', receipt.logs);
       
-      // Method 1: Parse logs directly from receipt
+      // The MessageSent event is emitted by the MessageTransmitter contract (not xReserve)
+      // MessageSent event signature: MessageSent(bytes message)
+      // Event signature hash: keccak256("MessageSent(bytes)")
+      const MESSAGE_SENT_TOPIC = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036';
+      
+      // Find the MessageSent event
       for (const log of receipt.logs) {
         console.log('🔍 Checking log:', {
           address: log.address,
@@ -261,36 +266,26 @@ export function BridgeInterface() {
           data: log.data,
         });
         
-        // Check if this log is from the xReserve contract
-        if (log.address.toLowerCase() === config.ethereumXReserveAddress.toLowerCase()) {
-          console.log('✅ Found xReserve log with topics:', log.topics);
+        // Check if this is a MessageSent event (topic[0] matches)
+        if (log.topics[0] === MESSAGE_SENT_TOPIC) {
+          console.log('✅ Found MessageSent event!');
+          console.log('📦 Message bytes (data):', log.data);
           
-          // The message hash should be in one of the topics
-          // Try topics[1], topics[2], or topics[3]
-          for (let i = 1; i < log.topics.length; i++) {
-            const topic = log.topics[i];
-            if (topic && topic !== '0x' && topic.length === 66) {
-              // Check if this looks like a message hash (not an address)
-              // Addresses are padded with zeros at the start: 0x000000000000000000000000...
-              // Message hashes should have more randomness
-              const hasLeadingZeros = topic.startsWith('0x000000000000000000000000');
-              if (!hasLeadingZeros) {
-                messageHash = topic;
-                console.log(`✅ Message hash found in topics[${i}]:`, messageHash);
-                break;
-              }
-            }
-          }
+          // The message bytes are in the data field
+          // We need to hash them with keccak256 to get the message hash
+          const { keccak256 } = await import('viem');
+          messageHash = keccak256(log.data as `0x${string}`);
           
-          if (messageHash) break;
+          console.log('✅ Message hash (keccak256 of message):', messageHash);
+          break;
         }
       }
       
-      // If still not found, use the transaction hash as fallback
-      // (Circle might use the transaction hash as the message identifier)
+      // If still not found, log error
       if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.warn('⚠️ Could not find message hash in logs, using transaction hash');
-        messageHash = depositHash;
+        console.error('❌ Could not find MessageSent event in transaction logs');
+        console.error('This will cause the bridge to fail. Please check the transaction on Etherscan.');
+        throw new Error('Failed to extract message hash from transaction');
       }
       
       console.log('✅ Final message hash:', messageHash);
