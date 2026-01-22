@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
-import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
+import { useConfig, USDC_ABI, TOKEN_MESSENGER_ABI, MESSAGE_TRANSMITTER_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
@@ -209,7 +209,7 @@ export function BridgeInterface() {
         address: config.ethereumUsdcAddress as `0x${string}`,
         abi: USDC_ABI,
         functionName: 'allowance',
-        args: [ethereumAddress as `0x${string}`, config.ethereumXReserveAddress as `0x${string}`],
+        args: [ethereumAddress as `0x${string}`, config.ethereumTokenMessengerAddress as `0x${string}`],
       });
 
       // Step 2: Approve if needed
@@ -218,7 +218,7 @@ export function BridgeInterface() {
           address: config.ethereumUsdcAddress as `0x${string}`,
           abi: USDC_ABI,
           functionName: 'approve',
-          args: [config.ethereumXReserveAddress as `0x${string}`, amountInMicroUsdc],
+          args: [config.ethereumTokenMessengerAddress as `0x${string}`, amountInMicroUsdc],
           account: ethereumAddress as `0x${string}`,
         });
 
@@ -226,20 +226,18 @@ export function BridgeInterface() {
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
       }
 
-      // Step 3: Deposit to xReserve
+      // Step 3: Deposit using Circle's TokenMessenger (depositForBurn)
       const recipientBytes32 = encodeStacksAddress(stacksAddress);
       
       const depositHash = await walletClient.writeContract({
-        address: config.ethereumXReserveAddress as `0x${string}`,
-        abi: XRESERVE_ABI,
-        functionName: 'depositToRemote',
+        address: config.ethereumTokenMessengerAddress as `0x${string}`,
+        abi: TOKEN_MESSENGER_ABI,
+        functionName: 'depositForBurn',
         args: [
           amountInMicroUsdc,
           config.stacksDomainId,
           recipientBytes32,
           config.ethereumUsdcAddress as `0x${string}`,
-          parseUnits('1', 6), // Max fee: 1 USDC
-          '0x' as `0x${string}`, // Empty hook data
         ],
         account: ethereumAddress as `0x${string}`,
       });
@@ -247,40 +245,30 @@ export function BridgeInterface() {
       // Wait for transaction receipt to get message hash
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
       
-      // Extract message hash from logs - this is CRITICAL for the bridge to work
+      // Extract message hash from Circle's MessageSent event
       let messageHash = '';
       let messageBytes = '';
       
       console.log('📋 Transaction receipt:', receipt);
       console.log('📋 Number of logs:', receipt.logs.length);
       
-      // Log all event signatures to help debug
-      console.log('📋 All event signatures in transaction:');
-      receipt.logs.forEach((log, index) => {
-        console.log(`Log ${index}:`, {
-          address: log.address,
-          topic0: log.topics[0],
-          topicsLength: log.topics.length,
-          dataLength: log.data?.length || 0,
-        });
-      });
-      
-      // The MessageSent event signature: MessageSent(bytes message)
+      // Circle's MessageSent event signature: MessageSent(bytes message)
       // Event topic hash (NOT a private key): keccak256("MessageSent(bytes)")
       const MESSAGE_SENT_TOPIC = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036';
       
-      // The DepositForBurn event signature from xReserve
-      // Event topic hash (NOT a private key): keccak256("DepositForBurn(...)")
-      const DEPOSIT_FOR_BURN_TOPIC = '0x2eef4ec627e0f99d1cc55f26e234a6066090b7bc0b3f61245f1f2d7c91d3e563';
-      
-      // Find the MessageSent event first
+      // Find the MessageSent event from MessageTransmitter contract
       for (const log of receipt.logs) {
-        if (log.topics[0]?.toLowerCase() === MESSAGE_SENT_TOPIC.toLowerCase()) {
-          console.log('✅ Found MessageSent event!');
+        // Check if this is from the MessageTransmitter contract and is a MessageSent event
+        if (
+          log.address.toLowerCase() === config.ethereumMessageTransmitterAddress.toLowerCase() &&
+          log.topics[0]?.toLowerCase() === MESSAGE_SENT_TOPIC.toLowerCase()
+        ) {
+          console.log('✅ Found Circle MessageSent event!');
           console.log('📦 Message bytes (data):', log.data);
           
           messageBytes = log.data;
           
+          // Hash the message bytes to get the message hash
           const { keccak256 } = await import('viem');
           messageHash = keccak256(log.data as `0x${string}`);
           
@@ -289,61 +277,12 @@ export function BridgeInterface() {
         }
       }
       
-      // If not found, try to extract from DepositForBurn event
+      // If message hash not found, throw error
       if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.log('⚠️ MessageSent not found, checking DepositForBurn event...');
-        
-        for (const log of receipt.logs) {
-          if (log.topics[0]?.toLowerCase() === DEPOSIT_FOR_BURN_TOPIC.toLowerCase()) {
-            console.log('✅ Found DepositForBurn event!');
-            console.log('📦 Event data:', log.data);
-            console.log('📦 Event topics:', log.topics);
-            
-            // The nonce is the first indexed parameter (topics[1])
-            const nonce = log.topics[1];
-            console.log('📦 Nonce from event:', nonce);
-            
-            // Wait a bit for Circle to index the transaction
-            console.log('⏳ Waiting 5 seconds for Circle to index transaction...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            
-            // Try to fetch message from Circle API using transaction hash
-            try {
-              // Domain 0 = Ethereum Sepolia
-              const circleResponse = await fetch(
-                `https://iris-api-sandbox.circle.com/v1/messages/0/${depositHash}`
-              );
-              
-              if (circleResponse.ok) {
-                const circleData = await circleResponse.json();
-                console.log('📡 Circle API response:', circleData);
-                
-                if (circleData.messages && circleData.messages.length > 0) {
-                  const message = circleData.messages[0];
-                  messageHash = message.messageHash;
-                  console.log('✅ Got message hash from Circle API:', messageHash);
-                }
-              } else {
-                const errorText = await circleResponse.text();
-                console.error('❌ Circle API error:', errorText);
-                
-                // If Circle doesn't have it yet, we'll let the backend retry
-                console.log('⏳ Circle API doesn\'t have the message yet, backend will retry');
-              }
-            } catch (apiError) {
-              console.error('❌ Failed to fetch from Circle API:', apiError);
-            }
-            
-            break;
-          }
-        }
-      }
-      
-      // If STILL not found, use transaction hash as last resort
-      // The backend will try to fetch the real message hash from Circle later
-      if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.warn('⚠️ Using transaction hash as message hash (backend will fetch real hash later)');
-        messageHash = depositHash;
+        console.error('❌ Could not find MessageSent event from MessageTransmitter');
+        console.error('MessageTransmitter address:', config.ethereumMessageTransmitterAddress);
+        console.error('All logs:', receipt.logs);
+        throw new Error('Failed to extract message hash from Circle CCTP transaction');
       }
       
       console.log('✅ Final message hash:', messageHash);

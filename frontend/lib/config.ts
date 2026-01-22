@@ -31,15 +31,16 @@ export function getConfig(): FrontendConfig {
     
     // Contract addresses (testnet defaults)
     ethereumUsdcAddress: getEnv('NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'),
-    ethereumXReserveAddress: getEnv('NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS', '0x008888878f94C0d87defdf0B07f46B93C1934442'),
+    ethereumTokenMessengerAddress: getEnv('NEXT_PUBLIC_ETHEREUM_TOKEN_MESSENGER_ADDRESS', '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA'),
+    ethereumMessageTransmitterAddress: getEnv('NEXT_PUBLIC_ETHEREUM_MESSAGE_TRANSMITTER_ADDRESS', '0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275'),
     stacksUsdcxAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx'),
     stacksUsdcxProtocolAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1'),
     stacksPaymasterAddress: getEnv('NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v3'),
     stacksSwapContractAddress: getEnv('NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-contract-v12'),
     
-    // Domain IDs
-    ethereumDomainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_DOMAIN_ID', '0')),
-    stacksDomainId: parseInt(getEnv('NEXT_PUBLIC_STACKS_DOMAIN_ID', '10003')),
+    // Domain IDs (Circle CCTP)
+    ethereumDomainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_DOMAIN_ID', '0')), // Ethereum Sepolia
+    stacksDomainId: parseInt(getEnv('NEXT_PUBLIC_STACKS_DOMAIN_ID', '10003')), // Stacks (custom domain)
     
     // Explorer URLs
     ethereumExplorerUrl: getEnv('NEXT_PUBLIC_ETHEREUM_EXPLORER_URL', 'https://sepolia.etherscan.io'),
@@ -135,6 +136,44 @@ export const XRESERVE_ABI = [
     anonymous: false,
     inputs: [
       { name: 'message', type: 'bytes32', indexed: true },
+    ],
+  },
+] as const;
+
+// Circle CCTP TokenMessenger ABI
+export const TOKEN_MESSENGER_ABI = [
+  {
+    name: 'depositForBurn',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amount', type: 'uint256' },
+      { name: 'destinationDomain', type: 'uint32' },
+      { name: 'mintRecipient', type: 'bytes32' },
+      { name: 'burnToken', type: 'address' },
+    ],
+    outputs: [{ name: 'nonce', type: 'uint64' }],
+  },
+] as const;
+
+// Circle CCTP MessageTransmitter ABI
+export const MESSAGE_TRANSMITTER_ABI = [
+  {
+    name: 'receiveMessage',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'message', type: 'bytes' },
+      { name: 'attestation', type: 'bytes' },
+    ],
+    outputs: [{ name: 'success', type: 'bool' }],
+  },
+  {
+    name: 'MessageSent',
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'message', type: 'bytes', indexed: false },
     ],
   },
 ] as const;

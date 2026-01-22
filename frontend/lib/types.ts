@@ -15,7 +15,8 @@ export interface FrontendConfig {
   
   // Contract addresses
   ethereumUsdcAddress: string;
-  ethereumXReserveAddress: string;
+  ethereumTokenMessengerAddress: string;
+  ethereumMessageTransmitterAddress: string;
   stacksUsdcxAddress: string;
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
