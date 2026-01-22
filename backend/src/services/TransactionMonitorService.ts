@@ -131,7 +131,7 @@ export class TransactionMonitorService {
   /**
    * Updates transaction status
    */
-  private async updateTransaction(
+  async updateTransaction(
     id: string,
     updates: Partial<BridgeTransaction>
   ): Promise<void> {

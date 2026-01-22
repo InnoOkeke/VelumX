@@ -150,4 +150,49 @@ router.post('/monitor', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/transactions/admin/clear-stuck
+ * Mark all stuck/pending transactions as failed (admin endpoint)
+ */
+router.post('/admin/clear-stuck', async (req: Request, res: Response) => {
+  try {
+    logger.info('Clearing stuck transactions');
+
+    const allTransactions = transactionMonitorService.getAllTransactions();
+    const stuckTransactions = allTransactions.filter(
+      tx => tx.status !== 'complete' && tx.status !== 'failed'
+    );
+
+    logger.info('Found stuck transactions', { count: stuckTransactions.length });
+
+    // Mark each as failed
+    for (const tx of stuckTransactions) {
+      await transactionMonitorService.updateTransaction(tx.id, {
+        status: 'failed',
+        error: 'Manually cleared - stuck transaction',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Cleared ${stuckTransactions.length} stuck transactions`,
+      data: {
+        clearedCount: stuckTransactions.length,
+        transactionIds: stuckTransactions.map(tx => tx.id),
+      },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.error('Error clearing stuck transactions', {
+      error: (error as Error).message,
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to clear stuck transactions',
+      timestamp: Date.now(),
+    });
+  }
+});
+
 export default router;
