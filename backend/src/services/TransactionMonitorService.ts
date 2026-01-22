@@ -248,17 +248,24 @@ export class TransactionMonitorService {
         break;
 
       case 'attesting':
-        // Fetch attestation from Circle
+        // Fetch attestation - use xReserve for Ethereum→Stacks deposits
         if (!tx.messageHash) {
           logger.error('Missing message hash for attestation', { id: tx.id });
           return;
         }
 
         try {
-          const attestation = await attestationService.fetchCircleAttestation(
-            tx.messageHash,
-            { maxRetries: 1 } // Single attempt per monitoring cycle
-          );
+          // For Ethereum→Stacks deposits, use xReserve attestation (Stacks network)
+          // For Stacks→Ethereum withdrawals, use Stacks attestation
+          const attestation = tx.sourceChain === 'ethereum'
+            ? await attestationService.fetchXReserveAttestation(
+                tx.messageHash,
+                { maxRetries: 1 } // Single attempt per monitoring cycle
+              )
+            : await attestationService.fetchStacksAttestation(
+                tx.sourceTxHash,
+                { maxRetries: 1 } // Single attempt per monitoring cycle
+              );
 
           await this.updateTransaction(tx.id, {
             attestation: attestation.attestation,
@@ -268,7 +275,11 @@ export class TransactionMonitorService {
           });
         } catch (error) {
           // Attestation not ready yet, will retry next cycle
-          logger.debug('Attestation not ready', { id: tx.id });
+          logger.debug('Attestation not ready', { 
+            id: tx.id,
+            sourceChain: tx.sourceChain,
+            error: (error as Error).message,
+          });
         }
         break;
 

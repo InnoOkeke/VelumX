@@ -20,7 +20,7 @@ export class AttestationService {
 
   /**
    * Fetches attestation from Circle's API
-   * Polls every 30 seconds until available or timeout
+   * Treats 404 as "not ready" (non-fatal) and retries
    * 
    * @param messageHash - The message hash to fetch attestation for
    * @param options - Fetch options (maxRetries, retryDelay, timeout)
@@ -45,7 +45,6 @@ export class AttestationService {
 
     const startTime = Date.now();
     let attempt = 0;
-    let lastError: Error | null = null;
 
     while (attempt < maxRetries) {
       // Check timeout
@@ -84,20 +83,32 @@ export class AttestationService {
           };
         }
 
-        // Attestation not ready yet
-        logger.debug('Circle attestation not ready, will retry', {
+        // Attestation not ready yet (404 or pending) - this is NORMAL
+        logger.info('Circle attestation not ready yet, will retry', {
           messageHash,
           attempt,
+          maxRetries,
           nextRetryIn: retryDelay,
         });
 
       } catch (error) {
-        lastError = error as Error;
-        logger.warn('Circle attestation fetch attempt failed', {
-          messageHash,
-          attempt,
-          error: (error as Error).message,
-        });
+        const err = error as Error;
+        // Only log as error if it's NOT a "not ready" case
+        if (err.message.includes('404') || err.message.includes('not ready')) {
+          logger.info('Circle attestation not ready (404), will retry', {
+            messageHash,
+            attempt,
+            nextRetryIn: retryDelay,
+          });
+        } else {
+          // Real error (auth, network, etc.)
+          logger.error('Circle attestation fetch error', {
+            messageHash,
+            attempt,
+            error: err.message,
+          });
+          throw error; // Fatal error, don't retry
+        }
       }
 
       // Wait before next attempt (unless it's the last attempt)
@@ -106,14 +117,126 @@ export class AttestationService {
       }
     }
 
-    // All retries exhausted
+    // All retries exhausted - attestation still not ready
     const error = new Error(
-      `Failed to fetch Circle attestation after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`
+      `Attestation not ready after ${maxRetries} attempts (${Math.floor((Date.now() - startTime) / 1000)}s)`
     );
-    logger.error('Circle attestation fetch failed', {
+    logger.warn('Circle attestation not ready after max retries', {
       messageHash,
       attempts: maxRetries,
-      lastError: lastError?.message,
+      duration: Date.now() - startTime,
+    });
+    throw error;
+  }
+
+  /**
+   * Fetches attestation for xReserve (Stacks official bridge)
+   * For xReserve, we need to check the Stacks transaction status
+   * 
+   * @param txHash - The Ethereum transaction hash (used as message identifier)
+   * @param options - Fetch options
+   * @returns Attestation data
+   */
+  async fetchXReserveAttestation(
+    txHash: string,
+    options: AttestationFetchOptions = {}
+  ): Promise<AttestationData> {
+    const {
+      maxRetries = this.config.maxRetries,
+      retryDelay = this.config.attestationPollInterval,
+      timeout = this.config.transactionTimeout,
+    } = options;
+
+    logger.info('Starting xReserve attestation fetch', {
+      txHash,
+      maxRetries,
+      retryDelay,
+      timeout,
+    });
+
+    const startTime = Date.now();
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+      // Check timeout
+      if (Date.now() - startTime > timeout) {
+        const error = new Error(`xReserve attestation timeout after ${timeout}ms`);
+        logger.error('xReserve attestation fetch timeout', {
+          txHash,
+          duration: Date.now() - startTime,
+          attempts: attempt + 1,
+        });
+        throw error;
+      }
+
+      attempt++;
+
+      try {
+        logger.debug('Fetching xReserve attestation from Stacks', {
+          txHash,
+          attempt,
+          maxRetries,
+        });
+
+        // For xReserve, check if the Ethereum deposit has been processed on Stacks
+        // The attestation comes from the Stacks network confirming the deposit
+        const response = await this.fetchFromStacksAPI(txHash);
+
+        if (response.attestation) {
+          logger.info('xReserve attestation fetched successfully', {
+            txHash,
+            attempt,
+            duration: Date.now() - startTime,
+          });
+
+          return {
+            attestation: response.attestation,
+            messageHash: txHash,
+            fetchedAt: Date.now(),
+          };
+        }
+
+        // Attestation not ready yet - Stacks hasn't confirmed the deposit
+        logger.info('xReserve attestation not ready yet, will retry', {
+          txHash,
+          attempt,
+          maxRetries,
+          nextRetryIn: retryDelay,
+        });
+
+      } catch (error) {
+        const err = error as Error;
+        // Only log as error if it's NOT a "not ready" case
+        if (err.message.includes('404') || err.message.includes('not found')) {
+          logger.info('xReserve transaction not found on Stacks yet, will retry', {
+            txHash,
+            attempt,
+            nextRetryIn: retryDelay,
+          });
+        } else {
+          logger.error('xReserve attestation fetch error', {
+            txHash,
+            attempt,
+            error: err.message,
+          });
+          throw error; // Fatal error
+        }
+      }
+
+      // Wait before next attempt
+      if (attempt < maxRetries) {
+        await this.sleep(retryDelay);
+      }
+    }
+
+    // All retries exhausted
+    const error = new Error(
+      `xReserve attestation not ready after ${maxRetries} attempts (${Math.floor((Date.now() - startTime) / 1000)}s)`
+    );
+    logger.warn('xReserve attestation not ready after max retries', {
+      txHash,
+      attempts: maxRetries,
+      duration: Date.now() - startTime,
     });
     throw error;
   }
