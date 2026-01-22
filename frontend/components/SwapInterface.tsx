@@ -95,25 +95,46 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isFetchingQuote: true, error: null }));
 
     try {
-      const inputAmountMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
+      // Convert input amount to micro units
+      const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
 
-      // For now, show a simple estimated quote
-      // TODO: Call backend to get quote from swap contract
-      const estimatedRate = 2.0; // 1 USDCx = 2 STX (example)
-      const outputAmount = (parseFloat(state.inputAmount) * estimatedRate).toFixed(6);
-      const fee = (parseFloat(state.inputAmount) * 0.003).toFixed(6);
-      
-      setState(prev => ({
-        ...prev,
-        outputAmount,
-        quote: {
-          amountOut: outputAmount,
-          priceImpact: '0.5',
-          fee,
-          rate: estimatedRate.toFixed(6),
-        },
-        isFetchingQuote: false,
-      }));
+      // Call backend to get quote from swap contract
+      const response = await fetch(`${config.backendUrl}/api/swap/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputToken: state.inputToken.address,
+          outputToken: state.outputToken.address,
+          inputAmount: amountInMicro.toString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch quote');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        // Convert output amount from micro units to display units
+        const outputAmountFormatted = (Number(data.data.outputAmount) / Math.pow(10, state.outputToken.decimals)).toFixed(6);
+        const feeFormatted = (Number(data.data.estimatedFee) / Math.pow(10, state.inputToken.decimals)).toFixed(6);
+        const rate = (Number(data.data.outputAmount) / Number(data.data.inputAmount)).toFixed(6);
+
+        setState(prev => ({
+          ...prev,
+          outputAmount: outputAmountFormatted,
+          quote: {
+            amountOut: outputAmountFormatted,
+            priceImpact: data.data.priceImpact.toFixed(2),
+            fee: feeFormatted,
+            rate: rate,
+          },
+          isFetchingQuote: false,
+        }));
+      } else {
+        throw new Error(data.error || 'Pool may not exist yet');
+      }
     } catch (error) {
       console.error('Failed to fetch quote:', error);
       setState(prev => ({
@@ -154,12 +175,55 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Show success message for now
-      // TODO: Implement actual swap contract call
+      // Dynamic imports for Stacks libraries
+      const { openContractCall } = await import('@stacks/connect');
+      const { STACKS_TESTNET } = await import('@stacks/network');
+      const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
+      
+      const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
+      const minAmountOutMicro = parseUnits(
+        (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
+        state.outputToken.decimals
+      );
+
+      // Parse token addresses (format: PRINCIPAL.CONTRACT-NAME)
+      const tokenInParts = state.inputToken.address.split('.');
+      const tokenOutParts = state.outputToken.address.split('.');
+
+      const functionArgs = [
+        contractPrincipalCV(tokenInParts[0], tokenInParts[1]), // token-in
+        contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]), // token-out
+        uintCV(Number(amountInMicro)), // amount-in
+        uintCV(Number(minAmountOutMicro)), // min-amount-out
+      ];
+
+      await new Promise<string>((resolve, reject) => {
+        openContractCall({
+          contractAddress: config.stacksSwapContractAddress.split('.')[0],
+          contractName: config.stacksSwapContractAddress.split('.')[1],
+          functionName: state.gaslessMode ? 'swap-gasless' : 'swap',
+          functionArgs,
+          network: STACKS_TESTNET,
+          postConditionMode: PostConditionMode.Allow,
+          sponsored: state.gaslessMode,
+          appDetails: {
+            name: 'VelumX Bridge',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
+          onFinish: async (data: any) => {
+            const txId = data.txId;
+            resolve(txId);
+          },
+          onCancel: () => {
+            reject(new Error('User cancelled transaction'));
+          },
+        });
+      });
+
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Swap functionality coming soon! You would receive approximately ${state.outputAmount} ${state.outputToken?.symbol}. Please deploy the swap contract first.`,
+        success: `Swap successful! You will receive approximately ${state.outputAmount} ${state.outputToken?.symbol}`,
         inputAmount: '',
         outputAmount: '',
         quote: null,

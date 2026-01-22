@@ -5,9 +5,16 @@
 
 import dotenv from 'dotenv';
 import { BackendConfig } from '@shared/types';
+import { getLiquidityConfig, validateLiquidityConfig, LiquidityConfig } from './liquidity';
 
 dotenv.config();
 
+/**
+ * Extended backend configuration with liquidity features
+ */
+export interface ExtendedBackendConfig extends BackendConfig {
+  liquidity: LiquidityConfig;
+}
 /**
  * Required environment variables
  */
@@ -17,6 +24,30 @@ const REQUIRED_ENV_VARS = [
   'RELAYER_PRIVATE_KEY',
   'RELAYER_STACKS_ADDRESS',
 ] as const;
+
+/**
+ * Loads and validates backend configuration with liquidity features
+ */
+export function loadExtendedConfig(): ExtendedBackendConfig {
+  // Load base config
+  const baseConfig = loadConfig();
+  
+  // Load liquidity config
+  const liquidityConfig = getLiquidityConfig();
+  
+  // Validate liquidity config
+  const liquidityErrors = validateLiquidityConfig(liquidityConfig);
+  if (liquidityErrors.length > 0) {
+    throw new Error(
+      `Invalid liquidity configuration:\n${liquidityErrors.map(e => `  - ${e}`).join('\n')}`
+    );
+  }
+  
+  return {
+    ...baseConfig,
+    liquidity: liquidityConfig,
+  };
+}
 
 /**
  * Validates that all required environment variables are present
@@ -78,6 +109,7 @@ export function loadConfig(): BackendConfig {
     stacksUsdcxAddress: process.env.STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
     stacksUsdcxProtocolAddress: process.env.STACKS_USDCX_PROTOCOL_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1',
     stacksPaymasterAddress: process.env.STACKS_PAYMASTER_ADDRESS || '',
+    stacksSwapContractAddress: process.env.STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-contract-v12',
     
     // API keys
     circleApiKey: process.env.CIRCLE_API_KEY,
@@ -107,9 +139,10 @@ export function loadConfig(): BackendConfig {
 }
 
 /**
- * Singleton config instance
+ * Singleton config instances
  */
 let configInstance: BackendConfig | null = null;
+let extendedConfigInstance: ExtendedBackendConfig | null = null;
 
 /**
  * Gets the backend configuration
@@ -123,8 +156,20 @@ export function getConfig(): BackendConfig {
 }
 
 /**
- * Resets the config instance (useful for testing)
+ * Gets the extended backend configuration with liquidity features
+ * Loads and validates on first call
+ */
+export function getExtendedConfig(): ExtendedBackendConfig {
+  if (!extendedConfigInstance) {
+    extendedConfigInstance = loadExtendedConfig();
+  }
+  return extendedConfigInstance;
+}
+
+/**
+ * Resets the config instances (useful for testing)
  */
 export function resetConfig(): void {
   configInstance = null;
+  extendedConfigInstance = null;
 }

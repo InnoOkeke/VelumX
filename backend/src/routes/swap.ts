@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { swapService } from '../services/SwapService';
+import { swapLiquidityIntegrationService } from '../services/SwapLiquidityIntegrationService';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -25,10 +26,9 @@ router.get('/tokens', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to fetch tokens', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch supported tokens',
-    });
+    const unifiedError = swapLiquidityIntegrationService.parseError(error, 'fetch-tokens');
+    const errorResponse = swapLiquidityIntegrationService.formatErrorResponse(unifiedError);
+    res.status(500).json(errorResponse);
   }
 });
 
@@ -65,6 +65,19 @@ router.post('/quote', async (req: Request, res: Response) => {
 
     logger.info('Getting swap quote', { inputToken, outputToken, inputAmount });
 
+    // Validate cross-system operation
+    const validation = await swapLiquidityIntegrationService.validateCrossSystemOperation({
+      operation: 'swap',
+      tokenA: inputToken,
+      tokenB: outputToken,
+      userAddress: 'system', // No user address for quote
+    });
+
+    if (!validation.valid && validation.error) {
+      const errorResponse = swapLiquidityIntegrationService.formatErrorResponse(validation.error);
+      return res.status(400).json(errorResponse);
+    }
+
     const quote = await swapService.getSwapQuote(inputToken, outputToken, amount);
 
     res.json({
@@ -78,10 +91,9 @@ router.post('/quote', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to get swap quote', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get swap quote',
-    });
+    const unifiedError = swapLiquidityIntegrationService.parseError(error, 'swap-quote');
+    const errorResponse = swapLiquidityIntegrationService.formatErrorResponse(unifiedError);
+    res.status(500).json(errorResponse);
   }
 });
 
@@ -126,10 +138,9 @@ router.post('/validate', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to validate swap', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to validate swap',
-    });
+    const unifiedError = swapLiquidityIntegrationService.parseError(error, 'validate-swap');
+    const errorResponse = swapLiquidityIntegrationService.formatErrorResponse(unifiedError);
+    res.status(500).json(errorResponse);
   }
 });
 
@@ -181,10 +192,9 @@ router.post('/execute', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to execute swap', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to execute swap',
-    });
+    const unifiedError = swapLiquidityIntegrationService.parseError(error, 'execute-swap');
+    const errorResponse = swapLiquidityIntegrationService.formatErrorResponse(unifiedError);
+    res.status(500).json(errorResponse);
   }
 });
 

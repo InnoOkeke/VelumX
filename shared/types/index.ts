@@ -212,6 +212,7 @@ export interface BackendConfig {
   stacksUsdcxAddress: string;
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
+  stacksSwapContractAddress: string;
   
   // API keys
   circleApiKey?: string;
@@ -251,6 +252,7 @@ export interface FrontendConfig {
   stacksUsdcxAddress: string;
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
+  stacksSwapContractAddress: string;
   
   // Domain IDs
   ethereumDomainId: number;

@@ -15,7 +15,9 @@ import {
   notFoundHandler,
 } from './middleware/security';
 import { createRateLimiter } from './middleware/rate-limit';
+import { requestMonitoring, errorMonitoring, healthCheckHandler, metricsHandler, alertsHandler } from './middleware/monitoring';
 import { transactionMonitorService } from './services/TransactionMonitorService';
+import { monitoringService } from './services/MonitoringService';
 
 // Load and validate configuration
 let config;
@@ -33,9 +35,16 @@ try {
 // Initialize services
 async function initializeServices() {
   try {
+    // Initialize monitoring service
+    monitoringService.initialize();
+    logger.info('Monitoring service initialized');
+
+    // Initialize transaction monitor
     await transactionMonitorService.initialize();
     await transactionMonitorService.startMonitoring();
-    logger.info('Services initialized successfully');
+    logger.info('Transaction monitor service initialized');
+
+    logger.info('All services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize services', { error });
     throw error;
@@ -52,10 +61,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(sanitizeInput);
 app.use(requestLogger);
+app.use(requestMonitoring); // Add monitoring middleware
 app.use(createRateLimiter()); // Rate limiting
 
-// Health check endpoint
-app.get('/api/health', (req: Request, res: Response) => {
+// Health check and monitoring endpoints
+app.get('/api/health', healthCheckHandler);
+app.get('/api/metrics', metricsHandler);
+app.get('/api/alerts', alertsHandler);
+
+// Legacy health check endpoint (for backward compatibility)
+app.get('/api/health/legacy', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: Date.now(),
@@ -70,14 +85,19 @@ import transactionRoutes from './routes/transactions';
 import attestationRoutes from './routes/attestations';
 import paymasterRoutes from './routes/paymaster';
 import swapRoutes from './routes/swap';
+import liquidityRoutes from './routes/liquidity';
 
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/attestations', attestationRoutes);
 app.use('/api/paymaster', paymasterRoutes);
 app.use('/api/swap', swapRoutes);
+app.use('/api/liquidity', liquidityRoutes);
 
 // 404 handler (must be after all routes)
 app.use(notFoundHandler);
+
+// Error monitoring middleware (before error handler)
+app.use(errorMonitoring);
 
 // Error handler (must be last)
 app.use(errorHandler);
@@ -103,6 +123,9 @@ const shutdown = async () => {
   logger.info('Shutdown signal received, closing server gracefully...');
   
   // Stop monitoring service
+  monitoringService.shutdown();
+  
+  // Stop transaction monitor service
   await transactionMonitorService.stopMonitoring();
   
   server.close(() => {
@@ -123,11 +146,16 @@ process.on('SIGINT', shutdown);
 // Handle uncaught errors
 process.on('uncaughtException', (error: Error) => {
   logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+  monitoringService.recordError(error, 'uncaught_exception');
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason: any) => {
   logger.error('Unhandled rejection', { reason });
+  monitoringService.recordError(
+    reason instanceof Error ? reason : new Error(String(reason)),
+    'unhandled_rejection'
+  );
   process.exit(1);
 });
 

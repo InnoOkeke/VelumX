@@ -1,11 +1,11 @@
 /**
  * Swap Service
- * Handles token swaps on Stacks via Velar DEX with gasless support
+ * Handles token swaps on Stacks via our deployed swap contract
  */
 
-import { VelarSDK } from '@velarprotocol/velar-sdk';
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
+import { callReadOnlyFunction, cvToJSON, principalCV, uintCV } from '@stacks/transactions';
 
 export interface TokenInfo {
   symbol: string;
@@ -34,13 +34,12 @@ export interface SwapRoute {
 
 export class SwapService {
   private config = getConfig();
-  private sdk: VelarSDK;
   private cachedTokens: TokenInfo[] | null = null;
   private tokensCacheExpiry = 0;
   private readonly CACHE_DURATION = 300000; // 5 minutes
 
   constructor() {
-    this.sdk = new VelarSDK();
+    // Initialize with testnet
   }
 
   /**
@@ -52,78 +51,30 @@ export class SwapService {
       return this.cachedTokens;
     }
 
-    logger.info('Fetching supported tokens from Velar');
+    logger.info('Fetching supported tokens');
 
-    try {
-      // Fetch token list from Velar SDK
-      const response = await fetch('https://sdk-beta.velar.network/tokens/symbols');
-      const tokenSymbols = await response.json() as string[];
+    // For now, return hardcoded list of tokens
+    // In production, this could query available pools from the contract
+    const tokens: TokenInfo[] = [
+      {
+        symbol: 'USDCx',
+        name: 'USDC (xReserve)',
+        address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
+        decimals: 6,
+      },
+      {
+        symbol: 'STX',
+        name: 'Stacks',
+        address: 'STX',
+        decimals: 6,
+      },
+    ];
 
-      // Map common tokens with metadata
-      const tokenMetadata: Record<string, Partial<TokenInfo>> = {
-        'STX': { name: 'Stacks', decimals: 6 },
-        'VELAR': { name: 'Velar Token', decimals: 6 },
-        'aeUSDC': { name: 'Wrapped USDC', decimals: 6 },
-        'aBTC': { name: 'Wrapped Bitcoin', decimals: 8 },
-        'WELSH': { name: 'Welsh Token', decimals: 6 },
-        'SOME': { name: 'Some Token', decimals: 6 },
-        'USDCx': { name: 'USDC (xReserve)', decimals: 6, address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx' },
-      };
+    this.cachedTokens = tokens;
+    this.tokensCacheExpiry = Date.now() + this.CACHE_DURATION;
 
-      const tokens: TokenInfo[] = tokenSymbols
-        .filter(symbol => tokenMetadata[symbol] || symbol === 'USDCx')
-        .map(symbol => ({
-          symbol,
-          name: tokenMetadata[symbol]?.name || symbol,
-          address: tokenMetadata[symbol]?.address || `SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.${symbol.toLowerCase()}`,
-          decimals: tokenMetadata[symbol]?.decimals || 6,
-        }));
-
-      // Always include USDCx if not in list
-      if (!tokens.find(t => t.symbol === 'USDCx')) {
-        tokens.unshift({
-          symbol: 'USDCx',
-          name: 'USDC (xReserve)',
-          address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
-          decimals: 6,
-        });
-      }
-
-      this.cachedTokens = tokens;
-      this.tokensCacheExpiry = Date.now() + this.CACHE_DURATION;
-
-      logger.info(`Fetched ${tokens.length} supported tokens`);
-      return tokens;
-    } catch (error) {
-      logger.error('Failed to fetch tokens from Velar, using fallback list', { error });
-
-      // Fallback to basic token list
-      const fallbackTokens: TokenInfo[] = [
-        {
-          symbol: 'USDCx',
-          name: 'USDC (xReserve)',
-          address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
-          decimals: 6,
-        },
-        {
-          symbol: 'STX',
-          name: 'Stacks',
-          address: 'STX',
-          decimals: 6,
-        },
-        {
-          symbol: 'VELAR',
-          name: 'Velar Token',
-          address: 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.velar-token',
-          decimals: 6,
-        },
-      ];
-
-      this.cachedTokens = fallbackTokens;
-      this.tokensCacheExpiry = Date.now() + this.CACHE_DURATION;
-
-      return fallbackTokens;
-    }
+    logger.info(`Loaded ${tokens.length} supported tokens`);
+    return tokens;
   }
 
   /**
@@ -134,35 +85,45 @@ export class SwapService {
     outputToken: string,
     inputAmount: bigint
   ): Promise<SwapQuote> {
-    logger.info('Getting swap quote from Velar', {
+    logger.info('Getting swap quote from our contract', {
       inputToken,
       outputToken,
       inputAmount: inputAmount.toString(),
     });
 
     try {
-      // Get token symbols from addresses
-      const inputSymbol = this.getTokenSymbol(inputToken);
-      const outputSymbol = this.getTokenSymbol(outputToken);
+      // Parse contract address
+      const [contractAddress, contractName] = this.config.stacksSwapContractAddress.split('.');
+      
+      // Parse token addresses
+      const [tokenInAddress, tokenInName] = inputToken.split('.');
+      const [tokenOutAddress, tokenOutName] = outputToken.split('.');
 
-      // Create swap instance
-      const swapInstance = await this.sdk.getSwapInstance({
-        account: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM', // Placeholder for quote
-        inToken: inputSymbol,
-        outToken: outputSymbol,
+      // Call quote-swap read-only function
+      const result = await callReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'quote-swap',
+        functionArgs: [
+          principalCV(`${tokenInAddress}.${tokenInName}`),
+          principalCV(`${tokenOutAddress}.${tokenOutName}`),
+          uintCV(inputAmount),
+        ],
+        network: 'testnet',
+        senderAddress: contractAddress,
       });
 
-      // Get computed amount with 0.5% slippage
-      const amountOut = await swapInstance.getComputedAmount({
-        amount: Number(inputAmount) / Math.pow(10, 6), // Convert from micro units
-        slippage: 0.5,
-      });
+      // Parse result
+      const resultJson = cvToJSON(result);
+      
+      if (resultJson.success === false || !resultJson.value) {
+        throw new Error('Pool not found or invalid quote');
+      }
 
-      // Extract route information - Velar SDK returns route details
-      const route = (amountOut as any).path || [inputSymbol, outputSymbol];
-      const outputAmount = BigInt(Math.floor((amountOut as any).amount * Math.pow(10, 6)));
-      const priceImpact = (amountOut as any).priceImpact || 0.5;
-      const estimatedFee = BigInt(100000); // 0.1 USDCx for gasless mode
+      const quoteData = resultJson.value.value;
+      const outputAmount = BigInt(quoteData['amount-out'].value);
+      const priceImpact = Number(quoteData['price-impact'].value) / 100; // Convert basis points to percentage
+      const fee = BigInt(quoteData.fee.value);
 
       const quote: SwapQuote = {
         inputToken,
@@ -170,157 +131,22 @@ export class SwapService {
         inputAmount,
         outputAmount,
         priceImpact,
-        route,
-        estimatedFee,
+        route: [inputToken, outputToken],
+        estimatedFee: fee,
         validUntil: Date.now() + 60000, // Valid for 1 minute
       };
 
-      logger.info('Swap quote generated from Velar', {
+      logger.info('Swap quote generated from contract', {
         outputAmount: outputAmount.toString(),
         priceImpact,
-        route,
+        fee: fee.toString(),
       });
 
       return quote;
     } catch (error) {
-      logger.error('Failed to get quote from Velar, using fallback', { error });
-
-      // Fallback to estimated quote
-      const route = await this.findBestRoute(inputToken, outputToken);
-      const outputAmount = await this.estimateOutput(inputToken, outputToken, inputAmount, route);
-      const priceImpact = this.calculatePriceImpact(inputAmount, outputAmount);
-      const estimatedFee = BigInt(100000);
-
-      return {
-        inputToken,
-        outputToken,
-        inputAmount,
-        outputAmount,
-        priceImpact,
-        route: route.path,
-        estimatedFee,
-        validUntil: Date.now() + 60000,
-      };
+      logger.error('Failed to get quote from contract', { error });
+      throw new Error('Failed to get swap quote. Pool may not exist yet.');
     }
-  }
-
-  /**
-   * Find best route for swap
-   */
-  private async findBestRoute(
-    inputToken: string,
-    outputToken: string
-  ): Promise<SwapRoute> {
-    // Direct swap if pool exists
-    if (this.hasDirectPool(inputToken, outputToken)) {
-      return {
-        path: [inputToken, outputToken],
-        pools: [`${inputToken}-${outputToken}`],
-        estimatedOutput: BigInt(0), // Will be calculated
-      };
-    }
-
-    // Route through STX if no direct pool
-    return {
-      path: [inputToken, 'STX', outputToken],
-      pools: [`${inputToken}-STX`, `STX-${outputToken}`],
-      estimatedOutput: BigInt(0),
-    };
-  }
-
-  /**
-   * Check if direct pool exists
-   */
-  private hasDirectPool(tokenA: string, tokenB: string): boolean {
-    // Common pairs on Velar DEX
-    const commonPairs = [
-      'USDCx-STX',
-      'STX-VELAR',
-      'STX-aeUSDC',
-      'STX-aBTC',
-      'VELAR-aeUSDC',
-    ];
-
-    const pairKey = `${this.getTokenSymbol(tokenA)}-${this.getTokenSymbol(tokenB)}`;
-    const reversePairKey = `${this.getTokenSymbol(tokenB)}-${this.getTokenSymbol(tokenA)}`;
-
-    return commonPairs.includes(pairKey) || commonPairs.includes(reversePairKey);
-  }
-
-  /**
-   * Estimate output amount for swap
-   */
-  private async estimateOutput(
-    inputToken: string,
-    outputToken: string,
-    inputAmount: bigint,
-    route: SwapRoute
-  ): Promise<bigint> {
-    // Fallback pricing when Velar SDK fails
-    const inputSymbol = this.getTokenSymbol(inputToken);
-    const outputSymbol = this.getTokenSymbol(outputToken);
-
-    // Approximate exchange rates
-    const rates: Record<string, Record<string, number>> = {
-      'USDCx': { 'STX': 2.0, 'VELAR': 10.0, 'aeUSDC': 1.0 },
-      'STX': { 'USDCx': 0.5, 'VELAR': 5.0, 'aeUSDC': 0.5 },
-      'VELAR': { 'USDCx': 0.1, 'STX': 0.2, 'aeUSDC': 0.1 },
-      'aeUSDC': { 'USDCx': 1.0, 'STX': 2.0, 'VELAR': 10.0 },
-    };
-
-    let outputAmount = inputAmount;
-
-    // Apply rates along the route
-    for (let i = 0; i < route.path.length - 1; i++) {
-      const from = this.getTokenSymbol(route.path[i]);
-      const to = this.getTokenSymbol(route.path[i + 1]);
-      const rate = rates[from]?.[to] || 1.0;
-      outputAmount = BigInt(Math.floor(Number(outputAmount) * rate));
-    }
-
-    // Apply 0.3% swap fee per hop
-    const feeMultiplier = Math.pow(0.997, route.path.length - 1);
-    outputAmount = BigInt(Math.floor(Number(outputAmount) * feeMultiplier));
-
-    return outputAmount;
-  }
-
-  /**
-   * Calculate price impact percentage
-   */
-  private calculatePriceImpact(inputAmount: bigint, outputAmount: bigint): number {
-    // Simplified calculation
-    // In production, compare against spot price from pool reserves
-    const impact = 0.5; // 0.5% for demo
-    return impact;
-  }
-
-  /**
-   * Get token symbol from address
-   */
-  private getTokenSymbol(tokenAddress: string): string {
-    // Handle direct symbol input
-    if (!tokenAddress.includes('.') && !tokenAddress.includes('0x')) {
-      return tokenAddress;
-    }
-    
-    if (tokenAddress === 'STX') return 'STX';
-    if (tokenAddress.toLowerCase().includes('usdcx')) return 'aeUSDC'; // Map USDCx to aeUSDC for Velar
-    if (tokenAddress.toLowerCase().includes('velar')) return 'VELAR';
-    if (tokenAddress.toLowerCase().includes('aeusdc')) return 'aeUSDC';
-    if (tokenAddress.toLowerCase().includes('abtc')) return 'aBTC';
-    if (tokenAddress.toLowerCase().includes('welsh')) return 'WELSH';
-    
-    // Extract token name from contract address
-    const parts = tokenAddress.split('.');
-    if (parts.length === 2) {
-      const tokenName = parts[1].toUpperCase();
-      // Map common tokens
-      if (tokenName === 'USDCX') return 'aeUSDC';
-      return tokenName;
-    }
-    
-    return tokenAddress;
   }
 
   /**

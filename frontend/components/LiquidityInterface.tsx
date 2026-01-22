@@ -8,14 +8,44 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { Plus, Minus, Loader2, AlertCircle, CheckCircle, Zap, Info, Search, X } from 'lucide-react';
+import { Plus, Minus, Loader2, AlertCircle, CheckCircle, Zap, Info, Search, X, BarChart3 } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
+import { fetchCallReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
+import { PoolAnalytics } from './PoolAnalytics';
+import { PositionDashboard } from './PositionDashboard';
 
 interface Token {
   symbol: string;
   name: string;
   address: string;
   decimals: number;
+  logoUrl?: string;
+  priceUSD?: number;
+}
+
+interface Pool {
+  id: string;
+  tokenA: Token;
+  tokenB: Token;
+  reserveA: bigint;
+  reserveB: bigint;
+  totalSupply: bigint;
+  tvl: number;
+  volume24h: number;
+  apr: number;
+  feeEarnings24h: number;
+  createdAt: Date;
+  lastUpdated: Date;
+}
+
+interface PoolAnalytics {
+  poolId: string;
+  tvl: number;
+  volume24h: number;
+  volume7d: number;
+  apr: number;
+  feeEarnings24h: number;
+  priceChange24h: number;
 }
 
 interface LiquidityState {
@@ -35,6 +65,19 @@ interface LiquidityState {
   showImportModal: boolean;
   importAddress: string;
   importingToken: 'A' | 'B' | null;
+  // Enhanced pool discovery features
+  showPoolBrowser: boolean;
+  availablePools: Pool[];
+  filteredPools: Pool[];
+  poolSearchQuery: string;
+  poolSortBy: 'tvl' | 'apr' | 'volume' | 'name';
+  poolSortOrder: 'asc' | 'desc';
+  selectedPoolForSwap: Pool | null;
+  loadingPools: boolean;
+  poolAnalytics: { [poolId: string]: PoolAnalytics };
+  showPoolAnalytics: boolean;
+  // Position dashboard
+  activeTab: 'liquidity' | 'positions';
 }
 
 // Default tokens for testnet
@@ -75,7 +118,32 @@ export function LiquidityInterface() {
     showImportModal: false,
     importAddress: '',
     importingToken: null,
+    // Enhanced pool discovery features
+    showPoolBrowser: false,
+    availablePools: [],
+    filteredPools: [],
+    poolSearchQuery: '',
+    poolSortBy: 'tvl',
+    poolSortOrder: 'desc',
+    selectedPoolForSwap: null,
+    loadingPools: false,
+    poolAnalytics: {},
+    showPoolAnalytics: false,
+    // Position dashboard
+    activeTab: 'liquidity',
   });
+
+  // Fetch available pools on component mount
+  useEffect(() => {
+    if (stacksConnected) {
+      fetchAvailablePools();
+    }
+  }, [stacksConnected]);
+
+  // Filter and sort pools when search query or sort options change
+  useEffect(() => {
+    filterAndSortPools();
+  }, [state.availablePools, state.poolSearchQuery, state.poolSortBy, state.poolSortOrder]);
 
   // Fetch pool info when tokens change
   useEffect(() => {
@@ -91,22 +159,355 @@ export function LiquidityInterface() {
     }
   }, [state.amountA, state.mode, state.poolExists]);
 
-  const fetchPoolInfo = async () => {
-    // TODO: Fetch pool reserves and user LP balance from contract
-    // For now, set placeholder values
-    setState(prev => ({
-      ...prev,
-      poolExists: false, // Will be true once pool is created
-      userLpBalance: '0',
-      poolShare: '0',
-    }));
+  /**
+   * Fetch available pools from the backend API
+   */
+  const fetchAvailablePools = async () => {
+    setState(prev => ({ ...prev, loadingPools: true, error: null }));
+
+    try {
+      // Fetch pools from the new pool discovery API
+      const response = await fetch(`${config.backendUrl}/api/liquidity/pools`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch pools: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        const pools: Pool[] = data.data.map((pool: any) => ({
+          id: pool.id,
+          tokenA: {
+            symbol: pool.tokenA.symbol,
+            name: pool.tokenA.name,
+            address: pool.tokenA.address,
+            decimals: pool.tokenA.decimals,
+            logoUrl: pool.tokenA.logoUrl,
+            priceUSD: pool.tokenA.priceUSD,
+          },
+          tokenB: {
+            symbol: pool.tokenB.symbol,
+            name: pool.tokenB.name,
+            address: pool.tokenB.address,
+            decimals: pool.tokenB.decimals,
+            logoUrl: pool.tokenB.logoUrl,
+            priceUSD: pool.tokenB.priceUSD,
+          },
+          reserveA: BigInt(pool.reserveA || '0'),
+          reserveB: BigInt(pool.reserveB || '0'),
+          totalSupply: BigInt(pool.totalSupply || '0'),
+          tvl: pool.tvl || 0,
+          volume24h: pool.volume24h || 0,
+          apr: pool.apr || 0,
+          feeEarnings24h: pool.feeEarnings24h || 0,
+          createdAt: new Date(pool.createdAt),
+          lastUpdated: new Date(pool.lastUpdated),
+        }));
+
+        setState(prev => ({ 
+          ...prev, 
+          availablePools: pools,
+          loadingPools: false,
+        }));
+
+        // Fetch analytics for each pool
+        await fetchPoolAnalytics(pools);
+      } else {
+        throw new Error(data.error || 'Failed to fetch pools');
+      }
+    } catch (error) {
+      console.error('Failed to fetch available pools:', error);
+      setState(prev => ({ 
+        ...prev, 
+        loadingPools: false,
+        error: `Failed to load pools: ${(error as Error).message}`,
+      }));
+    }
   };
 
-  const calculateOptimalAmountB = () => {
-    // TODO: Calculate optimal amount B based on pool ratio
-    // For now, use 1:2 ratio (1 USDCx = 2 STX)
-    const amountB = (parseFloat(state.amountA) * 2).toFixed(6);
-    setState(prev => ({ ...prev, amountB }));
+  /**
+   * Fetch analytics for multiple pools
+   */
+  const fetchPoolAnalytics = async (pools: Pool[]) => {
+    try {
+      const analyticsPromises = pools.map(async (pool) => {
+        try {
+          const response = await fetch(`${config.backendUrl}/api/liquidity/analytics/${pool.id}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data) {
+              return { poolId: pool.id, analytics: data.data };
+            }
+          }
+          return null;
+        } catch (error) {
+          console.error(`Failed to fetch analytics for pool ${pool.id}:`, error);
+          return null;
+        }
+      });
+
+      const analyticsResults = await Promise.all(analyticsPromises);
+      const analyticsMap: { [poolId: string]: PoolAnalytics } = {};
+
+      analyticsResults.forEach(result => {
+        if (result) {
+          analyticsMap[result.poolId] = result.analytics;
+        }
+      });
+
+      setState(prev => ({ 
+        ...prev, 
+        poolAnalytics: analyticsMap,
+      }));
+    } catch (error) {
+      console.error('Failed to fetch pool analytics:', error);
+    }
+  };
+
+  /**
+   * Filter and sort pools based on search query and sort options
+   */
+  const filterAndSortPools = () => {
+    let filtered = [...state.availablePools];
+
+    // Apply search filter
+    if (state.poolSearchQuery.trim()) {
+      const query = state.poolSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(pool => 
+        pool.tokenA.symbol.toLowerCase().includes(query) ||
+        pool.tokenA.name.toLowerCase().includes(query) ||
+        pool.tokenB.symbol.toLowerCase().includes(query) ||
+        pool.tokenB.name.toLowerCase().includes(query) ||
+        pool.id.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: number | string;
+      let bValue: number | string;
+
+      switch (state.poolSortBy) {
+        case 'tvl':
+          aValue = a.tvl;
+          bValue = b.tvl;
+          break;
+        case 'apr':
+          aValue = a.apr;
+          bValue = b.apr;
+          break;
+        case 'volume':
+          aValue = a.volume24h;
+          bValue = b.volume24h;
+          break;
+        case 'name':
+          aValue = `${a.tokenA.symbol}-${a.tokenB.symbol}`;
+          bValue = `${b.tokenA.symbol}-${b.tokenB.symbol}`;
+          break;
+        default:
+          aValue = a.tvl;
+          bValue = b.tvl;
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return state.poolSortOrder === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      } else {
+        const numA = Number(aValue);
+        const numB = Number(bValue);
+        return state.poolSortOrder === 'asc' ? numA - numB : numB - numA;
+      }
+    });
+
+    setState(prev => ({ ...prev, filteredPools: filtered }));
+  };
+
+  /**
+   * Select a pool from the browser
+   */
+  const selectPoolFromBrowser = (pool: Pool) => {
+    setState(prev => ({
+      ...prev,
+      tokenA: pool.tokenA,
+      tokenB: pool.tokenB,
+      selectedPoolForSwap: pool,
+      showPoolBrowser: false,
+      error: null,
+    }));
+
+    // Add tokens to the tokens list if they don't exist
+    const newTokens = [...tokens];
+    if (!newTokens.find(t => t.address === pool.tokenA.address)) {
+      newTokens.push(pool.tokenA);
+    }
+    if (!newTokens.find(t => t.address === pool.tokenB.address)) {
+      newTokens.push(pool.tokenB);
+    }
+    setTokens(newTokens);
+  };
+
+  /**
+   * Format currency values
+   */
+  const formatCurrency = (value: number): string => {
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(2)}M`;
+    } else if (value >= 1000) {
+      return `$${(value / 1000).toFixed(2)}K`;
+    } else {
+      return `$${value.toFixed(2)}`;
+    }
+  };
+
+  /**
+   * Format percentage values
+   */
+  const formatPercentage = (value: number): string => {
+    return `${value.toFixed(2)}%`;
+  };
+
+  const fetchPoolInfo = async () => {
+    if (!state.tokenA || !state.tokenB || !stacksAddress) return;
+
+    try {
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+
+      // Get pool reserves
+      const poolResult = await fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-pool-reserves',
+        functionArgs: [
+          principalCV(state.tokenA.address),
+          principalCV(state.tokenB.address),
+        ],
+        network: 'testnet',
+        senderAddress: stacksAddress,
+      });
+
+      const poolJson = cvToJSON(poolResult);
+      
+      if (poolJson.success && poolJson.value) {
+        const poolData = poolJson.value.value;
+        const reserveA = Number(poolData['reserve-a'].value);
+        const reserveB = Number(poolData['reserve-b'].value);
+        
+        // Pool exists if reserves are non-zero
+        const poolExists = reserveA > 0 && reserveB > 0;
+
+        // Get user LP balance
+        const lpResult = await fetchCallReadOnlyFunction({
+          contractAddress,
+          contractName,
+          functionName: 'get-lp-balance',
+          functionArgs: [
+            principalCV(state.tokenA.address),
+            principalCV(state.tokenB.address),
+            principalCV(stacksAddress),
+          ],
+          network: 'testnet',
+          senderAddress: stacksAddress,
+        });
+
+        const lpJson = cvToJSON(lpResult);
+        const userLpBalance = lpJson.success && lpJson.value 
+          ? (Number(lpJson.value.value) / Math.pow(10, 6)).toFixed(6)
+          : '0';
+
+        // Get pool share
+        const shareResult = await fetchCallReadOnlyFunction({
+          contractAddress,
+          contractName,
+          functionName: 'get-pool-share',
+          functionArgs: [
+            principalCV(state.tokenA.address),
+            principalCV(state.tokenB.address),
+            principalCV(stacksAddress),
+          ],
+          network: 'testnet',
+          senderAddress: stacksAddress,
+        });
+
+        const shareJson = cvToJSON(shareResult);
+        const poolShare = shareJson.success && shareJson.value
+          ? (Number(shareJson.value.value.percentage.value) / 100).toFixed(2)
+          : '0';
+
+        setState(prev => ({
+          ...prev,
+          poolExists,
+          userLpBalance,
+          poolShare,
+        }));
+      } else {
+        // Pool doesn't exist yet
+        setState(prev => ({
+          ...prev,
+          poolExists: false,
+          userLpBalance: '0',
+          poolShare: '0',
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch pool info:', error);
+      setState(prev => ({
+        ...prev,
+        poolExists: false,
+        userLpBalance: '0',
+        poolShare: '0',
+      }));
+    }
+  };
+
+  const calculateOptimalAmountB = async () => {
+    if (!state.tokenA || !state.tokenB || !state.amountA || !state.poolExists) return;
+
+    try {
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+
+      // Get pool reserves
+      const poolResult = await fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-pool-reserves',
+        functionArgs: [
+          principalCV(state.tokenA.address),
+          principalCV(state.tokenB.address),
+        ],
+        network: 'testnet',
+        senderAddress: stacksAddress || contractAddress,
+      });
+
+      const poolJson = cvToJSON(poolResult);
+      
+      if (poolJson.success && poolJson.value) {
+        const poolData = poolJson.value.value;
+        const reserveA = Number(poolData['reserve-a'].value);
+        const reserveB = Number(poolData['reserve-b'].value);
+        
+        // Calculate optimal amount B based on pool ratio
+        const amountAMicro = parseFloat(state.amountA) * Math.pow(10, state.tokenA.decimals);
+        const amountBMicro = (amountAMicro * reserveB) / reserveA;
+        const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
+        
+        setState(prev => ({ ...prev, amountB }));
+      }
+    } catch (error) {
+      console.error('Failed to calculate optimal amount:', error);
+    }
   };
 
   const handleAddLiquidity = async () => {
@@ -123,16 +524,63 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // TODO: Implement actual add-liquidity contract call
+      // Dynamic imports for Stacks libraries
+      const { openContractCall } = await import('@stacks/connect');
+      const { STACKS_TESTNET } = await import('@stacks/network');
+      const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
+      
+      const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
+      const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
+      
+      // Calculate minimum amounts with 0.5% slippage tolerance
+      const minAmountAMicro = parseUnits((parseFloat(state.amountA) * 0.995).toFixed(6), state.tokenA.decimals);
+      const minAmountBMicro = parseUnits((parseFloat(state.amountB) * 0.995).toFixed(6), state.tokenB.decimals);
+
+      // Parse token addresses (format: PRINCIPAL.CONTRACT-NAME)
+      const tokenAParts = state.tokenA.address.split('.');
+      const tokenBParts = state.tokenB.address.split('.');
+
+      const functionArgs = [
+        contractPrincipalCV(tokenAParts[0], tokenAParts[1]), // token-a
+        contractPrincipalCV(tokenBParts[0], tokenBParts[1]), // token-b
+        uintCV(Number(amountAMicro)), // amount-a-desired
+        uintCV(Number(amountBMicro)), // amount-b-desired
+        uintCV(Number(minAmountAMicro)), // amount-a-min
+        uintCV(Number(minAmountBMicro)), // amount-b-min
+      ];
+
+      await new Promise<string>((resolve, reject) => {
+        openContractCall({
+          contractAddress: config.stacksSwapContractAddress.split('.')[0],
+          contractName: config.stacksSwapContractAddress.split('.')[1],
+          functionName: state.gaslessMode ? 'add-liquidity-gasless' : 'add-liquidity',
+          functionArgs,
+          network: STACKS_TESTNET,
+          postConditionMode: PostConditionMode.Allow,
+          sponsored: state.gaslessMode,
+          appDetails: {
+            name: 'VelumX Bridge',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
+          onFinish: async (data: any) => {
+            const txId = data.txId;
+            resolve(txId);
+          },
+          onCancel: () => {
+            reject(new Error('User cancelled transaction'));
+          },
+        });
+      });
+
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Liquidity added! You would receive LP tokens. Please deploy the swap contract first.`,
+        success: `Liquidity added successfully! You received LP tokens.`,
         amountA: '',
         amountB: '',
       }));
 
-      // Refresh balances
+      // Refresh balances and pool info
       if (fetchBalances) {
         setTimeout(() => {
           fetchBalances();
@@ -146,6 +594,55 @@ export function LiquidityInterface() {
         isProcessing: false,
         error: (error as Error).message || 'Failed to add liquidity',
       }));
+    }
+  };
+
+  // Calculate expected output when removing liquidity
+  useEffect(() => {
+    if (state.mode === 'remove' && state.lpTokenAmount && parseFloat(state.lpTokenAmount) > 0 && state.poolExists) {
+      calculateRemoveAmounts();
+    }
+  }, [state.lpTokenAmount, state.mode, state.poolExists]);
+
+  const calculateRemoveAmounts = async () => {
+    if (!state.tokenA || !state.tokenB || !state.lpTokenAmount || !stacksAddress) return;
+
+    try {
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+
+      // Get pool reserves and total supply
+      const poolResult = await fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-pool-reserves',
+        functionArgs: [
+          principalCV(state.tokenA.address),
+          principalCV(state.tokenB.address),
+        ],
+        network: 'testnet',
+        senderAddress: stacksAddress,
+      });
+
+      const poolJson = cvToJSON(poolResult);
+      
+      if (poolJson.success && poolJson.value) {
+        const poolData = poolJson.value.value;
+        const reserveA = Number(poolData['reserve-a'].value);
+        const reserveB = Number(poolData['reserve-b'].value);
+        const totalSupply = Number(poolData['total-supply'].value);
+        
+        // Calculate proportional amounts
+        const lpAmountMicro = parseFloat(state.lpTokenAmount) * Math.pow(10, 6);
+        const amountAMicro = (lpAmountMicro * reserveA) / totalSupply;
+        const amountBMicro = (lpAmountMicro * reserveB) / totalSupply;
+        
+        const amountA = (amountAMicro / Math.pow(10, state.tokenA.decimals)).toFixed(6);
+        const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
+        
+        setState(prev => ({ ...prev, amountA, amountB }));
+      }
+    } catch (error) {
+      console.error('Failed to calculate remove amounts:', error);
     }
   };
 
@@ -168,17 +665,62 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // TODO: Implement actual remove-liquidity contract call
+      // Dynamic imports for Stacks libraries
+      const { openContractCall } = await import('@stacks/connect');
+      const { STACKS_TESTNET } = await import('@stacks/network');
+      const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
+      
+      const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6); // LP tokens have 6 decimals
+      
+      // Calculate minimum amounts with 0.5% slippage tolerance
+      const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * 0.995).toFixed(6), state.tokenA.decimals);
+      const minAmountBMicro = parseUnits((parseFloat(state.amountB || '0') * 0.995).toFixed(6), state.tokenB.decimals);
+
+      // Parse token addresses (format: PRINCIPAL.CONTRACT-NAME)
+      const tokenAParts = state.tokenA.address.split('.');
+      const tokenBParts = state.tokenB.address.split('.');
+
+      const functionArgs = [
+        contractPrincipalCV(tokenAParts[0], tokenAParts[1]), // token-a
+        contractPrincipalCV(tokenBParts[0], tokenBParts[1]), // token-b
+        uintCV(Number(lpTokenAmountMicro)), // liquidity
+        uintCV(Number(minAmountAMicro)), // amount-a-min
+        uintCV(Number(minAmountBMicro)), // amount-b-min
+      ];
+
+      await new Promise<string>((resolve, reject) => {
+        openContractCall({
+          contractAddress: config.stacksSwapContractAddress.split('.')[0],
+          contractName: config.stacksSwapContractAddress.split('.')[1],
+          functionName: state.gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity',
+          functionArgs,
+          network: STACKS_TESTNET,
+          postConditionMode: PostConditionMode.Allow,
+          sponsored: state.gaslessMode,
+          appDetails: {
+            name: 'VelumX Bridge',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
+          onFinish: async (data: any) => {
+            const txId = data.txId;
+            resolve(txId);
+          },
+          onCancel: () => {
+            reject(new Error('User cancelled transaction'));
+          },
+        });
+      });
+
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Liquidity removed! You would receive ${state.amountA} ${state.tokenA?.symbol} and ${state.amountB} ${state.tokenB?.symbol}`,
+        success: `Liquidity removed successfully! You received ${state.amountA} ${state.tokenA?.symbol} and ${state.amountB} ${state.tokenB?.symbol}`,
         lpTokenAmount: '',
         amountA: '',
         amountB: '',
       }));
 
-      // Refresh balances
+      // Refresh balances and pool info
       if (fetchBalances) {
         setTimeout(() => {
           fetchBalances();
@@ -314,6 +856,36 @@ export function LiquidityInterface() {
 
   return (
     <div className="max-w-lg mx-auto">
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setState(prev => ({ ...prev, activeTab: 'liquidity' }))}
+          className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${
+            state.activeTab === 'liquidity'
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+          style={state.activeTab !== 'liquidity' ? { color: 'var(--text-secondary)' } : {}}
+        >
+          Manage Liquidity
+        </button>
+        <button
+          onClick={() => setState(prev => ({ ...prev, activeTab: 'positions' }))}
+          className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${
+            state.activeTab === 'positions'
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+          style={state.activeTab !== 'positions' ? { color: 'var(--text-secondary)' } : {}}
+        >
+          My Positions
+        </button>
+      </div>
+
+      {/* Show Position Dashboard or Liquidity Interface based on active tab */}
+      {state.activeTab === 'positions' ? (
+        <PositionDashboard />
+      ) : (
       <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
         backgroundColor: 'var(--bg-surface)', 
         border: `1px solid var(--border-color)`,
@@ -325,6 +897,15 @@ export function LiquidityInterface() {
             Liquidity
           </h2>
           <div className="flex gap-2">
+            <button
+              onClick={() => setState(prev => ({ ...prev, showPoolBrowser: true }))}
+              className="px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+              style={{ color: 'var(--text-secondary)' }}
+              disabled={state.isProcessing}
+            >
+              <Search className="w-4 h-4 inline mr-1" />
+              Browse Pools
+            </button>
             <button
               onClick={() => setState(prev => ({ ...prev, mode: 'add', error: null, success: null }))}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -372,6 +953,59 @@ export function LiquidityInterface() {
                   <div className="flex justify-between">
                     <span>Pool Share:</span>
                     <span className="font-semibold text-purple-600 dark:text-purple-400">{state.poolShare}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Pool Info */}
+        {state.selectedPoolForSwap && (
+          <div className="rounded-xl p-4 mb-6" style={{
+            border: `1px solid var(--border-color)`,
+            backgroundColor: 'rgba(16, 185, 129, 0.05)'
+          }}>
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    Selected Pool: {state.selectedPoolForSwap.tokenA.symbol} / {state.selectedPoolForSwap.tokenB.symbol}
+                  </p>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, showPoolAnalytics: true }))}
+                    className="px-3 py-1 rounded-lg text-xs font-semibold transition-all bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center gap-1"
+                    disabled={state.isProcessing}
+                  >
+                    <BarChart3 className="w-3 h-3" />
+                    Analytics
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  <div className="flex justify-between">
+                    <span>TVL:</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {formatCurrency(state.selectedPoolForSwap.tvl)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>APR:</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      {formatPercentage(state.selectedPoolForSwap.apr)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>24h Volume:</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {formatCurrency(state.selectedPoolForSwap.volume24h)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>24h Fees:</span>
+                    <span className="font-semibold text-purple-600 dark:text-purple-400">
+                      {formatCurrency(state.selectedPoolForSwap.feeEarnings24h)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -679,6 +1313,260 @@ export function LiquidityInterface() {
           <p>LP tokens represent your share of the pool</p>
         </div>
       </div>
+      )}
+
+      {/* Pool Analytics Modal */}
+      {state.showPoolAnalytics && state.selectedPoolForSwap && (
+        <PoolAnalytics
+          pool={state.selectedPoolForSwap}
+          onClose={() => setState(prev => ({ ...prev, showPoolAnalytics: false }))}
+        />
+      )}
+
+      {/* Pool Browser Modal */}
+      {state.showPoolBrowser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden shadow-2xl" style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid var(--border-color)`
+          }}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--border-color)' }}>
+              <div>
+                <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Browse Liquidity Pools
+                </h3>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  Select a pool to add or remove liquidity
+                </p>
+              </div>
+              <button
+                onClick={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                disabled={state.loadingPools}
+              >
+                <X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+
+            {/* Search and Filter Controls */}
+            <div className="p-6 border-b" style={{ borderColor: 'var(--border-color)' }}>
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search Input */}
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                    <input
+                      type="text"
+                      value={state.poolSearchQuery}
+                      onChange={(e) => setState(prev => ({ ...prev, poolSearchQuery: e.target.value }))}
+                      placeholder="Search pools by token name or symbol..."
+                      className="w-full pl-10 pr-4 py-3 rounded-xl outline-none transition-all"
+                      style={{
+                        backgroundColor: 'var(--bg-primary)',
+                        border: `2px solid var(--border-color)`,
+                        color: 'var(--text-primary)'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Sort Controls */}
+                <div className="flex gap-2">
+                  <select
+                    value={state.poolSortBy}
+                    onChange={(e) => setState(prev => ({ ...prev, poolSortBy: e.target.value as any }))}
+                    className="px-4 py-3 rounded-xl outline-none transition-all"
+                    style={{
+                      backgroundColor: 'var(--bg-primary)',
+                      border: `2px solid var(--border-color)`,
+                      color: 'var(--text-primary)'
+                    }}
+                  >
+                    <option value="tvl">Sort by TVL</option>
+                    <option value="apr">Sort by APR</option>
+                    <option value="volume">Sort by Volume</option>
+                    <option value="name">Sort by Name</option>
+                  </select>
+                  <button
+                    onClick={() => setState(prev => ({ 
+                      ...prev, 
+                      poolSortOrder: prev.poolSortOrder === 'asc' ? 'desc' : 'asc' 
+                    }))}
+                    className="px-4 py-3 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+                    style={{ border: `2px solid var(--border-color)` }}
+                  >
+                    {state.poolSortOrder === 'asc' ? '↑' : '↓'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Pool Count */}
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {state.loadingPools ? 'Loading pools...' : `${state.filteredPools.length} pools found`}
+                </p>
+                <button
+                  onClick={fetchAvailablePools}
+                  disabled={state.loadingPools}
+                  className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-semibold transition-colors disabled:opacity-50"
+                >
+                  {state.loadingPools ? (
+                    <>
+                      <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    'Refresh'
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Pool List */}
+            <div className="max-h-96 overflow-y-auto">
+              {state.loadingPools ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-600 dark:text-purple-400" />
+                </div>
+              ) : state.filteredPools.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+                    No pools found
+                  </p>
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {state.poolSearchQuery ? 'Try adjusting your search query' : 'No liquidity pools are available yet'}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+                  {state.filteredPools.map((pool) => {
+                    const analytics = state.poolAnalytics[pool.id];
+                    return (
+                      <div
+                        key={pool.id}
+                        onClick={() => selectPoolFromBrowser(pool)}
+                        className="p-6 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          {/* Pool Info */}
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center -space-x-2">
+                              {/* Token A Logo */}
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                                {pool.tokenA.symbol.charAt(0)}
+                              </div>
+                              {/* Token B Logo */}
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                                {pool.tokenB.symbol.charAt(0)}
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
+                                {pool.tokenA.symbol} / {pool.tokenB.symbol}
+                              </h4>
+                              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                                {pool.tokenA.name} • {pool.tokenB.name}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Pool Metrics */}
+                          <div className="flex items-center gap-6 text-right">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                TVL
+                              </p>
+                              <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                                {formatCurrency(analytics?.tvl || pool.tvl)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                APR
+                              </p>
+                              <p className="font-bold text-green-600 dark:text-green-400">
+                                {formatPercentage(analytics?.apr || pool.apr)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                24h Volume
+                              </p>
+                              <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                                {formatCurrency(analytics?.volume24h || pool.volume24h)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                24h Fees
+                              </p>
+                              <p className="font-bold text-purple-600 dark:text-purple-400">
+                                {formatCurrency(analytics?.feeEarnings24h || pool.feeEarnings24h)}
+                              </p>
+                            </div>
+                            
+                            {/* Analytics Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setState(prev => ({ 
+                                  ...prev, 
+                                  selectedPoolForSwap: pool,
+                                  showPoolAnalytics: true 
+                                }));
+                              }}
+                              className="px-3 py-2 rounded-lg text-xs font-semibold transition-all bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center gap-1"
+                              title="View detailed analytics"
+                            >
+                              <BarChart3 className="w-4 h-4" />
+                              Analytics
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Additional Pool Info */}
+                        <div className="mt-4 flex items-center justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          <div className="flex items-center gap-4">
+                            <span>
+                              Reserve A: {Number(pool.reserveA) / Math.pow(10, pool.tokenA.decimals)} {pool.tokenA.symbol}
+                            </span>
+                            <span>
+                              Reserve B: {Number(pool.reserveB) / Math.pow(10, pool.tokenB.decimals)} {pool.tokenB.symbol}
+                            </span>
+                          </div>
+                          <span>
+                            Created: {pool.createdAt.toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
+              <div className="flex items-center justify-between">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Click on a pool to select it for liquidity operations
+                </p>
+                <button
+                  onClick={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
+                  className="px-6 py-2 rounded-lg font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+                  style={{
+                    border: `1px solid var(--border-color)`,
+                    color: 'var(--text-secondary)'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Import Token Modal */}
       {state.showImportModal && (
