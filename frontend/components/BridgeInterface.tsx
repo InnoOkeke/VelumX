@@ -247,37 +247,51 @@ export function BridgeInterface() {
       // Wait for transaction receipt to get message hash
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
       
-      // Extract message hash from logs using parseEventLogs
+      // Extract message hash from logs - this is CRITICAL for the bridge to work
       let messageHash = '';
-      try {
-        const logs = await publicClient.getLogs({
-          address: config.ethereumXReserveAddress as `0x${string}`,
-          event: {
-            type: 'event',
-            name: 'MessageSent',
-            inputs: [
-              { name: 'message', type: 'bytes32', indexed: true },
-            ],
-          },
-          fromBlock: receipt.blockNumber,
-          toBlock: receipt.blockNumber,
-        });
-        
-        if (logs.length > 0 && logs[0].topics[1]) {
-          messageHash = logs[0].topics[1];
-        }
-      } catch (error) {
-        console.error('Failed to extract message hash from logs:', error);
-        // Fallback: try to find MessageSent event in receipt logs
-        for (const log of receipt.logs) {
-          // MessageSent event signature: keccak256("MessageSent(bytes32)")
-          if (log.topics[0] === '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036') {
-            messageHash = log.topics[1] || '';
+      
+      // Method 1: Parse logs directly from receipt
+      for (const log of receipt.logs) {
+        // Check if this log is from the xReserve contract
+        if (log.address.toLowerCase() === config.ethereumXReserveAddress.toLowerCase()) {
+          // MessageSent event has the message hash as the first indexed parameter (topics[1])
+          if (log.topics.length >= 2 && log.topics[1]) {
+            messageHash = log.topics[1];
+            console.log('✅ Message hash extracted from receipt:', messageHash);
             break;
           }
         }
       }
-
+      
+      // Method 2: If not found, try getLogs with event filter
+      if (!messageHash) {
+        try {
+          const logs = await publicClient.getLogs({
+            address: config.ethereumXReserveAddress as `0x${string}`,
+            fromBlock: receipt.blockNumber,
+            toBlock: receipt.blockNumber,
+          });
+          
+          for (const log of logs) {
+            if (log.topics.length >= 2 && log.topics[1]) {
+              messageHash = log.topics[1];
+              console.log('✅ Message hash extracted from getLogs:', messageHash);
+              break;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to get logs:', error);
+        }
+      }
+      
+      // Validate message hash
+      if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
+        console.error('❌ Invalid or missing message hash:', messageHash);
+        console.error('Receipt logs:', receipt.logs);
+        throw new Error('Failed to extract message hash from transaction. Please try again or contact support.');
+      }
+      
+      console.log('✅ Final message hash:', messageHash);
       // Step 4: Submit to monitoring service
       await fetch(`${config.backendUrl}/api/transactions/monitor`, {
         method: 'POST',
