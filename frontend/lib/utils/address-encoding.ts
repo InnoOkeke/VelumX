@@ -4,7 +4,7 @@
  * Based on official Stacks documentation: https://docs.stacks.co/more-guides/bridging-usdcx
  */
 
-import { createAddress, addressToString, AddressVersion, StacksWireType } from '@stacks/transactions';
+import { createAddress, addressToString, AddressVersion } from '@stacks/transactions';
 import { type Hex, toHex, toBytes, pad } from 'viem';
 
 /**
@@ -51,7 +51,7 @@ export function decodeStacksAddress(bytes32: Hex): string {
   return addressToString({
     hash160,
     version,
-    type: StacksWireType.Address,
+    type: 0, // Address type constant
   });
 }
 

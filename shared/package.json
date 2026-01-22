@@ -9,7 +9,9 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@scure/base": "^2.0.0",
     "@stacks/transactions": "^6.15.0",
+    "micro-packed": "^0.8.0",
     "viem": "^2.44.4"
   },
   "devDependencies": {
