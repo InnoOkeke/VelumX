@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
-import { useConfig, USDC_ABI, TOKEN_MESSENGER_ABI, MESSAGE_TRANSMITTER_ABI } from '../lib/config';
+import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
@@ -209,7 +209,7 @@ export function BridgeInterface() {
         address: config.ethereumUsdcAddress as `0x${string}`,
         abi: USDC_ABI,
         functionName: 'allowance',
-        args: [ethereumAddress as `0x${string}`, config.ethereumTokenMessengerAddress as `0x${string}`],
+        args: [ethereumAddress as `0x${string}`, config.ethereumXReserveAddress as `0x${string}`],
       });
 
       // Step 2: Approve if needed
@@ -218,7 +218,7 @@ export function BridgeInterface() {
           address: config.ethereumUsdcAddress as `0x${string}`,
           abi: USDC_ABI,
           functionName: 'approve',
-          args: [config.ethereumTokenMessengerAddress as `0x${string}`, amountInMicroUsdc],
+          args: [config.ethereumXReserveAddress as `0x${string}`, amountInMicroUsdc],
           account: ethereumAddress as `0x${string}`,
         });
 
@@ -226,18 +226,20 @@ export function BridgeInterface() {
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
       }
 
-      // Step 3: Deposit using Circle's TokenMessenger (depositForBurn)
+      // Step 3: Deposit to xReserve (Stacks official bridge)
       const recipientBytes32 = encodeStacksAddress(stacksAddress);
       
       const depositHash = await walletClient.writeContract({
-        address: config.ethereumTokenMessengerAddress as `0x${string}`,
-        abi: TOKEN_MESSENGER_ABI,
-        functionName: 'depositForBurn',
+        address: config.ethereumXReserveAddress as `0x${string}`,
+        abi: XRESERVE_ABI,
+        functionName: 'depositToRemote',
         args: [
           amountInMicroUsdc,
           config.stacksDomainId,
           recipientBytes32,
           config.ethereumUsdcAddress as `0x${string}`,
+          parseUnits('0', 6), // Max fee: 0 USDC (as per Stacks docs)
+          '0x' as `0x${string}`, // Empty hook data
         ],
         account: ethereumAddress as `0x${string}`,
       });
@@ -245,47 +247,27 @@ export function BridgeInterface() {
       // Wait for transaction receipt to get message hash
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
       
-      // Extract message hash from Circle's MessageSent event
-      let messageHash = '';
-      let messageBytes = '';
-      
       console.log('📋 Transaction receipt:', receipt);
+      console.log('📋 Transaction status:', receipt.status);
       console.log('📋 Number of logs:', receipt.logs.length);
       
-      // Circle's MessageSent event signature: MessageSent(bytes message)
-      // Event topic hash (NOT a private key): keccak256("MessageSent(bytes)")
-      const MESSAGE_SENT_TOPIC = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036';
-      
-      // Find the MessageSent event from MessageTransmitter contract
-      for (const log of receipt.logs) {
-        // Check if this is from the MessageTransmitter contract and is a MessageSent event
-        if (
-          log.address.toLowerCase() === config.ethereumMessageTransmitterAddress.toLowerCase() &&
-          log.topics[0]?.toLowerCase() === MESSAGE_SENT_TOPIC.toLowerCase()
-        ) {
-          console.log('✅ Found Circle MessageSent event!');
-          console.log('📦 Message bytes (data):', log.data);
-          
-          messageBytes = log.data;
-          
-          // Hash the message bytes to get the message hash
-          const { keccak256 } = await import('viem');
-          messageHash = keccak256(log.data as `0x${string}`);
-          
-          console.log('✅ Message hash (keccak256 of message):', messageHash);
-          break;
-        }
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        console.error('❌ Transaction reverted!');
+        throw new Error('Transaction failed - please check your USDC balance and try again');
       }
       
-      // If message hash not found, throw error
-      if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.error('❌ Could not find MessageSent event from MessageTransmitter');
-        console.error('MessageTransmitter address:', config.ethereumMessageTransmitterAddress);
-        console.error('All logs:', receipt.logs);
-        throw new Error('Failed to extract message hash from Circle CCTP transaction');
-      }
+      // Extract message hash from xReserve transaction
+      // For xReserve (Stacks official bridge), use transaction hash as message identifier
+      // xReserve doesn't emit Circle's MessageSent event - it uses its own event system
+      const messageHash = depositHash;
       
-      console.log('✅ Final message hash:', messageHash);
+      console.log('✅ Using transaction hash as message identifier:', messageHash);
+      console.log('📋 All event logs:', receipt.logs.map(log => ({
+        address: log.address,
+        topics: log.topics,
+      })));
+      
       // Step 4: Submit to monitoring service
       await fetch(`${config.backendUrl}/api/transactions/monitor`, {
         method: 'POST',
