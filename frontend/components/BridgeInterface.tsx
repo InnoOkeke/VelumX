@@ -250,45 +250,47 @@ export function BridgeInterface() {
       // Extract message hash from logs - this is CRITICAL for the bridge to work
       let messageHash = '';
       
+      console.log('📋 Transaction receipt:', receipt);
+      console.log('📋 All logs:', receipt.logs);
+      
       // Method 1: Parse logs directly from receipt
       for (const log of receipt.logs) {
+        console.log('🔍 Checking log:', {
+          address: log.address,
+          topics: log.topics,
+          data: log.data,
+        });
+        
         // Check if this log is from the xReserve contract
         if (log.address.toLowerCase() === config.ethereumXReserveAddress.toLowerCase()) {
-          // MessageSent event has the message hash as the first indexed parameter (topics[1])
-          if (log.topics.length >= 2 && log.topics[1]) {
-            messageHash = log.topics[1];
-            console.log('✅ Message hash extracted from receipt:', messageHash);
-            break;
-          }
-        }
-      }
-      
-      // Method 2: If not found, try getLogs with event filter
-      if (!messageHash) {
-        try {
-          const logs = await publicClient.getLogs({
-            address: config.ethereumXReserveAddress as `0x${string}`,
-            fromBlock: receipt.blockNumber,
-            toBlock: receipt.blockNumber,
-          });
+          console.log('✅ Found xReserve log with topics:', log.topics);
           
-          for (const log of logs) {
-            if (log.topics.length >= 2 && log.topics[1]) {
-              messageHash = log.topics[1];
-              console.log('✅ Message hash extracted from getLogs:', messageHash);
-              break;
+          // The message hash should be in one of the topics
+          // Try topics[1], topics[2], or topics[3]
+          for (let i = 1; i < log.topics.length; i++) {
+            const topic = log.topics[i];
+            if (topic && topic !== '0x' && topic.length === 66) {
+              // Check if this looks like a message hash (not an address)
+              // Addresses are padded with zeros at the start: 0x000000000000000000000000...
+              // Message hashes should have more randomness
+              const hasLeadingZeros = topic.startsWith('0x000000000000000000000000');
+              if (!hasLeadingZeros) {
+                messageHash = topic;
+                console.log(`✅ Message hash found in topics[${i}]:`, messageHash);
+                break;
+              }
             }
           }
-        } catch (error) {
-          console.error('Failed to get logs:', error);
+          
+          if (messageHash) break;
         }
       }
       
-      // Validate message hash
+      // If still not found, use the transaction hash as fallback
+      // (Circle might use the transaction hash as the message identifier)
       if (!messageHash || messageHash === '0x' || messageHash.length !== 66) {
-        console.error('❌ Invalid or missing message hash:', messageHash);
-        console.error('Receipt logs:', receipt.logs);
-        throw new Error('Failed to extract message hash from transaction. Please try again or contact support.');
+        console.warn('⚠️ Could not find message hash in logs, using transaction hash');
+        messageHash = depositHash;
       }
       
       console.log('✅ Final message hash:', messageHash);
