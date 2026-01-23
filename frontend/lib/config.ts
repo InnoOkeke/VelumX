@@ -27,7 +27,7 @@ export function getConfig(): FrontendConfig {
 
     // Network configuration
     ethereumChainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_CHAIN_ID', '11155111')), // Sepolia
-    ethereumRpcUrl: getEnv('NEXT_PUBLIC_ETHEREUM_RPC_URL', 'https://rpc.sepolia.org'),
+    ethereumRpcUrl: getEnv('NEXT_PUBLIC_ETHEREUM_RPC_URL', 'https://ethereum-sepolia.publicnode.com'),
     stacksNetwork: (getEnv('NEXT_PUBLIC_STACKS_NETWORK', 'testnet') as 'testnet' | 'mainnet'),
 
     // Contract addresses (testnet defaults)
@@ -35,7 +35,7 @@ export function getConfig(): FrontendConfig {
     ethereumXReserveAddress: getEnv('NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS', '0x008888878f94C0d87defdf0B07f46B93C1934442'),
     stacksUsdcxAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx'),
     stacksUsdcxProtocolAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1'),
-    stacksPaymasterAddress: getEnv('NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v3'),
+    stacksPaymasterAddress: getEnv('NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v5'),
     stacksSwapContractAddress: getEnv('NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-contract-v12'),
 
     // Domain IDs (Stacks USDCx bridging)
