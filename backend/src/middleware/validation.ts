@@ -21,18 +21,22 @@ interface ValidationError {
 function isValidStacksAddress(address: string): boolean {
   // Format: PRINCIPAL.CONTRACT-NAME or just PRINCIPAL for STX
   if (address === 'STX') return true;
-  
-  const parts = address.split('.');
+
+  // Check for standard principal format (ST... or SP...)
+  if (parts.length === 1) {
+    return !!parts[0].match(/^(ST|SP)[0-9A-Z]{38,41}$/);
+  }
+
   if (parts.length !== 2) return false;
-  
+
   // Check principal (address) format
   const principal = parts[0];
   if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/)) return false;
-  
+
   // Check contract name format
   const contractName = parts[1];
   if (!contractName.match(/^[a-z][a-z0-9-]{0,39}$/)) return false;
-  
+
   return true;
 }
 
@@ -422,12 +426,12 @@ export function limitRequestSize(maxSize: string = '10mb') {
     if (contentLength) {
       const sizeInBytes = parseInt(contentLength);
       const maxSizeInBytes = parseSize(maxSize);
-      
+
       if (sizeInBytes > maxSizeInBytes) {
-        logger.warn('Request size exceeded', { 
-          size: sizeInBytes, 
-          maxSize: maxSizeInBytes, 
-          path: req.path 
+        logger.warn('Request size exceeded', {
+          size: sizeInBytes,
+          maxSize: maxSizeInBytes,
+          path: req.path
         });
         return res.status(413).json({
           success: false,
@@ -457,6 +461,6 @@ function parseSize(size: string): number {
 
   const value = parseFloat(match[1]);
   const unit = match[2] || 'b';
-  
+
   return Math.floor(value * units[unit]);
 }
