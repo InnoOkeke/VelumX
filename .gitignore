@@ -24,6 +24,7 @@ out/
 # Logs
 logs/
 *.log
+details.md
 
 # IDE
 .vscode/

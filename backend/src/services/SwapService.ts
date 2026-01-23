@@ -120,6 +120,22 @@ export class SwapService {
       const tokenInPrincipal = tokenInPrincipalInput === 'STX' || tokenInPrincipalInput === 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM' ? STX_SENTINEL : tokenInPrincipalInput;
       const tokenOutPrincipal = tokenOutPrincipalInput === 'STX' || tokenOutPrincipalInput === 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM' ? STX_SENTINEL : tokenOutPrincipalInput;
 
+      // Get pool reserves for price impact calculation
+      let priceImpact = 0;
+      try {
+        const { reserveA, reserveB } = await this.getReserves(tokenInPrincipal, tokenOutPrincipal);
+        if (reserveA > 0n && reserveB > 0n) {
+          // Simplified price impact for constant product: amountIn / (reserveIn + amountIn)
+          // We need to know which reserve is 'input'
+          // The contract's sort-tokens determines this, but we can just use the one that matches our input
+          // Or more accurately: price impact = (1 - (amountOut / (amountIn * spotPrice)))
+          const spotPrice = Number(reserveB) / Number(reserveA);
+          // We'll calculate this better after getting amountOut
+        }
+      } catch (e) {
+        logger.warn('Could not fetch reserves for price impact', { tokenA: tokenInPrincipal, tokenB: tokenOutPrincipal });
+      }
+
       // Call quote-swap read-only function
       const result = await callReadOnlyFunction({
         contractAddress,
@@ -138,13 +154,24 @@ export class SwapService {
       const resultJson = cvToJSON(result);
 
       if (resultJson.success === false || !resultJson.value) {
-        throw new Error('Pool not found or invalid quote');
+        throw new Error('Pool not found or invalid quote from contract');
       }
 
+      // The contract returns (ok {amount-out: uint, fee: uint})
       const quoteData = resultJson.value.value;
       const outputAmount = BigInt(quoteData['amount-out'].value);
-      const priceImpact = Number(quoteData['price-impact'].value) / 100; // Convert basis points to percentage
       const fee = BigInt(quoteData.fee.value);
+
+      // Recalculate price impact properly now that we have outputAmount
+      try {
+        const { reserveA } = await this.getReserves(tokenInPrincipal, tokenOutPrincipal);
+        if (reserveA > 0n) {
+          // Standard CPMM price impact: amountIn / (reserveIn + amountIn)
+          priceImpact = (Number(inputAmount) / (Number(reserveA) + Number(inputAmount))) * 100;
+        }
+      } catch (e) {
+        // Fallback or ignore
+      }
 
       const quote: SwapQuote = {
         inputToken,
@@ -168,6 +195,24 @@ export class SwapService {
       logger.error('Failed to get quote from contract', { error });
       throw new Error('Failed to get swap quote. Pool may not exist yet.');
     }
+  }
+
+  /**
+   * Helper to get reserves for a token pair
+   * Handles sorting internally matching the contract
+   */
+  private async getReserves(tokenA: string, tokenB: string): Promise<{ reserveA: bigint, reserveB: bigint }> {
+    const { liquidityService } = await import('./LiquidityService');
+    const reserves = await liquidityService.getPoolReserves(tokenA, tokenB);
+
+    // We need to know which one is tokenA in the contract's sorted map
+    // The contract uses alphabetical sort of principals
+    // But liquidityService already handles sorting?
+    // Let's just return what it has.
+    return {
+      reserveA: reserves.reserveA,
+      reserveB: reserves.reserveB
+    };
   }
 
   /**

@@ -10,6 +10,7 @@ import {
   makeContractCall,
   broadcastTransaction,
   sponsorTransaction,
+  deserializeTransaction,
   AnchorMode,
   PostConditionMode,
 } from '@stacks/transactions';
@@ -39,7 +40,7 @@ export class PaymasterService {
     try {
       // Fetch STX/USD rate
       const stxToUsd = await this.fetchStxPrice();
-      
+
       // USDC is pegged to USD, so it's always ~1.0
       const usdcToUsd = 1.0;
 
@@ -89,7 +90,7 @@ export class PaymasterService {
     });
 
     const rates = await this.getExchangeRates();
-    
+
     // Calculate USDCx equivalent with markup
     const gasInStxFloat = Number(estimatedGasInStx) / 1_000_000; // Convert micro STX to STX
     const gasInUsd = gasInStxFloat * rates.stxToUsd;
@@ -120,7 +121,7 @@ export class PaymasterService {
    * Relayer pays STX gas, user pays USDCx
    */
   async sponsorTransaction(
-    userTransaction: any,
+    userTransaction: string | any,
     userAddress: string,
     estimatedFee: bigint
   ): Promise<string> {
@@ -142,6 +143,17 @@ export class PaymasterService {
         throw new Error('User has insufficient USDCx balance to pay fee');
       }
 
+      // If userTransaction is a string (hex), deserialize it
+      let txObj = userTransaction;
+      if (typeof userTransaction === 'string') {
+        try {
+          txObj = deserializeTransaction(userTransaction);
+        } catch (error) {
+          logger.error('Failed to deserialize transaction', { error, tx: userTransaction });
+          throw new Error('Invalid transaction data. Deserialization failed.');
+        }
+      }
+
       logger.info('Sponsoring transaction', {
         userAddress,
         estimatedFee: estimatedFee.toString(),
@@ -149,7 +161,7 @@ export class PaymasterService {
 
       // Sponsor the transaction with relayer's private key
       const sponsoredTx = await sponsorTransaction({
-        transaction: userTransaction,
+        transaction: txObj,
         sponsorPrivateKey: this.config.relayerPrivateKey,
         fee: 50000n, // 0.05 STX sponsor fee
         sponsorNonce: undefined, // Will be fetched automatically
@@ -208,7 +220,7 @@ export class PaymasterService {
       }
 
       const data: any = await response.json();
-      
+
       // Find USDCx token balance
       const usdcxToken = data.fungible_tokens?.[this.config.stacksUsdcxAddress];
       const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
@@ -301,7 +313,7 @@ export class PaymasterService {
       return stxPrice;
     } catch (error) {
       logger.error('Failed to fetch STX price from CoinGecko', { error });
-      
+
       // Try alternative API or use fallback
       logger.warn('Using fallback STX price');
       return 0.5; // Conservative fallback

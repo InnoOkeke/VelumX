@@ -110,6 +110,15 @@ const DEFAULT_TOKENS: Token[] = [
   },
 ];
 
+const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+
+// Helper to sort tokens matching the contract logic
+const sortTokens = (tokenA: string, tokenB: string) => {
+  const pA = tokenA === 'STX' ? STX_SENTINEL : tokenA;
+  const pB = tokenB === 'STX' ? STX_SENTINEL : tokenB;
+  return pA < pB ? { a: pA, b: pB, isReversed: false } : { a: pB, b: pA, isReversed: true };
+};
+
 export function LiquidityInterface() {
   const { stacksAddress, stacksConnected, balances, fetchBalances } = useWallet();
   const config = useConfig();
@@ -150,21 +159,7 @@ export function LiquidityInterface() {
     slippage: 0.5
   });
 
-  // Update STX token address when wallet connects
-  useEffect(() => {
-    if (stacksConnected && stacksAddress) {
-      setState(prev => {
-        const newState = { ...prev };
-        if (prev.tokenA?.symbol === 'STX') {
-          newState.tokenA = { ...prev.tokenA as Token, address: stacksAddress };
-        }
-        if (prev.tokenB?.symbol === 'STX') {
-          newState.tokenB = { ...prev.tokenB as Token, address: stacksAddress };
-        }
-        return newState;
-      });
-    }
-  }, [stacksConnected, stacksAddress]);
+  // Replaced STX address overwrite with static sentinel usage in contract calls
 
   // Fetch available pools on component mount
   useEffect(() => {
@@ -417,14 +412,16 @@ export function LiquidityInterface() {
     try {
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
+      const { a, b } = sortTokens(state.tokenA.address, state.tokenB.address);
+
       // Get pool reserves
       const poolResult = await fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          principalCV(state.tokenA.address),
-          principalCV(state.tokenB.address),
+          principalCV(a),
+          principalCV(b),
         ],
         network: 'testnet',
         senderAddress: stacksAddress,
@@ -434,11 +431,12 @@ export function LiquidityInterface() {
 
       if (poolJson.success && poolJson.value) {
         const poolData = poolJson.value.value;
-        const reserveA = Number(poolData['reserve-a'].value);
-        const reserveB = Number(poolData['reserve-b'].value);
+        const rawReserveA = Number(poolData['reserve-a'].value);
+        const rawReserveB = Number(poolData['reserve-b'].value);
+        const totalSupply = Number(poolData['total-supply'].value);
 
         // Pool exists if reserves are non-zero
-        const poolExists = reserveA > 0 && reserveB > 0;
+        const poolExists = rawReserveA > 0 && rawReserveB > 0;
 
         // Get user LP balance
         const lpResult = await fetchCallReadOnlyFunction({
@@ -446,8 +444,8 @@ export function LiquidityInterface() {
           contractName,
           functionName: 'get-lp-balance',
           functionArgs: [
-            principalCV(state.tokenA.address),
-            principalCV(state.tokenB.address),
+            principalCV(a),
+            principalCV(b),
             principalCV(stacksAddress),
           ],
           network: 'testnet',
@@ -455,28 +453,14 @@ export function LiquidityInterface() {
         });
 
         const lpJson = cvToJSON(lpResult);
-        const userLpBalance = lpJson.success && lpJson.value
-          ? (Number(lpJson.value.value) / Math.pow(10, 6)).toFixed(6)
-          : '0';
+        const userLpBalanceRaw = lpJson.success && lpJson.value ? Number(lpJson.value.value) : 0;
+        const userLpBalance = (userLpBalanceRaw / Math.pow(10, 6)).toFixed(6);
 
-        // Get pool share
-        const shareResult = await fetchCallReadOnlyFunction({
-          contractAddress,
-          contractName,
-          functionName: 'get-pool-share',
-          functionArgs: [
-            principalCV(state.tokenA.address),
-            principalCV(state.tokenB.address),
-            principalCV(stacksAddress),
-          ],
-          network: 'testnet',
-          senderAddress: stacksAddress,
-        });
-
-        const shareJson = cvToJSON(shareResult);
-        const poolShare = shareJson.success && shareJson.value
-          ? (Number(shareJson.value.value.percentage.value) / 100).toFixed(2)
-          : '0';
+        // Local calculation of pool share percentage
+        let poolShare = '0';
+        if (totalSupply > 0 && userLpBalanceRaw > 0) {
+          poolShare = ((userLpBalanceRaw / totalSupply) * 100).toFixed(2);
+        }
 
         setState(prev => ({
           ...prev,
@@ -637,7 +621,33 @@ export function LiquidityInterface() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
-            resolve(data.txId);
+            let finalTxId = data.txId;
+
+            if (useGasless) {
+              try {
+                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    transaction: data.txRaw,
+                    userAddress: stacksAddress,
+                    estimatedFee: gasFee.toString(),
+                  }),
+                });
+
+                const sponsorData = await sponsorResponse.json();
+                if (!sponsorData.success) {
+                  throw new Error(sponsorData.message || 'Sponsorship failed');
+                }
+                finalTxId = sponsorData.data.txid;
+              } catch (err) {
+                console.error('Gasless sponsorship failed:', err);
+                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}`, isProcessing: false }));
+                return;
+              }
+            }
+
+            resolve(finalTxId);
           },
           onCancel: () => {
             reject(new Error('User cancelled transaction'));
@@ -674,14 +684,15 @@ export function LiquidityInterface() {
 
     try {
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+      const { a, b, isReversed } = sortTokens(state.tokenA.address, state.tokenB.address);
 
       const poolResult = await fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          principalCV(state.tokenA.address),
-          principalCV(state.tokenB.address),
+          principalCV(a),
+          principalCV(b),
         ],
         network: 'testnet',
         senderAddress: stacksAddress,
@@ -695,9 +706,13 @@ export function LiquidityInterface() {
         const reserveB = Number(poolData['reserve-b'].value);
         const totalSupply = Number(poolData['total-supply'].value);
 
+        // UI tokenA matches contract token-a if not reversed
+        const resA = isReversed ? reserveB : reserveA;
+        const resB = isReversed ? reserveA : reserveB;
+
         const lpAmountMicro = parseFloat(state.lpTokenAmount) * Math.pow(10, 6);
-        const amountAMicro = (lpAmountMicro * reserveA) / totalSupply;
-        const amountBMicro = (lpAmountMicro * reserveB) / totalSupply;
+        const amountAMicro = (lpAmountMicro * resA) / totalSupply;
+        const amountBMicro = (lpAmountMicro * resB) / totalSupply;
 
         const amountA = (amountAMicro / Math.pow(10, state.tokenA.decimals)).toFixed(6);
         const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
@@ -781,7 +796,33 @@ export function LiquidityInterface() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
-            resolve(data.txId);
+            let finalTxId = data.txId;
+
+            if (state.gaslessMode) {
+              try {
+                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    transaction: data.txRaw,
+                    userAddress: stacksAddress,
+                    estimatedFee: gasFee.toString(),
+                  }),
+                });
+
+                const sponsorData = await sponsorResponse.json();
+                if (!sponsorData.success) {
+                  throw new Error(sponsorData.message || 'Sponsorship failed');
+                }
+                finalTxId = sponsorData.data.txid;
+              } catch (err) {
+                console.error('Gasless sponsorship failed:', err);
+                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}`, isProcessing: false }));
+                return;
+              }
+            }
+
+            resolve(finalTxId);
           },
           onCancel: () => {
             reject(new Error('User cancelled transaction'));

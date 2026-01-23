@@ -286,8 +286,36 @@ export function SwapInterface() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
-            const txId = data.txId;
-            resolve(txId);
+            let finalTxId = data.txId;
+
+            // If gasless, we MUST send the txRaw back to our backend for sponsorship completion
+            // useGasless is true only for token-to-token swaps when gaslessMode is enabled
+            if (useGasless) {
+              try {
+                const gasFeeInMicroUsdcx = 10000; // Match the amount in functionArgs
+                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    transaction: data.txRaw,
+                    userAddress: stacksAddress,
+                    estimatedFee: gasFeeInMicroUsdcx.toString(),
+                  }),
+                });
+
+                const sponsorData = await sponsorResponse.json();
+                if (!sponsorData.success) {
+                  throw new Error(sponsorData.message || 'Sponsorship failed');
+                }
+                finalTxId = sponsorData.data.txid;
+              } catch (err) {
+                console.error('Gasless sponsorship failed:', err);
+                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}`, isProcessing: false }));
+                return;
+              }
+            }
+
+            resolve(finalTxId);
           },
           onCancel: () => {
             reject(new Error('User cancelled transaction'));

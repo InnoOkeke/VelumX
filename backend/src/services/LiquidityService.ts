@@ -34,12 +34,22 @@ import {
 export class LiquidityService {
   private config = getExtendedConfig();
   private cache = getCache();
+  private readonly STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
 
   constructor() {
     logger.info('LiquidityService initialized', {
       contractAddress: this.config.liquidity.swapContractAddress,
       cacheEnabled: this.config.liquidity.cacheEnabled,
     });
+  }
+
+  /**
+   * Helper to sort tokens matching the contract logic
+   */
+  private sortTokens(tokenA: string, tokenB: string) {
+    const pA = tokenA === 'STX' || tokenA === this.STX_SENTINEL ? this.STX_SENTINEL : tokenA;
+    const pB = tokenB === 'STX' || tokenB === this.STX_SENTINEL ? this.STX_SENTINEL : tokenB;
+    return pA < pB ? { a: pA, b: pB, isReversed: false } : { a: pB, b: pA, isReversed: true };
   }
 
   /**
@@ -56,17 +66,15 @@ export class LiquidityService {
         try {
           const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
 
-          const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
-          const pA = tokenA === 'STX' ? STX_SENTINEL : tokenA;
-          const pB = tokenB === 'STX' ? STX_SENTINEL : tokenB;
+          const { a, b, isReversed } = this.sortTokens(tokenA, tokenB);
 
           const result = await callReadOnlyFunction({
             contractAddress,
             contractName,
             functionName: 'get-pool-reserves',
             functionArgs: [
-              principalCV(pA),
-              principalCV(pB),
+              principalCV(a),
+              principalCV(b),
             ],
             network: 'testnet',
             senderAddress: contractAddress,
@@ -79,10 +87,12 @@ export class LiquidityService {
           }
 
           const poolData = resultJson.value.value;
+          const reserveA = BigInt(poolData['reserve-a'].value);
+          const reserveB = BigInt(poolData['reserve-b'].value);
 
           return {
-            reserveA: BigInt(poolData['reserve-a'].value),
-            reserveB: BigInt(poolData['reserve-b'].value),
+            reserveA: isReversed ? reserveB : reserveA,
+            reserveB: isReversed ? reserveA : reserveB,
             totalSupply: BigInt(poolData['total-supply'].value),
           };
         } catch (error) {
@@ -147,46 +157,41 @@ export class LiquidityService {
     return withCache(
       cacheKey,
       async () => {
-        logger.debug('Fetching user pool share from contract', { userAddress, tokenA, tokenB });
+        logger.debug('Calculating user pool share', { userAddress, tokenA, tokenB });
 
         try {
-          const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
+          // get-pool-share doesn't exist in contract, calculate manually
+          const [reserves, userLpBalanceStr] = await Promise.all([
+            this.getPoolReserves(tokenA, tokenB),
+            this.getUserLPBalance(userAddress, tokenA, tokenB)
+          ]);
 
-          const result = await callReadOnlyFunction({
-            contractAddress,
-            contractName,
-            functionName: 'get-pool-share',
-            functionArgs: [
-              principalCV(tokenA),
-              principalCV(tokenB),
-              principalCV(userAddress),
-            ],
-            network: 'testnet',
-            senderAddress: contractAddress,
-          });
+          const userLpBalance = BigInt(userLpBalanceStr);
+          const totalSupply = reserves.totalSupply;
 
-          const resultJson = cvToJSON(result);
-
-          if (!resultJson.success || !resultJson.value) {
+          if (totalSupply === 0n || userLpBalance === 0n) {
             return {
-              shareA: BigInt(0),
-              shareB: BigInt(0),
+              shareA: 0n,
+              shareB: 0n,
               percentage: 0,
             };
           }
 
-          const shareData = resultJson.value.value;
+          // Calculate share of each token
+          const shareA = (userLpBalance * reserves.reserveA) / totalSupply;
+          const shareB = (userLpBalance * reserves.reserveB) / totalSupply;
+          const percentage = Number((userLpBalance * 10000n) / totalSupply) / 100;
 
           return {
-            shareA: BigInt(shareData['share-a'].value),
-            shareB: BigInt(shareData['share-b'].value),
-            percentage: Number(shareData.percentage.value),
+            shareA,
+            shareB,
+            percentage,
           };
         } catch (error) {
-          logger.error('Failed to fetch user pool share', { userAddress, tokenA, tokenB, error });
+          logger.error('Failed to calculate user pool share', { userAddress, tokenA, tokenB, error });
           return {
-            shareA: BigInt(0),
-            shareB: BigInt(0),
+            shareA: 0n,
+            shareB: 0n,
             percentage: 0,
           };
         }

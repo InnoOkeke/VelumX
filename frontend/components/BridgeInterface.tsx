@@ -385,16 +385,41 @@ export function BridgeInterface() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
-            const txId = data.txId;
+            let finalTxId = data.txId;
+
+            // If gasless, we MUST send the txRaw back to our backend for sponsorship completion
+            if (state.gaslessMode) {
+              try {
+                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    transaction: data.txRaw,
+                    userAddress: stacksAddress,
+                    estimatedFee: parseUnits(state.feeEstimate?.usdcx || '0', 6).toString(),
+                  }),
+                });
+
+                const sponsorData = await sponsorResponse.json();
+                if (!sponsorData.success) {
+                  throw new Error(sponsorData.message || 'Sponsorship failed');
+                }
+                finalTxId = sponsorData.data.txid;
+              } catch (err) {
+                console.error('Gasless sponsorship failed:', err);
+                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}` }));
+                return;
+              }
+            }
 
             // Submit to monitoring service
             await fetch(`${config.backendUrl}/api/transactions/monitor`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                id: txId,
+                id: finalTxId,
                 type: 'withdrawal',
-                sourceTxHash: txId,
+                sourceTxHash: finalTxId,
                 sourceChain: 'stacks',
                 destinationChain: 'ethereum',
                 amount: state.amount,
@@ -407,7 +432,7 @@ export function BridgeInterface() {
               }),
             });
 
-            resolve(txId);
+            resolve(finalTxId);
           },
           onCancel: () => {
             reject(new Error('User cancelled transaction'));
