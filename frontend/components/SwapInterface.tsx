@@ -179,7 +179,7 @@ export function SwapInterface() {
       const { openContractCall } = await import('@stacks/connect');
       const { STACKS_TESTNET } = await import('@stacks/network');
       const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
-      
+
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minAmountOutMicro = parseUnits(
         (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
@@ -190,24 +190,46 @@ export function SwapInterface() {
       const tokenInParts = state.inputToken.address.split('.');
       const tokenOutParts = state.outputToken.address.split('.');
 
-      const functionArgs = [
-        contractPrincipalCV(tokenInParts[0], tokenInParts[1]), // token-in
-        contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]), // token-out
-        uintCV(Number(amountInMicro)), // amount-in
-        uintCV(Number(minAmountOutMicro)), // min-amount-out
-      ];
+      // For gasless mode, use paymaster contract
+      // For regular mode, use swap contract directly
+      const contractAddress = state.gaslessMode
+        ? config.stacksPaymasterAddress.split('.')[0]
+        : config.stacksSwapContractAddress.split('.')[0];
+      const contractName = state.gaslessMode
+        ? config.stacksPaymasterAddress.split('.')[1]
+        : config.stacksSwapContractAddress.split('.')[1];
+
+      // Calculate fee for gasless mode (0.01 USDCx = 10000 micro-USDCx default)
+      const gasFee = state.gaslessMode ? 10000 : 0;
+
+      const functionArgs = state.gaslessMode
+        ? [
+          // swap-gasless: (token-in, token-out, amount-in, min-amount-out, fee)
+          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          uintCV(Number(amountInMicro)),
+          uintCV(Number(minAmountOutMicro)),
+          uintCV(gasFee),
+        ]
+        : [
+          // swap: (token-in, token-out, amount-in, min-amount-out)
+          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          uintCV(Number(amountInMicro)),
+          uintCV(Number(minAmountOutMicro)),
+        ];
 
       await new Promise<string>((resolve, reject) => {
         openContractCall({
-          contractAddress: config.stacksSwapContractAddress.split('.')[0],
-          contractName: config.stacksSwapContractAddress.split('.')[1],
+          contractAddress,
+          contractName,
           functionName: state.gaslessMode ? 'swap-gasless' : 'swap',
           functionArgs,
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
           sponsored: state.gaslessMode,
           appDetails: {
-            name: 'VelumX Bridge',
+            name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
@@ -254,17 +276,17 @@ export function SwapInterface() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
-        backgroundColor: 'var(--bg-surface)', 
+      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{
+        backgroundColor: 'var(--bg-surface)',
         border: `1px solid var(--border-color)`,
         padding: '2rem'
       }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            Swap Tokens
+            Instant Swap
           </h2>
-          <button 
+          <button
             onClick={() => setState(prev => ({ ...prev, showSettings: !prev.showSettings }))}
             className="p-2 rounded-lg transition-colors group hover:bg-gray-100 dark:hover:bg-gray-800"
           >
@@ -288,11 +310,10 @@ export function SwapInterface() {
                     <button
                       key={value}
                       onClick={() => setState(prev => ({ ...prev, slippage: value }))}
-                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                        state.slippage === value
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.slippage === value
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                       style={state.slippage !== value ? { color: 'var(--text-secondary)' } : {}}
                     >
                       {value}%
@@ -457,21 +478,19 @@ export function SwapInterface() {
                 <Zap className="w-5 h-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Gasless Mode</span>
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pay fees in USDCx</p>
+                <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Gasless Swap</span>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pay gas in USDCx—no STX needed</p>
               </div>
             </div>
             <button
               onClick={() => setState(prev => ({ ...prev, gaslessMode: !prev.gaslessMode }))}
-              className={`relative w-14 h-7 rounded-full transition-all ${
-                state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
-              }`}
+              className={`relative w-14 h-7 rounded-full transition-all ${state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
+                }`}
               disabled={state.isProcessing}
             >
               <div
-                className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${
-                  state.gaslessMode ? 'translate-x-7' : ''
-                }`}
+                className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${state.gaslessMode ? 'translate-x-7' : ''
+                  }`}
               />
             </button>
           </div>
@@ -519,13 +538,13 @@ export function SwapInterface() {
         </button>
 
         {/* Info */}
-        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{ 
+        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{
           borderTop: `1px solid var(--border-color)`,
           color: 'var(--text-secondary)'
         }}>
           <p className="flex items-center justify-center gap-2">
             <span className="w-1.5 h-1.5 bg-blue-600 dark:bg-blue-400 rounded-full dark:animate-pulse-glow animate-slide-progress"></span>
-            Powered by VelumX AMM
+            VelumX AMM • 0.3% Fee • Instant Settlement
           </p>
           <p>Slippage tolerance: {state.slippage}%</p>
         </div>

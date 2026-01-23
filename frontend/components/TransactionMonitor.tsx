@@ -7,13 +7,13 @@
 
 import { useState, useEffect } from 'react';
 import { useConfig } from '../lib/config';
-import { 
-  Loader2, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Clock,
   ExternalLink,
-  ArrowRight 
+  ArrowRight
 } from 'lucide-react';
 
 // Define BridgeTransaction type locally
@@ -119,10 +119,10 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
 
   if (loading) {
     return (
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8">
+      <div className="rounded-2xl p-8" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
         <div className="flex items-center justify-center gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
-          <span className="text-white/60">Loading transaction...</span>
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600 dark:text-purple-400" />
+          <span style={{ color: 'var(--text-secondary)' }}>Loading transaction...</span>
         </div>
       </div>
     );
@@ -130,16 +130,16 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
 
   if (error || !transaction) {
     return (
-      <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8">
+      <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl p-8">
         <div className="flex items-center gap-3 mb-4">
-          <XCircle className="w-6 h-6 text-red-400" />
-          <h3 className="text-lg font-bold text-red-200">Error</h3>
+          <XCircle className="w-6 h-6 text-red-500 dark:text-red-400" />
+          <h3 className="text-lg font-bold text-red-700 dark:text-red-200">Error</h3>
         </div>
-        <p className="text-red-200/80">{error}</p>
+        <p className="text-red-600 dark:text-red-200/80">{error}</p>
         {onClose && (
           <button
             onClick={onClose}
-            className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-sm transition-colors"
+            className="mt-4 px-4 py-2 bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 rounded-lg text-sm text-red-700 dark:text-red-200 transition-colors"
           >
             Close
           </button>
@@ -154,14 +154,14 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
   const isFailed = transaction.status === 'failed';
 
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8">
+    <div className="rounded-2xl p-8" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-xl font-bold mb-1">
-            {transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Transaction
+          <h3 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+            {transaction.type === 'deposit' ? 'Bridge In' : 'Bridge Out'} Transaction
           </h3>
-          <p className="text-sm text-white/60">
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             {transaction.amount} {transaction.type === 'deposit' ? 'USDC → USDCx' : 'USDCx → USDC'}
           </p>
         </div>
@@ -191,27 +191,25 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
               {/* Step Indicator */}
               <div className="flex flex-col items-center">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
-                    isCompleted
-                      ? 'bg-green-500/20 border-green-500'
-                      : isActive
-                      ? 'bg-purple-500/20 border-purple-500'
-                      : 'bg-white/5 border-white/20'
-                  }`}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${isCompleted
+                    ? 'bg-green-50 dark:bg-green-500/20 border-green-500'
+                    : isActive
+                      ? 'bg-purple-50 dark:bg-purple-500/20 border-purple-500'
+                      : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700'
+                    }`}
                 >
                   {isCompleted ? (
-                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <CheckCircle className="w-5 h-5 text-green-500 dark:text-green-400" />
                   ) : isActive ? (
-                    <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                    <Loader2 className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin" />
                   ) : (
-                    <Clock className="w-5 h-5 text-white/40" />
+                    <Clock className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
                   )}
                 </div>
                 {index < steps.length - 1 && (
                   <div
-                    className={`w-0.5 h-12 mt-2 transition-colors ${
-                      isCompleted ? 'bg-green-500/50' : 'bg-white/10'
-                    }`}
+                    className={`w-0.5 h-12 mt-2 transition-colors ${isCompleted ? 'bg-green-400 dark:bg-green-500/50' : 'bg-gray-200 dark:bg-gray-700'
+                      }`}
                   />
                 )}
               </div>
@@ -219,18 +217,18 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
               {/* Step Content */}
               <div className="flex-1 pt-2">
                 <p
-                  className={`font-medium ${
-                    isCompleted
-                      ? 'text-green-200'
-                      : isActive
-                      ? 'text-white'
-                      : 'text-white/40'
-                  }`}
+                  className={`font-medium ${isCompleted
+                    ? 'text-green-600 dark:text-green-300'
+                    : isActive
+                      ? ''
+                      : ''
+                    }`}
+                  style={{ color: isCompleted ? undefined : (isActive ? 'var(--text-primary)' : 'var(--text-secondary)') }}
                 >
                   {step}
                 </p>
                 {isActive && (
-                  <p className="text-sm text-white/60 mt-1">In progress...</p>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>In progress...</p>
                 )}
               </div>
             </div>
@@ -239,26 +237,26 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
       </div>
 
       {/* Transaction Details */}
-      <div className="bg-black/40 rounded-xl p-4 space-y-3">
+      <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)', border: '1px solid var(--border-color)' }}>
         <div className="flex justify-between text-sm">
-          <span className="text-white/60">Status:</span>
-          <span className="font-medium capitalize">{transaction.status.replace('_', ' ')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Status:</span>
+          <span className="font-medium capitalize" style={{ color: 'var(--text-primary)' }}>{transaction.status.replace('_', ' ')}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-white/60">From:</span>
-          <span className="font-mono text-xs">
+          <span style={{ color: 'var(--text-secondary)' }}>From:</span>
+          <span className="font-mono text-xs" style={{ color: 'var(--text-primary)' }}>
             {transaction.sender.slice(0, 8)}...{transaction.sender.slice(-6)}
           </span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-white/60">To:</span>
-          <span className="font-mono text-xs">
+          <span style={{ color: 'var(--text-secondary)' }}>To:</span>
+          <span className="font-mono text-xs" style={{ color: 'var(--text-primary)' }}>
             {transaction.recipient.slice(0, 8)}...{transaction.recipient.slice(-6)}
           </span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-white/60">Time:</span>
-          <span>{new Date(transaction.timestamp).toLocaleString()}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Time:</span>
+          <span style={{ color: 'var(--text-primary)' }}>{new Date(transaction.timestamp).toLocaleString()}</span>
         </div>
       </div>
 
@@ -268,20 +266,22 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
           href={getExplorerUrl(transaction.sourceChain, transaction.sourceTxHash)}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors group"
+          className="flex items-center justify-between p-3 rounded-lg transition-colors group hover:bg-gray-100 dark:hover:bg-gray-800"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
         >
-          <span className="text-sm">View on {transaction.sourceChain === 'ethereum' ? 'Etherscan' : 'Stacks Explorer'}</span>
-          <ExternalLink className="w-4 h-4 text-white/40 group-hover:text-white/60" />
+          <span className="text-sm" style={{ color: 'var(--text-primary)' }}>View on {transaction.sourceChain === 'ethereum' ? 'Etherscan' : 'Stacks Explorer'}</span>
+          <ExternalLink className="w-4 h-4 text-purple-600 dark:text-purple-400" />
         </a>
         {transaction.destinationTxHash && (
           <a
             href={getExplorerUrl(transaction.destinationChain, transaction.destinationTxHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors group"
+            className="flex items-center justify-between p-3 rounded-lg transition-colors group hover:bg-gray-100 dark:hover:bg-gray-800"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
           >
-            <span className="text-sm">View on {transaction.destinationChain === 'ethereum' ? 'Etherscan' : 'Stacks Explorer'}</span>
-            <ExternalLink className="w-4 h-4 text-white/40 group-hover:text-white/60" />
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>View on {transaction.destinationChain === 'ethereum' ? 'Etherscan' : 'Stacks Explorer'}</span>
+            <ExternalLink className="w-4 h-4 text-purple-600 dark:text-purple-400" />
           </a>
         )}
       </div>
@@ -290,7 +290,8 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
       {onClose && (
         <button
           onClick={onClose}
-          className="mt-6 w-full py-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium transition-colors"
+          className="mt-6 w-full py-3 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
         >
           Close
         </button>

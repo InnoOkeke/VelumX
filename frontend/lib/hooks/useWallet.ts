@@ -26,15 +26,15 @@ export interface WalletState {
   ethereumConnected: boolean;
   ethereumChainId: number | null;
   ethereumWalletType: EthereumWalletType | null;
-  
+
   // Stacks
   stacksAddress: string | null;
   stacksConnected: boolean;
   stacksWalletType: StacksWalletType | null;
-  
+
   // Balances
   balances: WalletBalances;
-  
+
   // Loading states
   isConnecting: boolean;
   isFetchingBalances: boolean;
@@ -55,12 +55,12 @@ if (typeof window !== 'undefined') {
 // Detect available Ethereum wallets
 function detectEthereumWallets() {
   if (typeof window === 'undefined') return [];
-  
+
   const wallets: EthereumWalletType[] = [];
   const ethereum = (window as any).ethereum;
-  
+
   if (!ethereum) return wallets;
-  
+
   // Rabby detection
   if (ethereum.isRabby) {
     wallets.push('rabby');
@@ -73,31 +73,31 @@ function detectEthereumWallets() {
   else {
     wallets.push('injected');
   }
-  
+
   return wallets;
 }
 
 // Get Ethereum provider for specific wallet
 function getEthereumProvider(walletType?: EthereumWalletType) {
   if (typeof window === 'undefined') return null;
-  
+
   const ethereum = (window as any).ethereum;
   if (!ethereum) return null;
-  
+
   // If no specific wallet requested, return default
   if (!walletType) return ethereum;
-  
+
   // For Rabby and MetaMask, they override the default provider
   // So we can just return ethereum if it matches
   if (walletType === 'rabby' && ethereum.isRabby) return ethereum;
   if (walletType === 'metamask' && ethereum.isMetaMask) return ethereum;
-  
+
   return ethereum;
 }
 
 export function useWallet() {
   const config = useConfig();
-  
+
   const [state, setState] = useState<WalletState>({
     ethereumAddress: null,
     ethereumConnected: false,
@@ -162,22 +162,18 @@ export function useWallet() {
     try {
       // Use Stacks testnet API URL directly
       const apiUrl = 'https://api.testnet.hiro.so';
-      
-      // Fetch STX balance
-      const stxResponse = await fetch(
-        `${apiUrl}/extended/v1/address/${address}/balances`
-      );
-      const stxData = await stxResponse.json();
-      const stxBalance = BigInt(stxData.stx.balance);
 
-      // Fetch USDCx balance (SIP-010 token)
-      const usdcxResponse = await fetch(
+      // Fetch all balances in a single request (STX + fungible tokens)
+      const response = await fetch(
         `${apiUrl}/extended/v1/address/${address}/balances`
       );
-      const usdcxData = await usdcxResponse.json();
-      
-      // Find USDCx in fungible tokens
-      const usdcxToken = usdcxData.fungible_tokens?.[config.stacksUsdcxAddress];
+      const data = await response.json();
+
+      // Extract STX balance
+      const stxBalance = BigInt(data.stx.balance);
+
+      // Extract USDCx balance (SIP-010 token) from same response
+      const usdcxToken = data.fungible_tokens?.[config.stacksUsdcxAddress];
       const usdcxBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
 
       setState(prev => ({
@@ -196,18 +192,18 @@ export function useWallet() {
   // Restore wallet state from localStorage and reconnect
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     let mounted = true;
-    
+
     const restoreState = async () => {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return;
-        
+
         const parsed = JSON.parse(stored);
         const restoredEthAddress = parsed.ethereumAddress;
         const restoredStacksAddress = parsed.stacksAddress;
-        
+
         // Verify Ethereum connection BEFORE setting state
         let ethConnected = false;
         if (restoredEthAddress && typeof window !== 'undefined') {
@@ -223,7 +219,7 @@ export function useWallet() {
             }
           }
         }
-        
+
         // Check if Stacks wallet is still connected
         let stacksConnected = false;
         let stacksAddr = restoredStacksAddress;
@@ -232,7 +228,7 @@ export function useWallet() {
           stacksAddr = userData.profile.stxAddress.testnet;
           stacksConnected = true;
         }
-        
+
         // Only update state once with verified data
         if (mounted) {
           setState(prev => ({
@@ -245,7 +241,7 @@ export function useWallet() {
             stacksConnected: stacksConnected,
             stacksWalletType: stacksConnected ? parsed.stacksWalletType : null,
           }));
-          
+
           // Fetch balances immediately after state is set
           if (ethConnected && restoredEthAddress) {
             fetchEthereumBalances(restoredEthAddress);
@@ -259,9 +255,9 @@ export function useWallet() {
         localStorage.removeItem(STORAGE_KEY);
       }
     };
-    
+
     restoreState();
-    
+
     return () => {
       mounted = false;
     };
@@ -352,7 +348,7 @@ export function useWallet() {
       if (userSession.isUserSignedIn()) {
         const userData = userSession.loadUserData();
         const stacksAddr = userData.profile.stxAddress.testnet;
-        
+
         setState(prev => {
           // Only update if address changed
           if (prev.stacksAddress !== stacksAddr) {
@@ -389,7 +385,7 @@ export function useWallet() {
   // Persist wallet state to localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     try {
       const toPersist = {
         ethereumAddress: state.ethereumAddress,
@@ -408,7 +404,7 @@ export function useWallet() {
   // Connect Ethereum wallet (Rabby, MetaMask, or any injected wallet)
   const connectEthereum = useCallback(async (preferredWallet?: EthereumWalletType) => {
     const availableWallets = detectEthereumWallets();
-    
+
     if (availableWallets.length === 0) {
       throw new Error('No Ethereum wallet detected. Please install Rabby or MetaMask.');
     }
@@ -416,7 +412,7 @@ export function useWallet() {
     // Use preferred wallet or first available
     const walletType = preferredWallet || availableWallets[0];
     const provider = getEthereumProvider(walletType);
-    
+
     if (!provider) {
       throw new Error(`${walletType} wallet not available`);
     }
@@ -491,7 +487,7 @@ export function useWallet() {
         const { showConnect: sc } = require('@stacks/connect');
         showConnectFn = sc;
       }
-      
+
       await new Promise<void>((resolve, reject) => {
         showConnectFn({
           appDetails: {
@@ -501,7 +497,7 @@ export function useWallet() {
           redirectTo: '/',
           onFinish: () => {
             const userData = userSession.loadUserData();
-            
+
             // Detect which wallet was used
             let detectedWallet: StacksWalletType = 'leather';
             if (typeof window !== 'undefined') {
@@ -513,7 +509,7 @@ export function useWallet() {
                 detectedWallet = 'hiro';
               }
             }
-            
+
             setState(prev => ({
               ...prev,
               stacksAddress: userData.profile.stxAddress.testnet,
@@ -521,10 +517,10 @@ export function useWallet() {
               stacksWalletType: preferredWallet || detectedWallet,
               isConnecting: false,
             }));
-            
+
             // Fetch balances immediately after connection
             fetchStacksBalances(userData.profile.stxAddress.testnet);
-            
+
             resolve();
           },
           onCancel: () => {
@@ -561,7 +557,7 @@ export function useWallet() {
   // Fetch all balances
   const fetchBalances = useCallback(async () => {
     setState(prev => ({ ...prev, isFetchingBalances: true }));
-    
+
     const promises = [];
     if (state.ethereumAddress) {
       promises.push(fetchEthereumBalances(state.ethereumAddress));
@@ -569,9 +565,9 @@ export function useWallet() {
     if (state.stacksAddress) {
       promises.push(fetchStacksBalances(state.stacksAddress));
     }
-    
+
     await Promise.all(promises);
-    
+
     setState(prev => ({ ...prev, isFetchingBalances: false }));
   }, [state.ethereumAddress, state.stacksAddress, fetchEthereumBalances, fetchStacksBalances]);
 

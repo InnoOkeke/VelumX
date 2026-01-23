@@ -84,6 +84,10 @@ export function BridgeInterface() {
     setLastBalanceUpdate(Date.now());
   }, [balances]);
 
+  // Minimum bridge amounts per Stacks docs
+  const MIN_BRIDGE_IN_TESTNET = 1; // 1 USDC for testnet peg-in
+  const MIN_BRIDGE_OUT = 4.80;     // 4.80 USDCx for peg-out (covers bridge fees)
+
   // Validate amount
   const validateAmount = (amount: string): string | null => {
     if (!amount || amount === '0') {
@@ -95,13 +99,19 @@ export function BridgeInterface() {
       return 'Invalid amount';
     }
 
-    // Check balance
+    // Check minimum bridge amounts
     if (state.direction === 'eth-to-stacks') {
+      if (numAmount < MIN_BRIDGE_IN_TESTNET) {
+        return `Minimum deposit is ${MIN_BRIDGE_IN_TESTNET} USDC`;
+      }
       const usdcBalance = parseFloat(balances.usdc);
       if (numAmount > usdcBalance) {
         return 'Insufficient USDC balance';
       }
     } else {
+      if (numAmount < MIN_BRIDGE_OUT) {
+        return `Minimum withdrawal is ${MIN_BRIDGE_OUT} USDCx (covers bridge fees)`;
+      }
       const usdcxBalance = parseFloat(balances.usdcx);
       if (numAmount > usdcxBalance) {
         return 'Insufficient USDCx balance';
@@ -228,7 +238,7 @@ export function BridgeInterface() {
 
       // Step 3: Deposit to xReserve (Stacks official bridge)
       const recipientBytes32 = encodeStacksAddress(stacksAddress);
-      
+
       const depositHash = await walletClient.writeContract({
         address: config.ethereumXReserveAddress as `0x${string}`,
         abi: XRESERVE_ABI,
@@ -246,28 +256,28 @@ export function BridgeInterface() {
 
       // Wait for transaction receipt to get message hash
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
-      
+
       console.log('📋 Transaction receipt:', receipt);
       console.log('📋 Transaction status:', receipt.status);
       console.log('📋 Number of logs:', receipt.logs.length);
-      
+
       // Check if transaction was successful
       if (receipt.status === 'reverted') {
         console.error('❌ Transaction reverted!');
         throw new Error('Transaction failed - please check your USDC balance and try again');
       }
-      
+
       // Extract message hash from xReserve transaction
       // For xReserve (Stacks official bridge), use transaction hash as message identifier
       // xReserve doesn't emit Circle's MessageSent event - it uses its own event system
       const messageHash = depositHash;
-      
+
       console.log('✅ Using transaction hash as message identifier:', messageHash);
       console.log('📋 All event logs:', receipt.logs.map(log => ({
         address: log.address,
         topics: log.topics,
       })));
-      
+
       // Step 4: Submit to monitoring service
       await fetch(`${config.backendUrl}/api/transactions/monitor`, {
         method: 'POST',
@@ -337,32 +347,32 @@ export function BridgeInterface() {
       const { openContractCall } = await import('@stacks/connect');
       const { STACKS_TESTNET } = await import('@stacks/network');
       const { uintCV, bufferCV, PostConditionMode } = await import('@stacks/transactions');
-      
+
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);
 
       // Determine which contract and function to call
-      const contractAddress = state.gaslessMode 
+      const contractAddress = state.gaslessMode
         ? config.stacksPaymasterAddress.split('.')[0]
         : config.stacksUsdcxProtocolAddress.split('.')[0];
-      
+
       const contractName = state.gaslessMode
         ? config.stacksPaymasterAddress.split('.')[1]
         : config.stacksUsdcxProtocolAddress.split('.')[1];
 
       const functionName = state.gaslessMode ? 'withdraw-gasless' : 'burn';
-      
+
       const functionArgs = state.gaslessMode
         ? [
-            uintCV(Number(amountInMicroUsdc)),
-            uintCV(Number(parseUnits(state.feeEstimate?.usdcx || '0', 6))),
-            bufferCV(recipientBytes),
-          ]
+          uintCV(Number(amountInMicroUsdc)),
+          uintCV(Number(parseUnits(state.feeEstimate?.usdcx || '0', 6))),
+          bufferCV(recipientBytes),
+        ]
         : [
-            uintCV(Number(amountInMicroUsdc)),
-            uintCV(0), // native-domain: 0 for Ethereum
-            bufferCV(recipientBytes),
-          ];
+          uintCV(Number(amountInMicroUsdc)),
+          uintCV(0), // native-domain: 0 for Ethereum
+          bufferCV(recipientBytes),
+        ];
 
       await new Promise<string>((resolve, reject) => {
         openContractCall({
@@ -379,7 +389,7 @@ export function BridgeInterface() {
           },
           onFinish: async (data: any) => {
             const txId = data.txId;
-            
+
             // Submit to monitoring service
             await fetch(`${config.backendUrl}/api/transactions/monitor`, {
               method: 'POST',
@@ -441,7 +451,7 @@ export function BridgeInterface() {
   };
 
   // Check if both wallets are connected based on addresses (more reliable than flags during restoration)
-  const isConnected = state.direction === 'eth-to-stacks' 
+  const isConnected = state.direction === 'eth-to-stacks'
     ? (ethereumConnected || !!ethereumAddress) && (stacksConnected || !!stacksAddress)
     : (stacksConnected || !!stacksAddress) && (ethereumConnected || !!ethereumAddress);
 
@@ -451,15 +461,15 @@ export function BridgeInterface() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
-        backgroundColor: 'var(--bg-surface)', 
+      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{
+        backgroundColor: 'var(--bg-surface)',
         border: `1px solid var(--border-color)`,
         padding: '2rem'
       }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            Bridge Assets
+            Cross-Chain Bridge
           </h2>
           <div className="text-xs px-3 py-1.5 rounded-full font-semibold" style={{
             backgroundColor: 'rgba(139, 92, 246, 0.1)',
@@ -571,20 +581,18 @@ export function BridgeInterface() {
               </div>
               <button
                 onClick={() => setState(prev => ({ ...prev, gaslessMode: !prev.gaslessMode }))}
-                className={`relative w-14 h-7 rounded-full transition-all ${
-                  state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
-                }`}
+                className={`relative w-14 h-7 rounded-full transition-all ${state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
+                  }`}
                 disabled={state.isProcessing}
               >
                 <div
-                  className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${
-                    state.gaslessMode ? 'translate-x-7' : ''
-                  }`}
+                  className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${state.gaslessMode ? 'translate-x-7' : ''
+                    }`}
                 />
               </button>
             </div>
             {state.gaslessMode && state.feeEstimate && (
-              <div className="mt-4 pt-4 text-sm" style={{ 
+              <div className="mt-4 pt-4 text-sm" style={{
                 borderTop: `1px solid var(--border-color)`,
                 color: 'var(--text-primary)'
               }}>
@@ -636,15 +644,15 @@ export function BridgeInterface() {
         </button>
 
         {/* Info */}
-        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{ 
+        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{
           borderTop: `1px solid var(--border-color)`,
           color: 'var(--text-secondary)'
         }}>
           <p className="flex items-center justify-center gap-2">
             <span className="w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full dark:animate-pulse-glow animate-slide-progress"></span>
-            Bridging typically takes 5-10 minutes
+            Circle xReserve • 5-10 min confirmation
           </p>
-          <p>You'll receive {destToken} on the destination chain</p>
+          <p>Secure & trustless • Powered by USDC native bridging</p>
         </div>
       </div>
     </div>

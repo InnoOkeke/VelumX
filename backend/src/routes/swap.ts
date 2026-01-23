@@ -1,6 +1,6 @@
 /**
  * Swap API Routes
- * Endpoints for token swapping via ALEX DEX
+ * Endpoints for token swapping via VelumX AMM
  */
 
 import { Router, Request, Response } from 'express';
@@ -169,12 +169,12 @@ router.post('/execute', async (req: Request, res: Response) => {
       });
     }
 
-    logger.info('Executing swap', { 
-      userAddress, 
-      inputToken, 
-      outputToken, 
+    logger.info('Executing swap', {
+      userAddress,
+      inputToken,
+      outputToken,
       inputAmount,
-      gaslessMode 
+      gaslessMode
     });
 
     // For now, return success with instructions for client-side execution

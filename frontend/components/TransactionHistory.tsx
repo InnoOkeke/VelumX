@@ -180,14 +180,14 @@ export function TransactionHistory() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
-        backgroundColor: 'var(--bg-surface)', 
+      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{
+        backgroundColor: 'var(--bg-surface)',
         border: `1px solid var(--border-color)`,
         padding: '2rem'
       }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Transaction History</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Activity</h2>
           <button
             onClick={() => fetchTransactions(true)}
             disabled={loading}
@@ -208,12 +208,11 @@ export function TransactionHistory() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  filter === f
-                    ? 'bg-purple-600 text-white'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-                style={filter !== f ? { 
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === f
+                  ? 'bg-purple-600 text-white'
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                style={filter !== f ? {
                   backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
                   color: 'var(--text-primary)',
                   border: `1px solid var(--border-color)`
@@ -259,10 +258,10 @@ export function TransactionHistory() {
         {/* Empty State */}
         {!loading && sortedTransactions.length === 0 && (
           <div className="text-center py-12">
-            <ArrowDownUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-600">No transactions yet</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Your bridge transactions will appear here
+            <ArrowDownUp className="w-12 h-12 mx-auto mb-4" style={{ color: 'var(--text-secondary)', opacity: 0.5 }} />
+            <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>No transactions yet</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
+              Bridge, swap, or provide liquidity to get started
             </p>
           </div>
         )}
@@ -274,7 +273,11 @@ export function TransactionHistory() {
               <div
                 key={tx.id}
                 onClick={() => setSelectedTx(tx.id)}
-                className="bg-gray-50 hover:bg-gray-100 border-2 border-gray-200 rounded-xl p-5 cursor-pointer transition-all group"
+                className="rounded-xl p-5 cursor-pointer transition-all group hover:-translate-y-0.5"
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border-color)'
+                }}
               >
                 <div className="flex items-start justify-between">
                   {/* Left Side */}
@@ -285,14 +288,14 @@ export function TransactionHistory() {
                     {/* Transaction Info */}
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-gray-900">
-                          {tx.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {tx.type === 'deposit' ? 'Bridge In' : 'Bridge Out'}
                         </span>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                           {tx.type === 'deposit' ? 'ETH → STX' : 'STX → ETH'}
                         </span>
                       </div>
-                      <div className="text-sm text-gray-600 space-y-1">
+                      <div className="text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
                         <div>
                           From: <span className="font-mono">{formatAddress(tx.sender)}</span>
                         </div>
@@ -301,7 +304,7 @@ export function TransactionHistory() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span>{new Date(tx.timestamp).toLocaleDateString()}</span>
-                          <span className="text-gray-400">•</span>
+                          <span style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>•</span>
                           <span>{new Date(tx.timestamp).toLocaleTimeString()}</span>
                         </div>
                       </div>
@@ -310,7 +313,7 @@ export function TransactionHistory() {
 
                   {/* Right Side */}
                   <div className="text-right">
-                    <div className="text-lg font-bold mb-1 text-gray-900">
+                    <div className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
                       {tx.amount} {tx.type === 'deposit' ? 'USDC' : 'USDCx'}
                     </div>
                     <div className={`text-sm font-semibold capitalize ${getStatusColor(tx.status)}`}>
@@ -321,7 +324,7 @@ export function TransactionHistory() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 mt-2 font-medium"
+                      className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 mt-2 font-medium"
                     >
                       View TX <ExternalLink className="w-3 h-3" />
                     </a>

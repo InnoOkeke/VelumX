@@ -45,7 +45,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen mesh-gradient transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <NotificationContainer />
-      
+
       {/* Header */}
       <header className="sticky top-0 z-50 w-full backdrop-blur-2xl transition-all duration-300" style={{ borderBottom: `1px solid var(--border-color)`, backgroundColor: 'rgba(var(--bg-surface-rgb), 0.7)' }}>
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -64,7 +64,7 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={toggleDarkMode}
-                className="p-2.5 rounded-xl transition-all duration-300 group hover:scale-110" 
+                className="p-2.5 rounded-xl transition-all duration-300 group hover:scale-110"
                 style={{ backgroundColor: 'var(--bg-surface)', border: `1px solid var(--border-color)` }}
                 aria-label="Toggle dark mode"
               >
@@ -89,13 +89,13 @@ export default function HomePage() {
           </div>
           <h1 className="relative text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
             <span className="bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 bg-clip-text text-transparent animate-gradient">
-              DeFi Without
+              The Future of
             </span>
             <br />
-            <span style={{ color: 'var(--text-primary)' }}>The Gas Tax</span>
+            <span style={{ color: 'var(--text-primary)' }}>Gasless DeFi</span>
           </h1>
-          <p className="relative text-xl md:text-2xl max-w-2xl mx-auto font-light" style={{ color: 'var(--text-secondary)' }}>
-            Bridge. Swap. Build. All on Bitcoin L2—zero STX required.
+          <p className="relative text-xl md:text-2xl max-w-3xl mx-auto font-light leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            Bridge USDC. Swap tokens. Earn yield. All without buying native gas tokens—your stablecoins pay the way.
           </p>
         </div>
 
@@ -104,55 +104,50 @@ export default function HomePage() {
           <div className="inline-flex rounded-2xl border border-gray-200/50 dark:border-gray-800/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-1.5 shadow-xl shadow-purple-500/10 dark:shadow-purple-500/5 transition-all duration-300">
             <button
               onClick={() => setActiveTab('bridge')}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
-                activeTab === 'bridge'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
-                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${activeTab === 'bridge'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
             >
               <ArrowLeftRight className="h-4 w-4" />
               Bridge
             </button>
             <button
               onClick={() => setActiveTab('swap')}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
-                activeTab === 'swap'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
-                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${activeTab === 'swap'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
             >
               <Repeat className="h-4 w-4" />
               Swap
             </button>
             <button
               onClick={() => setActiveTab('liquidity')}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
-                activeTab === 'liquidity'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
-                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${activeTab === 'liquidity'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
             >
               <Droplets className="h-4 w-4" />
               Liquidity
             </button>
             <button
               onClick={() => setActiveTab('pools')}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
-                activeTab === 'pools'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
-                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${activeTab === 'pools'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
             >
               <BarChart3 className="h-4 w-4" />
               Pools
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${
-                activeTab === 'history'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
-                  : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all duration-300 ${activeTab === 'history'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
             >
               <History className="h-4 w-4" />
               History
@@ -178,9 +173,9 @@ export default function HomePage() {
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 mb-5 shadow-lg shadow-purple-500/50 group-hover:scale-110 transition-transform duration-300">
               <ArrowLeftRight className="h-7 w-7 text-white" />
             </div>
-            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Ethereum ⇄ Stacks</h3>
+            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Seamless Bridging</h3>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Move USDC across chains in minutes. Circle's xReserve handles the heavy lifting.
+              Move USDC between Ethereum and Stacks in under 10 minutes. Circle's xReserve ensures your funds are always safe.
             </p>
           </div>
 
@@ -191,9 +186,9 @@ export default function HomePage() {
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 mb-5 shadow-lg shadow-blue-500/50 group-hover:scale-110 transition-transform duration-300">
               <Zap className="h-7 w-7 text-white" />
             </div>
-            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Pay in Stablecoins</h3>
+            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Stablecoin Gas</h3>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Forget buying STX for gas. Pay fees in USDCx and keep it simple.
+              Stop juggling native tokens. VelumX accepts USDCx as gas—so you can trade without the friction.
             </p>
           </div>
 
@@ -204,9 +199,9 @@ export default function HomePage() {
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 mb-5 shadow-lg shadow-green-500/50 group-hover:scale-110 transition-transform duration-300">
               <Repeat className="h-7 w-7 text-white" />
             </div>
-            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Gasless Swaps</h3>
+            <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Instant Swaps</h3>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Trade on ALEX DEX without holding native tokens. Pure DeFi, zero friction.
+              Our battle-tested AMM gives you the best rates with near-instant execution. DeFi the way it should be.
             </p>
           </div>
         </div>
@@ -220,8 +215,8 @@ export default function HomePage() {
             }}>
               <Shield className="h-8 w-8 text-purple-600 dark:text-purple-400" />
             </div>
-            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Battle-Tested</h4>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Audited contracts, zero compromises</p>
+            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Bank-Grade Security</h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Non-custodial contracts, fully audited</p>
           </div>
           <div className="text-center group">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 group-hover:scale-110 transition-transform duration-300" style={{
@@ -230,8 +225,8 @@ export default function HomePage() {
             }}>
               <Zap className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Lightning Fast</h4>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Transactions settle in seconds</p>
+            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Sub-Second Execution</h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Lightning-fast transactions on Stacks</p>
           </div>
           <div className="text-center group">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 group-hover:scale-110 transition-transform duration-300" style={{
@@ -240,8 +235,8 @@ export default function HomePage() {
             }}>
               <ArrowLeftRight className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Dead Simple</h4>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No native tokens, no headaches</p>
+            <h4 className="font-bold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>Zero Friction</h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No wallet hopping, no token juggling</p>
           </div>
         </div>
       </main>
@@ -257,7 +252,7 @@ export default function HomePage() {
               <img src="/velumx-icon.svg" alt="VelumX" className="h-6 w-6" />
               <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>VelumX</span>
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Built on Circle xReserve × Stacks
+                Gasless DeFi on Bitcoin L2
               </span>
             </div>
 
@@ -271,7 +266,7 @@ export default function HomePage() {
 
           <div className="text-center pt-6 mt-6" style={{ borderTop: `1px solid var(--border-color)` }}>
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              © 2024 VelumX • <span className="text-orange-600 dark:text-orange-400 font-semibold">Testnet Only - Not for Production</span>
+              © 2024 VelumX • <span className="text-orange-600 dark:text-orange-400 font-semibold">Testnet Beta - Not for Production</span>
             </p>
           </div>
         </div>

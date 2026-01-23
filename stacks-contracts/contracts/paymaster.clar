@@ -10,6 +10,11 @@
 
 (define-constant ERR-NOT-SPONSORED (err u200))
 (define-constant ERR-WRONG-SPONSOR (err u201))
+(define-constant ERR-BELOW-MINIMUM (err u202))
+
+;; Minimum withdrawal amount: 4.80 USDCx (4,800,000 micro-USDCx)
+;; Per Stacks docs: bridge-out has ~$4.80 flat fee
+(define-constant MIN-WITHDRAW-AMOUNT u4800000)
 
 ;; The backend relayer address that pays the STX fees
 (define-data-var relayer principal 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P)
@@ -29,9 +34,12 @@
 
 ;; 2. Bridge Withdraw (Gasless)
 ;; Pays fee in USDCx, then calls official Bridge Burn
+;; Minimum withdrawal: 4.80 USDCx per Stacks bridge requirements
 (define-public (withdraw-gasless (amount uint) (fee uint) (recipient (buff 32)))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    ;; Validate minimum withdrawal amount
+    (asserts! (>= amount MIN-WITHDRAW-AMOUNT) ERR-BELOW-MINIMUM)
     
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
