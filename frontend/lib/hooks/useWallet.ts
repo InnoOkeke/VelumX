@@ -6,8 +6,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createWalletClient, createPublicClient, custom, http, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { AppConfig, UserSession } from '@stacks/connect';
-import { STACKS_TESTNET } from '@stacks/network';
+import { connect, isConnected, getLocalStorage, showConnect } from '@stacks/connect';
+import { validateStacksAddress } from '@stacks/transactions';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
 
 export type EthereumWalletType = 'rabby' | 'metamask' | 'injected';
@@ -93,6 +93,13 @@ function getEthereumProvider(walletType?: EthereumWalletType) {
   if (walletType === 'metamask' && ethereum.isMetaMask) return ethereum;
 
   return ethereum;
+}
+
+// Validate Stacks address and ensure it's testnet
+function assertTestnetAddress(address: string) {
+  if (!address || !address.startsWith('ST') || !validateStacksAddress(address)) {
+    throw new Error('Please connect a valid STX testnet address');
+  }
 }
 
 export function useWallet() {
@@ -473,69 +480,43 @@ export function useWallet() {
     }));
   }, []);
 
-  // Connect Stacks wallet (Xverse, Leather, or Hiro)
+  // Connect Stacks wallet using recommended connect() pattern
   const connectStacks = useCallback(async (preferredWallet?: StacksWalletType) => {
-    if (!userSession) {
-      throw new Error('Stacks wallet not available');
-    }
-
     setState(prev => ({ ...prev, isConnecting: true }));
 
     try {
-      // Try dynamic import first, fallback to require for dev environment
-      let showConnectFn;
-      try {
-        const module = await import('@stacks/connect');
-        showConnectFn = module.showConnect;
-      } catch (importError) {
-        // Fallback for development environment
-        const { showConnect: sc } = require('@stacks/connect');
-        showConnectFn = sc;
+      // Use connect() to prompt wallet selector
+      const response = await connect();
+      console.log('Connected with response:', response);
+
+      // Read STX address from local storage as recommended
+      const data = getLocalStorage();
+      const stxAddresses = data?.addresses?.stx;
+
+      if (!stxAddresses || stxAddresses.length === 0) {
+        throw new Error('No STX addresses found in connected wallet');
       }
 
-      await new Promise<void>((resolve, reject) => {
-        showConnectFn({
-          appDetails: {
-            name: 'VelumX Bridge',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          redirectTo: '/',
-          onFinish: () => {
-            const userData = userSession.loadUserData();
+      const address = stxAddresses[0].address;
 
-            // Detect which wallet was used
-            let detectedWallet: StacksWalletType = 'leather';
-            if (typeof window !== 'undefined') {
-              if ((window as any).XverseProviders) {
-                detectedWallet = 'xverse';
-              } else if ((window as any).LeatherProvider) {
-                detectedWallet = 'leather';
-              } else if ((window as any).HiroWalletProvider) {
-                detectedWallet = 'hiro';
-              }
-            }
+      // Validate address
+      assertTestnetAddress(address);
 
-            setState(prev => ({
-              ...prev,
-              stacksAddress: userData.profile.stxAddress.testnet,
-              stacksConnected: true,
-              stacksWalletType: preferredWallet || detectedWallet,
-              isConnecting: false,
-            }));
+      setState(prev => ({
+        ...prev,
+        stacksAddress: address,
+        stacksConnected: true,
+        // Detection logic could be improved, but for now use first available or preferred
+        stacksWalletType: preferredWallet || 'leather',
+        isConnecting: false,
+      }));
 
-            // Fetch balances immediately after connection
-            fetchStacksBalances(userData.profile.stxAddress.testnet);
+      // Fetch balances immediately
+      fetchStacksBalances(address);
 
-            resolve();
-          },
-          onCancel: () => {
-            setState(prev => ({ ...prev, isConnecting: false }));
-            reject(new Error('User cancelled connection'));
-          },
-          userSession,
-        });
-      });
+      return address;
     } catch (error) {
+      console.error('Stacks connection failed:', error);
       setState(prev => ({ ...prev, isConnecting: false }));
       throw error;
     }

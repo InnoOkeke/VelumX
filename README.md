@@ -34,7 +34,7 @@ When users bridge USDC to Stacks as USDCx, they face a critical UX barrier: **th
 
 ✅ **Pay fees in USDCx** instead of STX  
 ✅ **Bridge USDC** from Ethereum to Stacks  
-✅ **Swap tokens** on ALEX DEX  
+✅ **Swap tokens** on VelumX AMM  
 ✅ **Transact freely** without holding STX  
 ✅ **Onboard instantly** - no native token needed  
 
@@ -62,8 +62,8 @@ VelumX uses a **Paymaster smart contract** that:
 - Real-time transaction monitoring
 
 ### 3. **Token Swaps** 🔄
-- Swap USDCx for STX, ALEX, or other tokens
-- Integrated with ALEX DEX
+- Swap USDCx for STX, VelumX, or other tokens
+- Integrated with VelumX AMM
 - Smart routing (direct & multi-hop)
 - All swaps are gasless
 
@@ -166,7 +166,7 @@ VelumX uses a **Paymaster smart contract** that:
 1. User selects tokens (e.g., USDCx → STX)
 2. Gets real-time quote
 3. Pays fee in USDCx
-4. Paymaster sponsors swap on ALEX
+4. Paymaster sponsors swap on VelumX
 5. User receives output tokens
 ```
 
@@ -291,7 +291,7 @@ Open http://localhost:3000
 ;; Gasless swap
 (define-public (swap-gasless (token-in <sip-010>) (token-out <sip-010>) ...)
   ;; 1. User pays fee in USDCx
-  ;; 2. Execute swap on ALEX
+  ;; 2. Execute swap on VelumX
   ;; 3. Transaction sponsored by relayer
 )
 ```
@@ -311,7 +311,7 @@ Open http://localhost:3000
 - Manages supported tokens
 - Generates swap quotes
 - Finds optimal routes
-- Integrates with ALEX DEX
+- Integrates with VelumX AMM
 
 ---
 
@@ -413,7 +413,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Circle** - xReserve Protocol
 - **Stacks** - Bitcoin L2 infrastructure
-- **ALEX** - DEX integration
+- **VelumX** - AMM integration
 - **Hiro** - Development tools
 
 ---

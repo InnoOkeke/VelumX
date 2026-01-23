@@ -93,11 +93,25 @@ export class SwapService {
 
     try {
       // Parse contract address
-      const [contractAddress, contractName] = this.config.stacksSwapContractAddress.split('.');
+      const parts = this.config.stacksSwapContractAddress.split('.');
+      const contractAddress = parts[0];
+      const contractName = parts[1] || 'swap-contract';
 
-      // Parse token addresses
-      const [tokenInAddress, tokenInName] = inputToken.split('.');
-      const [tokenOutAddress, tokenOutName] = outputToken.split('.');
+      // Parse token addresses - handle both contract.name and naked principals (like STX or user addr)
+      const tokenInParts = inputToken.split('.');
+      const tokenInPrincipal = tokenInParts.length === 2
+        ? `${tokenInParts[0]}.${tokenInParts[1]}`
+        : inputToken;
+
+      const tokenOutParts = outputToken.split('.');
+      const tokenOutPrincipal = tokenOutParts.length === 2
+        ? `${tokenOutParts[0]}.${tokenOutParts[1]}`
+        : outputToken;
+
+      // Validate principals before calling principalCV
+      if (tokenInPrincipal === 'STX' || tokenOutPrincipal === 'STX') {
+        throw new Error('STX must be represented by a valid principal. Please connect your wallet.');
+      }
 
       // Call quote-swap read-only function
       const result = await callReadOnlyFunction({
@@ -105,8 +119,8 @@ export class SwapService {
         contractName,
         functionName: 'quote-swap',
         functionArgs: [
-          principalCV(`${tokenInAddress}.${tokenInName}`),
-          principalCV(`${tokenOutAddress}.${tokenOutName}`),
+          principalCV(tokenInPrincipal),
+          principalCV(tokenOutPrincipal),
           uintCV(inputAmount),
         ],
         network: 'testnet',

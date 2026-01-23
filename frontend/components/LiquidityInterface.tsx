@@ -104,7 +104,10 @@ export function LiquidityInterface() {
   const [state, setState] = useState<LiquidityState>({
     mode: 'add',
     tokenA: DEFAULT_TOKENS[0],
-    tokenB: DEFAULT_TOKENS[1],
+    tokenB: {
+      ...DEFAULT_TOKENS[1],
+      address: stacksAddress || 'STX'
+    },
     amountA: '',
     amountB: '',
     lpTokenAmount: '',
@@ -132,6 +135,22 @@ export function LiquidityInterface() {
     // Position dashboard
     activeTab: 'liquidity',
   });
+
+  // Update STX token address when wallet connects
+  useEffect(() => {
+    if (stacksConnected && stacksAddress) {
+      setState(prev => {
+        const newState = { ...prev };
+        if (prev.tokenA?.symbol === 'STX') {
+          newState.tokenA = { ...prev.tokenA, address: stacksAddress };
+        }
+        if (prev.tokenB?.symbol === 'STX') {
+          newState.tokenB = { ...prev.tokenB, address: stacksAddress };
+        }
+        return newState;
+      });
+    }
+  }, [stacksConnected, stacksAddress]);
 
   // Fetch available pools on component mount
   useEffect(() => {

@@ -64,7 +64,10 @@ export function SwapInterface() {
   const [tokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<SwapState>({
     inputToken: DEFAULT_TOKENS[0],
-    outputToken: DEFAULT_TOKENS[1],
+    outputToken: {
+      ...DEFAULT_TOKENS[1],
+      address: stacksAddress || 'STX'
+    },
     inputAmount: '',
     outputAmount: '',
     gaslessMode: true,
@@ -76,6 +79,22 @@ export function SwapInterface() {
     slippage: 0.5,
     showSettings: false,
   });
+
+  // Update STX token address when wallet connects
+  useEffect(() => {
+    if (stacksConnected && stacksAddress) {
+      setState(prev => {
+        const newState = { ...prev };
+        if (prev.inputToken?.symbol === 'STX') {
+          newState.inputToken = { ...prev.inputToken, address: stacksAddress };
+        }
+        if (prev.outputToken?.symbol === 'STX') {
+          newState.outputToken = { ...prev.outputToken, address: stacksAddress };
+        }
+        return newState;
+      });
+    }
+  }, [stacksConnected, stacksAddress]);
 
   // Fetch quote when input changes
   useEffect(() => {
