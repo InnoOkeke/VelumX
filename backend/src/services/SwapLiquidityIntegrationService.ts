@@ -581,9 +581,17 @@ export class SwapLiquidityIntegrationService {
 
     try {
       // Check if pool exists
-      const poolId = `${params.tokenA}-${params.tokenB}`;
-      const pools = await poolDiscoveryService.getAllPools();
-      const poolExists = pools.some((p) => p.id === poolId);
+
+      // Normalize STX to sentinel address for lookup
+      const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+      const addressA = params.tokenA === 'STX' ? STX_SENTINEL : params.tokenA;
+      const addressB = params.tokenB === 'STX' ? STX_SENTINEL : params.tokenB;
+
+      const pool = await poolDiscoveryService.getPoolByTokens(addressA, addressB);
+      const poolExists = !!pool;
+
+      // Use the actual pool ID if found, otherwise construct one for logging
+      const poolId = pool ? pool.id : `${params.tokenA}-${params.tokenB}`;
 
       if (!poolExists && params.operation === 'swap') {
         return {
