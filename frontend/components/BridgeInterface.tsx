@@ -45,7 +45,15 @@ export function BridgeInterface() {
   useEffect(() => {
     // Fetch balances if we have addresses (even if connected flags aren't set yet)
     if ((ethereumAddress || stacksAddress) && fetchBalances) {
+      // Immediate fetch
       fetchBalances();
+
+      // Also fetch after a short delay to catch late wallet state updates
+      const timeoutId = setTimeout(() => {
+        fetchBalances();
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances]);
 
