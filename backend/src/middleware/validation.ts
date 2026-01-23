@@ -26,14 +26,14 @@ function isValidStacksAddress(address: string): boolean {
 
   // Check for standard principal format (ST... or SP...)
   if (parts.length === 1) {
-    return !!parts[0].match(/^(ST|SP)[0-9A-Z]{38,41}$/);
+    return !!parts[0].match(/^(ST|SP)[0-9A-Z]{38,41}$/i);
   }
 
   if (parts.length !== 2) return false;
 
   // Check principal (address) format
   const principal = parts[0];
-  if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/)) return false;
+  if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/i)) return false;
 
   // Check contract name format
   const contractName = parts[1];

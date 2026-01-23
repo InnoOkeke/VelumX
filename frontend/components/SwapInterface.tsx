@@ -104,21 +104,7 @@ export function SwapInterface() {
     }));
   }, [config.stacksVexAddress]);
 
-  // Update STX token address when wallet connects
-  useEffect(() => {
-    if (stacksConnected && stacksAddress) {
-      setState(prev => {
-        const newState = { ...prev };
-        if (prev.inputToken?.symbol === 'STX') {
-          newState.inputToken = { ...prev.inputToken, address: stacksAddress };
-        }
-        if (prev.outputToken?.symbol === 'STX') {
-          newState.outputToken = { ...prev.outputToken, address: stacksAddress };
-        }
-        return newState;
-      });
-    }
-  }, [stacksConnected, stacksAddress]);
+
 
   // Fetch quote when input changes
   useEffect(() => {
