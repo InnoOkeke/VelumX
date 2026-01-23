@@ -265,13 +265,8 @@ export function BridgeInterface() {
       // Wait for transaction receipt to get message hash
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
 
-      console.log('📋 Transaction receipt:', receipt);
-      console.log('📋 Transaction status:', receipt.status);
-      console.log('📋 Number of logs:', receipt.logs.length);
-
       // Check if transaction was successful
       if (receipt.status === 'reverted') {
-        console.error('❌ Transaction reverted!');
         throw new Error('Transaction failed - please check your USDC balance and try again');
       }
 
@@ -279,12 +274,6 @@ export function BridgeInterface() {
       // For xReserve (Stacks official bridge), use transaction hash as message identifier
       // xReserve doesn't emit Circle's MessageSent event - it uses its own event system
       const messageHash = depositHash;
-
-      console.log('✅ Using transaction hash as message identifier:', messageHash);
-      console.log('📋 All event logs:', receipt.logs.map(log => ({
-        address: log.address,
-        topics: log.topics,
-      })));
 
       // Step 4: Submit to monitoring service
       await fetch(`${config.backendUrl}/api/transactions/monitor`, {

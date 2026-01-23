@@ -554,16 +554,39 @@ export function useWallet() {
     }));
   }, []);
 
-  // Fetch all balances
+  // Fetch all balances - uses stored addresses to avoid stale closure issues
   const fetchBalances = useCallback(async () => {
+    // Get addresses from localStorage to ensure we have the latest
+    // This avoids the stale closure problem
+    let ethAddr = state.ethereumAddress;
+    let stacksAddr = state.stacksAddress;
+
+    // If state doesn't have addresses, try to get them from storage
+    if (!ethAddr && !stacksAddr && typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          ethAddr = parsed.ethereumAddress || null;
+          stacksAddr = parsed.stacksAddress || null;
+        }
+      } catch (e) {
+        // Ignore storage errors
+      }
+    }
+
+    if (!ethAddr && !stacksAddr) {
+      return; // No addresses to fetch for
+    }
+
     setState(prev => ({ ...prev, isFetchingBalances: true }));
 
     const promises = [];
-    if (state.ethereumAddress) {
-      promises.push(fetchEthereumBalances(state.ethereumAddress));
+    if (ethAddr) {
+      promises.push(fetchEthereumBalances(ethAddr));
     }
-    if (state.stacksAddress) {
-      promises.push(fetchStacksBalances(state.stacksAddress));
+    if (stacksAddr) {
+      promises.push(fetchStacksBalances(stacksAddr));
     }
 
     await Promise.all(promises);
