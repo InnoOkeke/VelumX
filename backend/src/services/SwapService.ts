@@ -94,7 +94,7 @@ export class SwapService {
     try {
       // Parse contract address
       const [contractAddress, contractName] = this.config.stacksSwapContractAddress.split('.');
-      
+
       // Parse token addresses
       const [tokenInAddress, tokenInName] = inputToken.split('.');
       const [tokenOutAddress, tokenOutName] = outputToken.split('.');
@@ -115,7 +115,7 @@ export class SwapService {
 
       // Parse result
       const resultJson = cvToJSON(result);
-      
+
       if (resultJson.success === false || !resultJson.value) {
         throw new Error('Pool not found or invalid quote');
       }
@@ -168,12 +168,12 @@ export class SwapService {
       }
 
       const data: any = await response.json();
-      
+
       // Check USDCx balance
       if (inputToken.includes('usdcx')) {
-        const usdcxBalance = BigInt(
-          data.fungible_tokens?.[this.config.stacksUsdcxAddress]?.balance || '0'
-        );
+        const fungibleTokens = data.fungible_tokens || {};
+        const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(this.config.stacksUsdcxAddress));
+        const usdcxBalance = usdcxKey ? BigInt(fungibleTokens[usdcxKey].balance) : BigInt(0);
 
         if (usdcxBalance < inputAmount) {
           return { valid: false, error: 'Insufficient USDCx balance' };

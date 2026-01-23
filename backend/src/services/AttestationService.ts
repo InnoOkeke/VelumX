@@ -136,7 +136,7 @@ export class AttestationService {
     // Query Stacks blockchain for balance verification
     const operation = async (): Promise<AttestationData | null> => {
       const balance = await this.fetchStacksBalance(recipientAddress);
-      
+
       if (this.verifyBalanceIncrease(balance, expectedAmount)) {
         logger.info('xReserve balance verification successful', {
           txHash,
@@ -144,14 +144,14 @@ export class AttestationService {
           balance: balance.toString(),
           expectedAmount,
         });
-        
+
         return {
           attestation: 'xreserve-automatic',
           messageHash: txHash,
           fetchedAt: Date.now(),
         };
       }
-      
+
       // Balance not yet increased, retry
       logger.debug('xReserve balance not yet increased', {
         txHash,
@@ -159,7 +159,7 @@ export class AttestationService {
         currentBalance: balance.toString(),
         expectedAmount,
       });
-      
+
       return null;
     };
 
@@ -253,22 +253,22 @@ export class AttestationService {
    */
   private async fetchStacksBalance(address: string): Promise<bigint> {
     const url = `${this.config.stacksRpcUrl}/extended/v1/address/${address}/balances`;
-    
+
     try {
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           // Address not found or no balance yet - this is normal for new addresses
           return 0n;
         }
-        
+
         // Create error with status code for classification
         const error = new Error(`Stacks API error: ${response.status} ${response.statusText}`);
-        
+
         // Classify error and throw appropriately
         if (this.isRetryableError(error)) {
           // Retryable error - throw to trigger retry logic
@@ -278,21 +278,23 @@ export class AttestationService {
           throw error;
         }
       }
-      
+
       const data: any = await response.json();
-      
+
       // Extract USDCx balance from fungible_tokens
       // The key format is the full contract identifier (e.g., "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx::usdcx-token")
-      const usdcxToken = data.fungible_tokens?.[this.config.stacksUsdcxAddress];
-      if (!usdcxToken) {
+      const fungibleTokens = data.fungible_tokens || {};
+      const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(this.config.stacksUsdcxAddress));
+
+      if (!usdcxKey) {
         return 0n;
       }
-      
-      return BigInt(usdcxToken.balance);
+
+      return BigInt(fungibleTokens[usdcxKey].balance);
     } catch (error) {
       // Catch network errors (fetch failures, timeouts, etc.)
       const err = error as Error;
-      
+
       // Classify the error
       if (this.isRetryableError(err)) {
         // Retryable error (network timeout, connection failure, etc.) - throw to trigger retry
@@ -331,7 +333,7 @@ export class AttestationService {
     expectedAmount: string
   ): boolean {
     const expected = BigInt(expectedAmount);
-    
+
     // For first deposit, balance should be >= expected amount
     // For subsequent deposits, we can't verify exact increase without
     // tracking previous balance, so we just verify balance >= expected
@@ -344,7 +346,7 @@ export class AttestationService {
    */
   private async fetchFromCircleAPI(messageHash: string): Promise<any> {
     const url = `${this.CIRCLE_ATTESTATION_API}/${messageHash}`;
-    
+
     const headers: Record<string, string> = {
       'Accept': 'application/json',
     };
@@ -379,7 +381,7 @@ export class AttestationService {
     // Note: This is a placeholder implementation
     // The actual Stacks attestation API endpoint may differ
     const url = `${this.STACKS_ATTESTATION_API}/extended/v1/tx/${txHash}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -396,7 +398,7 @@ export class AttestationService {
     }
 
     const data: any = await response.json();
-    
+
     // Extract attestation from transaction data
     // This will depend on the actual Stacks attestation format
     if (data.tx_status === 'success' && data.burn_block_time) {
@@ -576,7 +578,7 @@ export class AttestationService {
         // Result is null - attestation not ready yet (this is normal, not an error)
         // Check if we have more attempts remaining BEFORE logging "will retry"
         const hasMoreAttempts = attempt < maxAttempts;
-        
+
         if (hasMoreAttempts) {
           // ACCURATE RETRY LOGGING: Only log "will retry" when we actually will retry
           // This fixes the bug where "will retry" was logged even on the last attempt
@@ -599,7 +601,7 @@ export class AttestationService {
       } catch (error) {
         lastError = error as Error;
         const err = error as Error;
-        
+
         // Check if this is a retryable error using the helper method
         // Retryable errors: 404, timeout, network errors, rate limiting
         // Permanent errors: 401, 403, 500, validation errors
@@ -608,7 +610,7 @@ export class AttestationService {
         if (isRetryable) {
           // Transient error - check if we can retry
           const hasMoreAttempts = attempt < maxAttempts;
-          
+
           if (hasMoreAttempts) {
             // ACCURATE RETRY LOGGING: Only log "will retry" when we actually will retry
             logger.info(`${operationName} not ready (${err.message}), will retry`, {
@@ -674,30 +676,30 @@ export class AttestationService {
    */
   private isRetryableError(error: Error): boolean {
     const message = error.message.toLowerCase();
-    
+
     // Check for retryable error patterns
     const isRetryable = message.includes('404') ||
-                       message.includes('not found') ||
-                       message.includes('timeout') ||
-                       message.includes('network') ||
-                       message.includes('429') ||
-                       message.includes('rate limit');
-    
+      message.includes('not found') ||
+      message.includes('timeout') ||
+      message.includes('network') ||
+      message.includes('429') ||
+      message.includes('rate limit');
+
     // Check for permanent error patterns
     const isPermanent = message.includes('401') ||
-                       message.includes('unauthorized') ||
-                       message.includes('403') ||
-                       message.includes('forbidden') ||
-                       message.includes('500') ||
-                       message.includes('internal server error') ||
-                       message.includes('validation error') ||
-                       message.includes('invalid');
-    
+      message.includes('unauthorized') ||
+      message.includes('403') ||
+      message.includes('forbidden') ||
+      message.includes('500') ||
+      message.includes('internal server error') ||
+      message.includes('validation error') ||
+      message.includes('invalid');
+
     // If explicitly permanent, return false
     if (isPermanent) {
       return false;
     }
-    
+
     // Otherwise, return true if retryable pattern found
     return isRetryable;
   }

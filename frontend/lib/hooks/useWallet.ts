@@ -174,7 +174,11 @@ export function useWallet() {
       const stxBalance = BigInt(data.stx.balance);
 
       // Extract USDCx balance (SIP-010 token) from same response
-      const usdcxToken = data.fungible_tokens?.[config.stacksUsdcxAddress];
+      // Use fuzzy lookup: find any token that starts with the contract address
+      // Stacks API uses "contract.name::token-unit-name" format
+      const fungibleTokens = data.fungible_tokens || {};
+      const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksUsdcxAddress));
+      const usdcxToken = usdcxKey ? fungibleTokens[usdcxKey] : null;
       const usdcxBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
 
       setState(prev => ({
