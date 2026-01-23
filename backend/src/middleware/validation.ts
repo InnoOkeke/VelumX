@@ -22,6 +22,8 @@ function isValidStacksAddress(address: string): boolean {
   // Format: PRINCIPAL.CONTRACT-NAME or just PRINCIPAL for STX
   if (address === 'STX') return true;
 
+  const parts = address.split('.');
+
   // Check for standard principal format (ST... or SP...)
   if (parts.length === 1) {
     return !!parts[0].match(/^(ST|SP)[0-9A-Z]{38,41}$/);
