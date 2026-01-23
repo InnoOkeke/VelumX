@@ -91,17 +91,24 @@ export class AttestationService {
 
   /**
    * Fetches attestation for xReserve (Stacks official bridge)
-   * For xReserve, we need to check the Stacks transaction status
+   * 
+   * xReserve is the official Stacks bridge that operates fully automatically without
+   * using Circle's attestation system. Instead of querying Circle's API, we verify
+   * that the USDCx tokens have arrived on Stacks by checking the recipient's balance.
    * 
    * This method uses the corrected retry logic via the shared retryWithAttempts helper.
    * The off-by-one bug has been fixed: maxRetries is now treated as maxAttempts (total attempts).
    * 
    * @param txHash - The Ethereum transaction hash (used as message identifier)
-   * @param options - Fetch options
-   * @returns Attestation data
+   * @param recipientAddress - The Stacks address that should receive USDCx tokens
+   * @param expectedAmount - The expected amount of USDCx tokens (as string)
+   * @param options - Fetch options (maxRetries, retryDelay, timeout)
+   * @returns Attestation data with 'xreserve-automatic' as attestation value
    */
   async fetchXReserveAttestation(
     txHash: string,
+    recipientAddress: string,
+    expectedAmount: string,
     options: AttestationFetchOptions = {}
   ): Promise<AttestationData> {
     const {
@@ -117,28 +124,42 @@ export class AttestationService {
     // Fix: We now treat the parameter as maxAttempts (total attempts, not retries after initial).
     const maxAttempts = this.validateMaxAttempts(maxRetries, 'fetchXReserveAttestation');
 
-    logger.info('Starting xReserve attestation fetch', {
+    logger.info('Starting xReserve balance verification', {
       txHash,
+      recipientAddress,
+      expectedAmount,
       maxAttempts,
       retryDelay,
       timeout,
     });
 
-    // Extract xReserve API call into operation callback
+    // Query Stacks blockchain for balance verification
     const operation = async (): Promise<AttestationData | null> => {
-      // For xReserve, check if the Ethereum deposit has been processed on Stacks
-      // The attestation comes from the Stacks network confirming the deposit
-      const response = await this.fetchFromStacksAPI(txHash);
-
-      if (response.attestation) {
+      const balance = await this.fetchStacksBalance(recipientAddress);
+      
+      if (this.verifyBalanceIncrease(balance, expectedAmount)) {
+        logger.info('xReserve balance verification successful', {
+          txHash,
+          recipientAddress,
+          balance: balance.toString(),
+          expectedAmount,
+        });
+        
         return {
-          attestation: response.attestation,
+          attestation: 'xreserve-automatic',
           messageHash: txHash,
           fetchedAt: Date.now(),
         };
       }
-
-      // Attestation not ready yet - Stacks hasn't confirmed the deposit
+      
+      // Balance not yet increased, retry
+      logger.debug('xReserve balance not yet increased', {
+        txHash,
+        recipientAddress,
+        currentBalance: balance.toString(),
+        expectedAmount,
+      });
+      
       return null;
     };
 
@@ -148,7 +169,7 @@ export class AttestationService {
       maxAttempts,
       retryDelay,
       timeout,
-      'xReserve attestation',
+      'xReserve balance verification',
       txHash
     );
   }
@@ -214,6 +235,107 @@ export class AttestationService {
       'Stacks attestation',
       txHash
     );
+  }
+
+  /**
+   * Fetches USDCx balance for a Stacks address
+   * Queries the Stacks blockchain API for fungible token balances
+   * 
+   * Error handling:
+   * - Retryable errors (404, network, timeout, rate limit) are thrown to trigger retry logic
+   * - Permanent errors (401, 403, 500, validation) are thrown immediately without retry
+   * - 404 responses return 0n (address not found is normal for new addresses)
+   * 
+   * @param address - The Stacks address to query
+   * @returns The USDCx balance as a bigint (0n if address not found or no balance)
+   * @throws Error for API failures (classified as retryable or permanent)
+   * @private
+   */
+  private async fetchStacksBalance(address: string): Promise<bigint> {
+    const url = `${this.config.stacksRpcUrl}/extended/v1/address/${address}/balances`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Address not found or no balance yet - this is normal for new addresses
+          return 0n;
+        }
+        
+        // Create error with status code for classification
+        const error = new Error(`Stacks API error: ${response.status} ${response.statusText}`);
+        
+        // Classify error and throw appropriately
+        if (this.isRetryableError(error)) {
+          // Retryable error - throw to trigger retry logic
+          throw error;
+        } else {
+          // Permanent error - throw immediately without retry
+          throw error;
+        }
+      }
+      
+      const data: any = await response.json();
+      
+      // Extract USDCx balance from fungible_tokens
+      // The key format is the full contract identifier (e.g., "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx::usdcx-token")
+      const usdcxToken = data.fungible_tokens?.[this.config.stacksUsdcxAddress];
+      if (!usdcxToken) {
+        return 0n;
+      }
+      
+      return BigInt(usdcxToken.balance);
+    } catch (error) {
+      // Catch network errors (fetch failures, timeouts, etc.)
+      const err = error as Error;
+      
+      // Classify the error
+      if (this.isRetryableError(err)) {
+        // Retryable error (network timeout, connection failure, etc.) - throw to trigger retry
+        logger.debug('Retryable error in fetchStacksBalance', {
+          address,
+          error: err.message,
+        });
+        throw err;
+      } else {
+        // Permanent error - throw immediately without retry
+        logger.error('Permanent error in fetchStacksBalance', {
+          address,
+          error: err.message,
+        });
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Verifies that balance increased by expected amount
+   * 
+   * Note: We check >= instead of == to handle cases where user received
+   * multiple deposits or had existing balance. For first deposit, balance 
+   * should be >= expected amount. For subsequent deposits, we can't verify 
+   * exact increase without tracking previous balance, so we just verify 
+   * balance >= expected.
+   * 
+   * @param currentBalance - The current USDCx balance as a bigint
+   * @param expectedAmount - The expected deposit amount as a string
+   * @returns true if balance meets or exceeds expected amount, false otherwise
+   * @private
+   */
+  private verifyBalanceIncrease(
+    currentBalance: bigint,
+    expectedAmount: string
+  ): boolean {
+    const expected = BigInt(expectedAmount);
+    
+    // For first deposit, balance should be >= expected amount
+    // For subsequent deposits, we can't verify exact increase without
+    // tracking previous balance, so we just verify balance >= expected
+    return currentBalance >= expected;
   }
 
   /**
@@ -478,11 +600,10 @@ export class AttestationService {
         lastError = error as Error;
         const err = error as Error;
         
-        // Check if this is a retryable error (404, not found, not ready)
-        // These are expected transient errors that should trigger retry logic
-        const isRetryable = err.message.includes('404') || 
-                           err.message.includes('not found') || 
-                           err.message.includes('not ready');
+        // Check if this is a retryable error using the helper method
+        // Retryable errors: 404, timeout, network errors, rate limiting
+        // Permanent errors: 401, 403, 500, validation errors
+        const isRetryable = this.isRetryableError(err);
 
         if (isRetryable) {
           // Transient error - check if we can retry
@@ -530,6 +651,55 @@ export class AttestationService {
       lastError: lastError?.message,
     });
     throw error;
+  }
+
+  /**
+   * Classifies errors as retryable or permanent
+   * 
+   * Retryable errors (return true):
+   * - 404 Not Found (address not yet on chain, balance not yet updated)
+   * - Network timeouts
+   * - Temporary network failures
+   * - Rate limiting (429)
+   * 
+   * Permanent errors (return false):
+   * - 401 Unauthorized
+   * - 403 Forbidden
+   * - 500 Internal Server Error
+   * - Validation errors
+   * 
+   * @param error - The error to classify
+   * @returns true if the error is retryable, false if permanent
+   * @private
+   */
+  private isRetryableError(error: Error): boolean {
+    const message = error.message.toLowerCase();
+    
+    // Check for retryable error patterns
+    const isRetryable = message.includes('404') ||
+                       message.includes('not found') ||
+                       message.includes('timeout') ||
+                       message.includes('network') ||
+                       message.includes('429') ||
+                       message.includes('rate limit');
+    
+    // Check for permanent error patterns
+    const isPermanent = message.includes('401') ||
+                       message.includes('unauthorized') ||
+                       message.includes('403') ||
+                       message.includes('forbidden') ||
+                       message.includes('500') ||
+                       message.includes('internal server error') ||
+                       message.includes('validation error') ||
+                       message.includes('invalid');
+    
+    // If explicitly permanent, return false
+    if (isPermanent) {
+      return false;
+    }
+    
+    // Otherwise, return true if retryable pattern found
+    return isRetryable;
   }
 
   /**

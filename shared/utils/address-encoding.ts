@@ -95,7 +95,9 @@ export function decodeEthereumAddress(bytes32: Hex): Hex {
   // Extract last 20 bytes (Ethereum address is 20 bytes)
   const addressBytes = buffer.slice(12, 32);
   
-  return toHex(addressBytes);
+  // Convert to hex with proper padding to ensure 40 characters (20 bytes)
+  const hexAddress = bytesToHex(addressBytes);
+  return `0x${hexAddress}` as Hex;
 }
 
 /**

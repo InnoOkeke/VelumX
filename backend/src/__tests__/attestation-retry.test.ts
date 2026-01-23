@@ -265,14 +265,12 @@ describe('AttestationService - retryWithAttempts', () => {
     });
 
     it('should validate maxAttempts in fetchXReserveAttestation', async () => {
-      // Mock the fetchFromStacksAPI to avoid actual API calls
-      vi.spyOn(service as any, 'fetchFromStacksAPI').mockResolvedValue({
-        attestation: 'test-attestation',
-        messageHash: '0x' + 'a'.repeat(64),
-      });
+      // Mock the fetchStacksBalance to avoid actual API calls
+      vi.spyOn(service as any, 'fetchStacksBalance').mockResolvedValue(BigInt('1000000'));
+      vi.spyOn(service as any, 'verifyBalanceIncrease').mockReturnValue(true);
 
       // Call with invalid maxRetries (non-integer)
-      const result = await service.fetchXReserveAttestation('0x' + 'a'.repeat(64), {
+      const result = await service.fetchXReserveAttestation('0x' + 'a'.repeat(64), 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM', '1000000', {
         maxRetries: 2.7,
         retryDelay: 10,
         timeout: 1000,
@@ -280,7 +278,7 @@ describe('AttestationService - retryWithAttempts', () => {
 
       // Should succeed because validation coerces to default
       expect(result).toBeDefined();
-      expect(result.attestation).toBe('test-attestation');
+      expect(result.attestation).toBe('xreserve-automatic');
     });
 
     it('should validate maxAttempts in fetchStacksAttestation', async () => {
@@ -300,6 +298,116 @@ describe('AttestationService - retryWithAttempts', () => {
       // Should succeed because validation coerces to default
       expect(result).toBeDefined();
       expect(result.attestation).toBe('test-attestation');
+    });
+  });
+
+  describe('Error classification - isRetryableError', () => {
+    it('should classify 404 errors as retryable', () => {
+      const error = new Error('404 Not Found');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(true);
+    });
+
+    it('should classify "not found" errors as retryable', () => {
+      const error = new Error('Resource not found');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(true);
+    });
+
+    it('should classify timeout errors as retryable', () => {
+      const error = new Error('Request timeout');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(true);
+    });
+
+    it('should classify network errors as retryable', () => {
+      const error = new Error('Network error occurred');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(true);
+    });
+
+    it('should classify 429 rate limit errors as retryable', () => {
+      const error = new Error('429 Too Many Requests');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(true);
+    });
+
+    it('should classify rate limit errors as retryable', () => {
+      const error = new Error('Rate limit exceeded');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(true);
+    });
+
+    it('should classify 401 errors as permanent (not retryable)', () => {
+      const error = new Error('401 Unauthorized');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify unauthorized errors as permanent', () => {
+      const error = new Error('Unauthorized access');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify 403 errors as permanent', () => {
+      const error = new Error('403 Forbidden');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify forbidden errors as permanent', () => {
+      const error = new Error('Access forbidden');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify 500 errors as permanent', () => {
+      const error = new Error('500 Internal Server Error');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify internal server errors as permanent', () => {
+      const error = new Error('Internal server error occurred');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify validation errors as permanent', () => {
+      const error = new Error('Validation error: invalid input');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should classify invalid errors as permanent', () => {
+      const error = new Error('Invalid request format');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should handle case-insensitive error messages', () => {
+      const error1 = new Error('404 NOT FOUND');
+      const error2 = new Error('TIMEOUT ERROR');
+      const error3 = new Error('401 UNAUTHORIZED');
+      
+      expect((service as any).isRetryableError(error1)).toBe(true);
+      expect((service as any).isRetryableError(error2)).toBe(true);
+      expect((service as any).isRetryableError(error3)).toBe(false);
+    });
+
+    it('should return false for unknown error types', () => {
+      const error = new Error('Some unknown error');
+      const isRetryable = (service as any).isRetryableError(error);
+      expect(isRetryable).toBe(false);
+    });
+
+    it('should prioritize permanent classification over retryable', () => {
+      // Error message contains both retryable (404) and permanent (500) patterns
+      const error = new Error('404 Not Found but 500 Internal Server Error');
+      const isRetryable = (service as any).isRetryableError(error);
+      // Should be classified as permanent because permanent takes precedence
+      expect(isRetryable).toBe(false);
     });
   });
 });

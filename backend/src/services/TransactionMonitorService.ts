@@ -209,6 +209,110 @@ export class TransactionMonitorService {
   }
 
   /**
+   * Determines if a transaction is an xReserve deposit
+   * xReserve deposits are Ethereum→Stacks deposits that operate fully automatically
+   * without using Circle's attestation system
+   */
+  private isXReserveDeposit(tx: BridgeTransaction): boolean {
+    return tx.sourceChain === 'ethereum' && 
+           tx.destinationChain === 'stacks' &&
+           tx.type === 'deposit';
+  }
+
+  /**
+   * Checks if an Ethereum transaction is confirmed
+   * @param txHash - The Ethereum transaction hash
+   * @returns true if transaction is mined and succeeded, false otherwise
+   */
+  private async checkEthereumConfirmation(txHash: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `${this.config.ethereumRpcUrl}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_getTransactionReceipt',
+            params: [txHash],
+            id: 1,
+          }),
+        }
+      );
+
+      const data = await response.json() as {
+        result?: {
+          status: string;
+        } | null;
+      };
+      
+      if (!data.result) {
+        // Transaction not yet mined
+        return false;
+      }
+
+      // Check if transaction succeeded (status === '0x1')
+      return data.result.status === '0x1';
+    } catch (error) {
+      logger.error('Failed to check Ethereum confirmation', {
+        txHash,
+        error: (error as Error).message,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Performs manual minting for CCTP transactions
+   * This method handles the minting step for non-xReserve deposits that require
+   * manual attestation and minting on the Stacks blockchain
+   * @param tx - The bridge transaction to mint
+   */
+  private async performManualMinting(tx: BridgeTransaction): Promise<void> {
+    if (!tx.attestation || !tx.messageHash) {
+      logger.error('Missing attestation or message hash for minting', { id: tx.id });
+      return;
+    }
+
+    try {
+      // Validate relayer balance first
+      const hasBalance = await stacksMintService.validateRelayerBalance();
+      if (!hasBalance) {
+        logger.error('Insufficient relayer balance for minting', { id: tx.id });
+        await this.updateTransaction(tx.id, {
+          error: 'Insufficient relayer STX balance',
+        });
+        return;
+      }
+
+      // Mint USDCx on Stacks
+      const mintTxId = await stacksMintService.mintUsdcx(
+        tx.stacksAddress,
+        tx.amount,
+        tx.attestation,
+        tx.messageHash
+      );
+
+      logger.info('Mint transaction submitted', {
+        id: tx.id,
+        mintTxId,
+      });
+
+      await this.updateTransaction(tx.id, {
+        destinationTxHash: mintTxId,
+        status: 'complete',
+        completedAt: Date.now(),
+      });
+    } catch (error) {
+      logger.error('Failed to mint USDCx', {
+        id: tx.id,
+        error: (error as Error).message,
+      });
+      throw error; // Will be caught by processQueue and increment retry count
+    }
+  }
+
+  /**
    * Processes a deposit transaction (Ethereum → Stacks)
    */
   private async processDeposit(tx: BridgeTransaction): Promise<void> {
@@ -230,103 +334,113 @@ export class TransactionMonitorService {
     switch (tx.status) {
       case 'pending':
       case 'confirming':
-        // Check if we have a message hash
-        if (!tx.messageHash) {
-          logger.error('Missing message hash for deposit', { id: tx.id });
+        // Wait for Ethereum confirmation
+        const isConfirmed = await this.checkEthereumConfirmation(tx.sourceTxHash);
+        
+        if (isConfirmed) {
           await this.updateTransaction(tx.id, {
-            status: 'failed',
-            error: 'Missing message hash from Ethereum deposit',
-          });
-          return;
-        }
-
-        // Move to attesting state
-        await this.updateTransaction(tx.id, {
-          status: 'attesting',
-          currentStep: 'attestation',
-        });
-        break;
-
-      case 'attesting':
-        // Fetch attestation - use xReserve for Ethereum→Stacks deposits
-        if (!tx.messageHash) {
-          logger.error('Missing message hash for attestation', { id: tx.id });
-          return;
-        }
-
-        try {
-          // For Ethereum→Stacks deposits, use xReserve attestation (Stacks network)
-          // For Stacks→Ethereum withdrawals, use Stacks attestation
-          // Use config maxRetries to allow sufficient time for attestation to become available
-          const attestation = tx.sourceChain === 'ethereum'
-            ? await attestationService.fetchXReserveAttestation(
-                tx.messageHash
-                // Uses default maxRetries from config (no override)
-              )
-            : await attestationService.fetchStacksAttestation(
-                tx.sourceTxHash
-                // Uses default maxRetries from config (no override)
-              );
-
-          await this.updateTransaction(tx.id, {
-            attestation: attestation.attestation,
-            attestationFetchedAt: attestation.fetchedAt,
-            status: 'minting',
-            currentStep: 'mint',
-          });
-        } catch (error) {
-          // Attestation not ready yet, will retry next cycle
-          logger.debug('Attestation not ready', { 
-            id: tx.id,
-            sourceChain: tx.sourceChain,
-            error: (error as Error).message,
+            status: 'attesting',
+            currentStep: 'attestation',
           });
         }
         break;
 
-      case 'minting':
-        // Submit mint transaction to Stacks
-        if (!tx.attestation || !tx.messageHash) {
-          logger.error('Missing attestation or message hash for minting', { id: tx.id });
-          return;
-        }
+      case 'attesting':
+        // Determine bridge type and fetch appropriate attestation
+        if (this.isXReserveDeposit(tx)) {
+          // xReserve: verify balance on Stacks
+          try {
+            const attestation = await attestationService.fetchXReserveAttestation(
+              tx.sourceTxHash,
+              tx.stacksAddress,
+              tx.amount
+            );
 
-        try {
-          // Validate relayer balance first
-          const hasBalance = await stacksMintService.validateRelayerBalance();
-          if (!hasBalance) {
-            logger.error('Insufficient relayer balance for minting', { id: tx.id });
+            // For xReserve, skip minting and go directly to complete
             await this.updateTransaction(tx.id, {
-              error: 'Insufficient relayer STX balance',
+              attestation: attestation.attestation,
+              attestationFetchedAt: attestation.fetchedAt,
+              status: 'complete',
+              completedAt: Date.now(),
+            });
+          } catch (error) {
+            const err = error as Error;
+            
+            // Check if this is an exhausted retry error (contains "after X attempts")
+            if (err.message.includes('after') && err.message.includes('attempts')) {
+              // Retries exhausted - mark transaction as failed with descriptive error
+              logger.error('xReserve balance verification failed after all retries', {
+                id: tx.id,
+                error: err.message,
+                recipientAddress: tx.stacksAddress,
+                expectedAmount: tx.amount,
+              });
+              
+              await this.updateTransaction(tx.id, {
+                status: 'failed',
+                error: `Balance verification failed: ${err.message}`,
+              });
+            } else {
+              // Transient error - will retry on next cycle
+              logger.debug('xReserve balance verification not ready', { 
+                id: tx.id,
+                error: err.message,
+              });
+            }
+          }
+        } else {
+          // CCTP: use Circle attestation and manual minting
+          if (!tx.messageHash) {
+            logger.error('Missing message hash for CCTP deposit', { id: tx.id });
+            await this.updateTransaction(tx.id, {
+              status: 'failed',
+              error: 'Missing message hash for CCTP deposit',
             });
             return;
           }
 
-          // Mint USDCx on Stacks
-          const mintTxId = await stacksMintService.mintUsdcx(
-            tx.stacksAddress,
-            tx.amount,
-            tx.attestation,
-            tx.messageHash
-          );
+          try {
+            const attestation = await attestationService.fetchCircleAttestation(
+              tx.messageHash
+            );
 
-          logger.info('Mint transaction submitted', {
-            id: tx.id,
-            mintTxId,
-          });
-
-          await this.updateTransaction(tx.id, {
-            destinationTxHash: mintTxId,
-            status: 'complete',
-            completedAt: Date.now(),
-          });
-        } catch (error) {
-          logger.error('Failed to mint USDCx', {
-            id: tx.id,
-            error: (error as Error).message,
-          });
-          throw error; // Will be caught by processQueue and increment retry count
+            await this.updateTransaction(tx.id, {
+              attestation: attestation.attestation,
+              attestationFetchedAt: attestation.fetchedAt,
+              status: 'minting',
+              currentStep: 'mint',
+            });
+          } catch (error) {
+            const err = error as Error;
+            
+            // Check if this is an exhausted retry error (contains "after X attempts")
+            if (err.message.includes('after') && err.message.includes('attempts')) {
+              // Retries exhausted - mark transaction as failed with descriptive error
+              logger.error('Circle attestation fetch failed after all retries', {
+                id: tx.id,
+                error: err.message,
+                messageHash: tx.messageHash,
+              });
+              
+              await this.updateTransaction(tx.id, {
+                status: 'failed',
+                error: `Attestation fetch failed: ${err.message}`,
+              });
+            } else {
+              // Transient error - will retry on next cycle
+              logger.debug('Circle attestation not ready', { 
+                id: tx.id,
+                error: err.message,
+              });
+            }
+          }
         }
+        break;
+
+      case 'minting':
+        // This state is only reached for CCTP transactions
+        // xReserve transactions skip this state
+        await this.performManualMinting(tx);
         break;
     }
   }

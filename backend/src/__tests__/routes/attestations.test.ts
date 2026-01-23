@@ -66,8 +66,7 @@ describe('Attestation API Routes', () => {
       });
       expect(response.body.timestamp).toBeDefined();
       expect(attestationService.fetchCircleAttestation).toHaveBeenCalledWith(
-        '0xmessage456',
-        { maxRetries: 1 }
+        '0xmessage456'
       );
     });
 
@@ -143,8 +142,7 @@ describe('Attestation API Routes', () => {
         .expect(200);
 
       expect(attestationService.fetchCircleAttestation).toHaveBeenCalledWith(
-        messageHash,
-        { maxRetries: 1 }
+        messageHash
       );
     });
 
@@ -181,8 +179,7 @@ describe('Attestation API Routes', () => {
       });
       expect(response.body.timestamp).toBeDefined();
       expect(attestationService.fetchStacksAttestation).toHaveBeenCalledWith(
-        '0x123abc',
-        { maxRetries: 1 }
+        '0x123abc'
       );
     });
 
@@ -258,8 +255,7 @@ describe('Attestation API Routes', () => {
         .expect(200);
 
       expect(attestationService.fetchStacksAttestation).toHaveBeenCalledWith(
-        longTxHash,
-        { maxRetries: 1 }
+        longTxHash
       );
     });
 
@@ -355,8 +351,7 @@ describe('Attestation API Routes', () => {
         .expect(200);
 
       expect(attestationService.fetchCircleAttestation).toHaveBeenCalledWith(
-        specialHash,
-        { maxRetries: 1 }
+        specialHash
       );
     });
   });

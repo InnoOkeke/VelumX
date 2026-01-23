@@ -54,6 +54,11 @@ vi.mock('../cache/redis', () => ({
 
 // Mock config
 vi.mock('../config', () => ({
+  getConfig: vi.fn(() => ({
+    stacksRpcUrl: 'https://api.testnet.hiro.so',
+    stacksNetwork: 'testnet',
+    port: 3000,
+  })),
   getExtendedConfig: vi.fn(() => ({
     liquidity: {
       swapContractAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.swap-contract',
