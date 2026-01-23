@@ -1,20 +1,30 @@
 @import "tailwindcss";
 
 @layer base {
-  /* Light Mode: Vellum White */
+
+  /* Light Mode: Vellum Premium */
   :root {
     --bg-primary: #F8FAFC;
     --bg-surface: #FFFFFF;
-    --border-color: #E2E8F0;
-    --text-primary: #0F172A;
-    --text-secondary: #475569;
+    --bg-surface-rgb: 255, 255, 255;
+    --border-color: rgba(88, 90, 184, 0.15);
+    --text-primary: #000000;
+    --text-secondary: #334155;
     --success-color: #059669;
+  }
+
+  .mesh-gradient {
+    background-image:
+      radial-gradient(at 20% 30%, rgba(99, 102, 241, 0.03) 0px, transparent 50%),
+      radial-gradient(at 80% 70%, rgba(139, 92, 246, 0.03) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.02) 0px, transparent 50%);
   }
 
   /* Dark Mode: Deep Space */
   .dark {
     --bg-primary: #080A0F;
     --bg-surface: #12161F;
+    --bg-surface-rgb: 18, 22, 31;
     --border-color: rgba(255, 255, 255, 0.08);
     --text-primary: #FFFFFF;
     --text-secondary: #94A3B8;
@@ -31,10 +41,13 @@
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.3;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.6;
     transform: scale(1.05);
@@ -45,15 +58,19 @@
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
 }
 
 @keyframes gradient-shift {
-  0%, 100% {
+
+  0%,
+  100% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }
@@ -73,7 +90,7 @@
 }
 
 .dark .mesh-gradient {
-  background-image: 
+  background-image:
     radial-gradient(at 20% 30%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
     radial-gradient(at 80% 70%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
     radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.03) 0px, transparent 50%);

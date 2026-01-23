@@ -18,6 +18,7 @@ export interface WalletBalances {
   usdc: string;
   stx: string;
   usdcx: string;
+  vex: string;
 }
 
 export interface WalletState {
@@ -118,6 +119,7 @@ export function useWallet() {
       usdc: '0',
       stx: '0',
       usdcx: '0',
+      vex: '0',
     },
     isConnecting: false,
     isFetchingBalances: false,
@@ -188,12 +190,17 @@ export function useWallet() {
       const usdcxToken = usdcxKey ? fungibleTokens[usdcxKey] : null;
       const usdcxBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
 
+      const vexKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksVexAddress));
+      const vexToken = vexKey ? fungibleTokens[vexKey] : null;
+      const vexBalance = vexToken ? BigInt(vexToken.balance) : BigInt(0);
+
       setState(prev => ({
         ...prev,
         balances: {
           ...prev.balances,
           stx: formatUnits(stxBalance, TOKEN_DECIMALS.stx),
           usdcx: formatUnits(usdcxBalance, TOKEN_DECIMALS.usdcx),
+          vex: formatUnits(vexBalance, TOKEN_DECIMALS.usdcx), // VEX also has 6 decimals
         },
       }));
     } catch (error) {

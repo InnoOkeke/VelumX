@@ -15,6 +15,11 @@ path = "contracts/swap-contract.clar"
 clarity_version = 3
 epoch = 3.0
 
+[contracts.velumx-token]
+path = "contracts/velumx-token.clar"
+clarity_version = 3
+epoch = 3.0
+
 
 [contracts.sip-010-trait-ft-standard]
 path = "contracts/traits/sip-010-trait-ft-standard.clar"

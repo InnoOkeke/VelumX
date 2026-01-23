@@ -5,7 +5,7 @@
 
 // ============ Transaction Types ============
 
-export type TransactionStatus = 
+export type TransactionStatus =
   | 'pending'       // Initial submission
   | 'confirming'    // Waiting for blockchain confirmation
   | 'attesting'     // Waiting for attestation
@@ -24,43 +24,43 @@ export type BridgeStep =
 export interface BridgeTransaction {
   // Unique identifier
   id: string;
-  
+
   // Transaction type
   type: 'deposit' | 'withdrawal';
-  
+
   // Amount in smallest unit (micro USDC/USDCx)
   amount: string;
-  
+
   // Chain information
   sourceChain: 'ethereum' | 'stacks';
   destinationChain: 'ethereum' | 'stacks';
-  
+
   // Status tracking
   status: TransactionStatus;
   currentStep: BridgeStep;
-  
+
   // Transaction hashes
   sourceTxHash: string;
   destinationTxHash?: string;
-  
+
   // Attestation data
   messageHash?: string;
   attestation?: string;
   attestationFetchedAt?: number;
-  
+
   // User addresses
   ethereumAddress: string;
   stacksAddress: string;
-  
+
   // Timestamps
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
-  
+
   // Error handling
   error?: string;
   retryCount: number;
-  
+
   // Gasless transaction info
   isGasless: boolean;
   gasFeeInUsdcx?: string;
@@ -101,20 +101,20 @@ export interface YieldPosition {
   protocol: string;           // Contract address
   protocolName: string;       // Human-readable name
   protocolType: 'lending' | 'liquidity' | 'staking';
-  
+
   // Position details
   depositedAmount: bigint;    // in micro USDCx
   earnedRewards: bigint;      // in micro USDCx or protocol token
   rewardToken: string;        // Token address for rewards
-  
+
   // Performance metrics
   apy: number;                // Annual percentage yield
   tvl: bigint;                // Total value locked in protocol
-  
+
   // Timestamps
   depositedAt: number;
   lastClaimAt?: number;
-  
+
   // Auto-compound settings
   autoCompound: boolean;
   compoundFrequency?: number; // seconds between compounds
@@ -136,17 +136,17 @@ export interface YieldProtocol {
 export interface FeeEstimate {
   // Gas cost in native token
   gasInStx: bigint;           // in micro STX
-  
+
   // Equivalent cost in USDCx
   gasInUsdcx: bigint;         // in micro USDCx
-  
+
   // Exchange rates used
   stxToUsd: number;
   usdcToUsd: number;          // Should be ~1.0
-  
+
   // Markup applied
   markup: number;             // percentage
-  
+
   // Timestamp
   estimatedAt: number;
   validUntil: number;         // Estimate expires after 60 seconds
@@ -205,7 +205,7 @@ export interface BackendConfig {
   // Network configuration
   ethereumRpcUrl: string;
   stacksRpcUrl: string;
-  
+
   // Contract addresses
   ethereumUsdcAddress: string;
   ethereumXReserveAddress: string;
@@ -213,26 +213,27 @@ export interface BackendConfig {
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
   stacksSwapContractAddress: string;
-  
+  stacksVexAddress: string;
+
   // API keys
   circleApiKey?: string;
-  
+
   // Relayer configuration
   relayerPrivateKey: string;
   relayerStacksAddress: string;
   minStxBalance: bigint;
-  
+
   // Monitoring configuration
   attestationPollInterval: number;  // milliseconds
   maxRetries: number;
   transactionTimeout: number;       // milliseconds
-  
+
   // Fee configuration
   paymasterMarkup: number;          // percentage (e.g., 5 for 5%)
-  
+
   // Rate limiting
   maxRequestsPerMinute: number;
-  
+
   // Server configuration
   port: number;
   corsOrigin: string;
@@ -241,11 +242,11 @@ export interface BackendConfig {
 export interface FrontendConfig {
   // API endpoint
   backendUrl: string;
-  
+
   // Network configuration
   ethereumChainId: number;
   stacksNetwork: 'testnet' | 'mainnet';
-  
+
   // Contract addresses
   ethereumUsdcAddress: string;
   ethereumXReserveAddress: string;
@@ -253,11 +254,12 @@ export interface FrontendConfig {
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
   stacksSwapContractAddress: string;
-  
+  stacksVexAddress: string;
+
   // Domain IDs
   ethereumDomainId: number;
   stacksDomainId: number;
-  
+
   // Explorer URLs
   ethereumExplorerUrl: string;
   stacksExplorerUrl: string;

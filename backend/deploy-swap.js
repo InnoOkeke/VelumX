@@ -63,7 +63,7 @@ async function deploy() {
 
         console.log("\nStep 4: Building transaction...");
         const tx = await makeContractDeploy({
-            contractName: 'swap-contract-v12',
+            contractName: 'swap-contract-v13',
             codeBody: codeBody,
             senderKey: privateKey,
             network: network,

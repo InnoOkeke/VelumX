@@ -179,7 +179,7 @@ export function TransactionHistory() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{
         backgroundColor: 'var(--bg-surface)',
         border: `1px solid var(--border-color)`,

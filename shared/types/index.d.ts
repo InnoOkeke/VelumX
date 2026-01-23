@@ -128,6 +128,7 @@ export interface BackendConfig {
     stacksUsdcxProtocolAddress: string;
     stacksPaymasterAddress: string;
     stacksSwapContractAddress: string;
+    stacksVexAddress: string;
     circleApiKey?: string;
     relayerPrivateKey: string;
     relayerStacksAddress: string;
@@ -150,6 +151,7 @@ export interface FrontendConfig {
     stacksUsdcxProtocolAddress: string;
     stacksPaymasterAddress: string;
     stacksSwapContractAddress: string;
+    stacksVexAddress: string;
     ethereumDomainId: number;
     stacksDomainId: number;
     ethereumExplorerUrl: string;

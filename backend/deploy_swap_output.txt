@@ -1,0 +1,15 @@
+[dotenv@17.2.3] injecting env (20) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+🚀 Deploying Swap V4 (Fixing VM Error + Native STX)
+
+Step 1: Reading swap contract...
+Step 2: Building transaction (Nonce: 37)...
+Step 3: Broadcasting...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ SUCCESS - Swap V4 Deployed!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Transaction ID: 35ab4fccc581e8840eda2e3a357901b28334544d37d285f2611245065f50c48d
+📍 Contract Address: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v4-stx
+🔗 Explorer: https://explorer.hiro.so/txid/35ab4fccc581e8840eda2e3a357901b28334544d37d285f2611245065f50c48d?chain=testnet
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+

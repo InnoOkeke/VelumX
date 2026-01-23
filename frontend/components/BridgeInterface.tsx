@@ -479,7 +479,7 @@ export function BridgeInterface() {
 
         {/* From Section */}
         <div className="rounded-2xl p-6 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
-          border: `2px solid var(--border-color)`,
+          border: `1px solid var(--border-color)`,
           backgroundColor: 'var(--bg-surface)'
         }}>
           <div className="flex items-center justify-between mb-4">
@@ -542,7 +542,7 @@ export function BridgeInterface() {
 
         {/* To Section */}
         <div className="rounded-2xl p-6 mb-6" style={{
-          border: `2px solid var(--border-color)`,
+          border: `1px solid var(--border-color)`,
           backgroundColor: 'var(--bg-surface)'
         }}>
           <div className="flex items-center justify-between mb-4">
@@ -578,12 +578,12 @@ export function BridgeInterface() {
               </div>
               <button
                 onClick={() => setState(prev => ({ ...prev, gaslessMode: !prev.gaslessMode }))}
-                className={`relative w-14 h-7 rounded-full transition-all ${state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
+                className={`relative w-14 h-7 rounded-full transition-all duration-300 ${state.gaslessMode ? 'bg-green-600 shadow-lg shadow-green-500/20' : 'bg-gray-200 dark:bg-gray-700'
                   }`}
                 disabled={state.isProcessing}
               >
                 <div
-                  className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${state.gaslessMode ? 'translate-x-7' : ''
+                  className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform ${state.gaslessMode ? 'translate-x-7' : ''
                     }`}
                 />
               </button>
@@ -601,9 +601,9 @@ export function BridgeInterface() {
 
         {/* Error Message */}
         {state.error && (
-          <div className="flex items-start gap-3 bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700 font-medium">{state.error}</p>
+          <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 dark:text-red-400 font-bold">{state.error}</p>
           </div>
         )}
 

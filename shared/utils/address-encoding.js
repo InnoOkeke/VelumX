@@ -2,6 +2,7 @@
 /**
  * Address encoding utilities for cross-chain bridge
  * Handles conversion between Stacks addresses and bytes32 format
+ * Based on official Stacks USDCx bridging documentation
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.encodeStacksAddress = encodeStacksAddress;
@@ -15,6 +16,9 @@ const viem_1 = require("viem");
 /**
  * Encodes a Stacks address to bytes32 format for xReserve protocol
  * Format: [11 zero bytes][1 version byte][20 hash160 bytes]
+ *
+ * This implementation follows the official Stacks documentation:
+ * https://docs.stacks.co/more-guides/bridging-usdcx
  *
  * @param address - Stacks address (e.g., "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM")
  * @returns 32-byte hex string
@@ -48,7 +52,7 @@ function decodeStacksAddress(bytes32) {
     return (0, transactions_1.addressToString)({
         hash160,
         version,
-        type: transactions_1.StacksMessageType.Address,
+        type: 0, // Address type constant
     });
 }
 /**
@@ -83,7 +87,9 @@ function decodeEthereumAddress(bytes32) {
     const buffer = (0, viem_1.toBytes)(bytes32);
     // Extract last 20 bytes (Ethereum address is 20 bytes)
     const addressBytes = buffer.slice(12, 32);
-    return (0, viem_1.toHex)(addressBytes);
+    // Convert to hex with proper padding to ensure 40 characters (20 bytes)
+    const hexAddress = bytesToHex(addressBytes);
+    return `0x${hexAddress}`;
 }
 /**
  * Validates a Stacks address format

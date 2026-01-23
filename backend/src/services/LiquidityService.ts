@@ -6,12 +6,12 @@
 import { getExtendedConfig } from '../config';
 import { logger } from '../utils/logger';
 import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
-import { 
-  callReadOnlyFunction, 
-  cvToJSON, 
-  principalCV, 
+import {
+  callReadOnlyFunction,
+  cvToJSON,
+  principalCV,
   uintCV,
-  contractPrincipalCV 
+  contractPrincipalCV
 } from '@stacks/transactions';
 import {
   Token,
@@ -47,35 +47,39 @@ export class LiquidityService {
    */
   async getPoolReserves(tokenA: string, tokenB: string): Promise<PoolReserves> {
     const cacheKey = CACHE_KEYS.POOL_RESERVES(`${tokenA}-${tokenB}`);
-    
+
     return withCache(
       cacheKey,
       async () => {
         logger.debug('Fetching pool reserves from contract', { tokenA, tokenB });
-        
+
         try {
           const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
-          
+
+          const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+          const pA = tokenA === 'STX' ? STX_SENTINEL : tokenA;
+          const pB = tokenB === 'STX' ? STX_SENTINEL : tokenB;
+
           const result = await callReadOnlyFunction({
             contractAddress,
             contractName,
             functionName: 'get-pool-reserves',
             functionArgs: [
-              principalCV(tokenA),
-              principalCV(tokenB),
+              principalCV(pA),
+              principalCV(pB),
             ],
             network: 'testnet',
             senderAddress: contractAddress,
           });
 
           const resultJson = cvToJSON(result);
-          
+
           if (!resultJson.success || !resultJson.value) {
             throw new Error('Pool not found');
           }
 
           const poolData = resultJson.value.value;
-          
+
           return {
             reserveA: BigInt(poolData['reserve-a'].value),
             reserveB: BigInt(poolData['reserve-b'].value),
@@ -95,15 +99,15 @@ export class LiquidityService {
    */
   async getUserLPBalance(userAddress: string, tokenA: string, tokenB: string): Promise<string> {
     const cacheKey = CACHE_KEYS.USER_LP_BALANCE(userAddress, `${tokenA}-${tokenB}`);
-    
+
     return withCache(
       cacheKey,
       async () => {
         logger.debug('Fetching user LP balance from contract', { userAddress, tokenA, tokenB });
-        
+
         try {
           const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
-          
+
           const result = await callReadOnlyFunction({
             contractAddress,
             contractName,
@@ -118,7 +122,7 @@ export class LiquidityService {
           });
 
           const resultJson = cvToJSON(result);
-          
+
           if (!resultJson.success || resultJson.value === null) {
             return '0';
           }
@@ -139,15 +143,15 @@ export class LiquidityService {
    */
   async getPoolShare(userAddress: string, tokenA: string, tokenB: string): Promise<PoolShare> {
     const cacheKey = CACHE_KEYS.USER_LP_BALANCE(userAddress, `${tokenA}-${tokenB}-share`);
-    
+
     return withCache(
       cacheKey,
       async () => {
         logger.debug('Fetching user pool share from contract', { userAddress, tokenA, tokenB });
-        
+
         try {
           const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
-          
+
           const result = await callReadOnlyFunction({
             contractAddress,
             contractName,
@@ -162,7 +166,7 @@ export class LiquidityService {
           });
 
           const resultJson = cvToJSON(result);
-          
+
           if (!resultJson.success || !resultJson.value) {
             return {
               shareA: BigInt(0),
@@ -172,7 +176,7 @@ export class LiquidityService {
           }
 
           const shareData = resultJson.value.value;
-          
+
           return {
             shareA: BigInt(shareData['share-a'].value),
             shareB: BigInt(shareData['share-b'].value),
@@ -196,11 +200,11 @@ export class LiquidityService {
    */
   async calculateOptimalAmounts(params: OptimalAmountParams): Promise<OptimalAmounts> {
     logger.debug('Calculating optimal liquidity amounts', params);
-    
+
     try {
       // Get current pool reserves
       const reserves = await this.getPoolReserves(params.tokenA, params.tokenB);
-      
+
       // If pool doesn't exist, return the provided amounts
       if (reserves.reserveA === BigInt(0) || reserves.reserveB === BigInt(0)) {
         return {
@@ -210,10 +214,10 @@ export class LiquidityService {
           priceImpact: 0,
         };
       }
-      
+
       let optimalAmountA: bigint;
       let optimalAmountB: bigint;
-      
+
       if (params.amountA && !params.amountB) {
         // Calculate optimal amount B based on amount A
         optimalAmountA = params.amountA;
@@ -226,7 +230,7 @@ export class LiquidityService {
         // Use the ratio that requires less of both tokens
         const ratioA = params.amountA * reserves.reserveB / reserves.reserveA;
         const ratioB = params.amountB * reserves.reserveA / reserves.reserveB;
-        
+
         if (ratioA <= params.amountB) {
           optimalAmountA = params.amountA;
           optimalAmountB = ratioA;
@@ -237,13 +241,13 @@ export class LiquidityService {
       } else {
         throw new Error('Either amountA or amountB must be provided');
       }
-      
+
       // Calculate current ratio
       const ratio = Number(reserves.reserveA) / Number(reserves.reserveB);
-      
+
       // Calculate price impact (minimal for liquidity addition)
       const priceImpact = 0; // Liquidity addition doesn't cause price impact
-      
+
       return {
         amountA: optimalAmountA,
         amountB: optimalAmountB,
@@ -276,11 +280,11 @@ export class LiquidityService {
       }
 
       const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
-      
+
       // Parse token addresses for contract call
       const tokenAParts = params.tokenA.split('.');
       const tokenBParts = params.tokenB.split('.');
-      
+
       const functionArgs = [
         contractPrincipalCV(tokenAParts[0], tokenAParts[1]), // token-a
         contractPrincipalCV(tokenBParts[0], tokenBParts[1]), // token-b
@@ -323,11 +327,11 @@ export class LiquidityService {
       }
 
       const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
-      
+
       // Parse token addresses for contract call
       const tokenAParts = params.tokenA.split('.');
       const tokenBParts = params.tokenB.split('.');
-      
+
       const functionArgs = [
         contractPrincipalCV(tokenAParts[0], tokenAParts[1]), // token-a
         contractPrincipalCV(tokenBParts[0], tokenBParts[1]), // token-b
@@ -469,7 +473,7 @@ export class LiquidityService {
       }
 
       const data: any = await response.json();
-      
+
       // Check token A balance
       if (tokenA.includes('usdcx')) {
         const tokenABalance = BigInt(
@@ -556,7 +560,7 @@ export class LiquidityService {
     try {
       // Get pool reserves
       const reserves = await this.getPoolReserves(tokenA, tokenB);
-      
+
       if (reserves.totalSupply === BigInt(0)) {
         throw new Error('Pool has no liquidity');
       }
@@ -590,7 +594,7 @@ export class LiquidityService {
     try {
       // Get current pool reserves
       const reserves = await this.getPoolReserves(tokenA, tokenB);
-      
+
       // If pool doesn't exist, no price impact
       if (reserves.reserveA === BigInt(0) || reserves.reserveB === BigInt(0)) {
         return 0;
@@ -598,17 +602,17 @@ export class LiquidityService {
 
       // Calculate current price
       const currentPrice = Number(reserves.reserveB) / Number(reserves.reserveA);
-      
+
       // Calculate new reserves after liquidity addition
       const newReserveA = reserves.reserveA + amountA;
       const newReserveB = reserves.reserveB + amountB;
-      
+
       // Calculate new price
       const newPrice = Number(newReserveB) / Number(newReserveA);
-      
+
       // Calculate price impact as percentage
       const priceImpact = Math.abs((newPrice - currentPrice) / currentPrice) * 100;
-      
+
       return priceImpact;
     } catch (error) {
       logger.error('Failed to calculate price impact', { tokenA, tokenB, error });
@@ -628,7 +632,7 @@ export class LiquidityService {
     try {
       // Get current pool reserves
       const reserves = await this.getPoolReserves(tokenA, tokenB);
-      
+
       // If pool doesn't exist, calculate initial LP tokens
       if (reserves.reserveA === BigInt(0) || reserves.reserveB === BigInt(0)) {
         // For first liquidity, LP tokens = sqrt(amountA * amountB)
@@ -638,7 +642,7 @@ export class LiquidityService {
       // For subsequent liquidity, calculate proportional LP tokens
       const liquidityA = (amountA * reserves.totalSupply) / reserves.reserveA;
       const liquidityB = (amountB * reserves.totalSupply) / reserves.reserveB;
-      
+
       // Return the minimum to maintain pool ratio
       return liquidityA < liquidityB ? liquidityA : liquidityB;
     } catch (error) {
@@ -662,14 +666,14 @@ export class LiquidityService {
       ]);
 
       const userBalance = BigInt(userLPBalance);
-      
+
       if (reserves.totalSupply === BigInt(0) || userBalance === BigInt(0)) {
         return 0;
       }
 
       // Calculate percentage (multiply by 10000 for basis points, then divide by 100 for percentage)
       const percentage = Number((userBalance * BigInt(10000)) / reserves.totalSupply) / 100;
-      
+
       return percentage;
     } catch (error) {
       logger.error('Failed to calculate pool share percentage', { userAddress, tokenA, tokenB, error });
@@ -687,7 +691,7 @@ export class LiquidityService {
     try {
       // Mock gas estimation - in production, this would call the contract
       // or use historical data to estimate gas costs
-      
+
       if (gaslessMode) {
         return BigInt(0); // No gas fees in gasless mode
       }
@@ -714,10 +718,10 @@ export class LiquidityService {
   ): { min: bigint; max: bigint } {
     const slippageBasisPoints = BigInt(Math.floor(slippagePercentage * 100));
     const basisPoints = BigInt(10000);
-    
+
     const minAmount = (amount * (basisPoints - slippageBasisPoints)) / basisPoints;
     const maxAmount = (amount * (basisPoints + slippageBasisPoints)) / basisPoints;
-    
+
     return {
       min: minAmount,
       max: maxAmount,
@@ -730,15 +734,15 @@ export class LiquidityService {
   private sqrt(n: bigint): bigint {
     if (n === BigInt(0)) return BigInt(0);
     if (n < BigInt(4)) return BigInt(1);
-    
+
     let x = n;
     let y = (x + BigInt(1)) / BigInt(2);
-    
+
     while (y < x) {
       x = y;
       y = (x + n / x) / BigInt(2);
     }
-    
+
     return x;
   }
 
@@ -751,7 +755,7 @@ export class LiquidityService {
       this.cache.del(CACHE_KEYS.USER_PORTFOLIO(userAddress)),
       this.cache.delPattern(`user:lp:${userAddress}:*`),
     ]);
-    
+
     logger.debug('User liquidity cache cleared', { userAddress });
   }
 
@@ -764,7 +768,7 @@ export class LiquidityService {
       this.cache.del(CACHE_KEYS.POOL_ANALYTICS(poolId)),
       this.cache.del(CACHE_KEYS.POOL_METADATA(poolId)),
     ]);
-    
+
     logger.debug('Pool liquidity cache cleared', { poolId });
   }
 }

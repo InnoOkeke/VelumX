@@ -54,9 +54,9 @@ export function NotificationContainer() {
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-white mb-1">{notification.title}</h4>
+              <h4 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{notification.title}</h4>
               {notification.message && (
-                <p className="text-sm text-white/70">{notification.message}</p>
+                <p className="text-sm opacity-80" style={{ color: 'var(--text-secondary)' }}>{notification.message}</p>
               )}
               {notification.action && (
                 <button
@@ -72,7 +72,8 @@ export function NotificationContainer() {
             {notification.type !== 'loading' && (
               <button
                 onClick={() => removeNotification(notification.id)}
-                className="flex-shrink-0 text-white/40 hover:text-white/60 transition-colors"
+                className="flex-shrink-0 opacity-40 hover:opacity-100 transition-all active:scale-90"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 <X className="w-4 h-4" />
               </button>

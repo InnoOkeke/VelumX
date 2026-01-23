@@ -59,41 +59,55 @@ export function PoolBrowser() {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      // TODO: Fetch pools from backend/contract
-      // For now, show placeholder data
-      const placeholderPools: Pool[] = [
-        {
-          id: 'usdcx-stx',
+      const response = await fetch(`${config.backendUrl}/api/liquidity/pools`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch pools: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const pools: Pool[] = data.data.map((pool: any) => ({
+          id: pool.id,
           tokenA: {
-            symbol: 'USDCx',
-            address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
-            reserve: '10000',
+            symbol: pool.tokenA.symbol,
+            address: pool.tokenA.address,
+            reserve: pool.tokenA.reserve || '0',
           },
           tokenB: {
-            symbol: 'STX',
-            address: 'STX',
-            reserve: '20000',
+            symbol: pool.tokenB.symbol,
+            address: pool.tokenB.address,
+            reserve: pool.tokenB.reserve || '0',
           },
-          tvl: '20000',
-          volume24h: '5000',
-          apy: '45.2',
-          fee: '0.3',
+          tvl: pool.tvl || '0',
+          volume24h: pool.volume24h || '0',
+          apy: pool.apr || '0',
+          fee: '0.3', // Standard fee for now
           userLpBalance: '0',
           userPoolShare: '0',
-        },
-      ];
+        }));
 
-      setState(prev => ({
-        ...prev,
-        pools: placeholderPools,
-        isLoading: false,
-      }));
+        setState(prev => ({
+          ...prev,
+          pools: pools,
+          isLoading: false,
+        }));
+      } else {
+        throw new Error(data.error || 'Failed to fetch pools');
+      }
     } catch (error) {
       console.error('Failed to fetch pools:', error);
       setState(prev => ({
         ...prev,
-        error: 'Failed to load pools. Please try again.',
+        error: 'Failed to load live pools. Showing placeholder data for preview.',
         isLoading: false,
+        pools: [], // We can leave it empty or fallback to nothing
       }));
     }
   };
@@ -113,14 +127,14 @@ export function PoolBrowser() {
 
   const filteredPools = state.filterToken === 'all'
     ? sortedPools
-    : sortedPools.filter(pool => 
-        pool.tokenA.symbol === state.filterToken || pool.tokenB.symbol === state.filterToken
-      );
+    : sortedPools.filter(pool =>
+      pool.tokenA.symbol === state.filterToken || pool.tokenB.symbol === state.filterToken
+    );
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{ 
-        backgroundColor: 'var(--bg-surface)', 
+      <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{
+        backgroundColor: 'var(--bg-surface)',
         border: `1px solid var(--border-color)`,
         padding: '2rem'
       }}>
@@ -148,36 +162,45 @@ export function PoolBrowser() {
           <div className="flex gap-2">
             <button
               onClick={() => setState(prev => ({ ...prev, sortBy: 'tvl' }))}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                state.sortBy === 'tvl'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              style={state.sortBy !== 'tvl' ? { color: 'var(--text-secondary)' } : {}}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.sortBy === 'tvl'
+                ? 'bg-purple-600 text-white'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              style={state.sortBy !== 'tvl' ? {
+                backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+                color: 'var(--text-primary)',
+                border: `1px solid var(--border-color)`
+              } : {}}
             >
               <Droplets className="w-4 h-4 inline mr-1" />
               TVL
             </button>
             <button
               onClick={() => setState(prev => ({ ...prev, sortBy: 'volume' }))}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                state.sortBy === 'volume'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              style={state.sortBy !== 'volume' ? { color: 'var(--text-secondary)' } : {}}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.sortBy === 'volume'
+                ? 'bg-purple-600 text-white'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              style={state.sortBy !== 'volume' ? {
+                backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+                color: 'var(--text-primary)',
+                border: `1px solid var(--border-color)`
+              } : {}}
             >
               <BarChart3 className="w-4 h-4 inline mr-1" />
               Volume
             </button>
             <button
               onClick={() => setState(prev => ({ ...prev, sortBy: 'apy' }))}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                state.sortBy === 'apy'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              style={state.sortBy !== 'apy' ? { color: 'var(--text-secondary)' } : {}}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.sortBy === 'apy'
+                ? 'bg-purple-600 text-white'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              style={state.sortBy !== 'apy' ? {
+                backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+                color: 'var(--text-primary)',
+                border: `1px solid var(--border-color)`
+              } : {}}
             >
               <TrendingUp className="w-4 h-4 inline mr-1" />
               APY
@@ -187,8 +210,12 @@ export function PoolBrowser() {
           <select
             value={state.filterToken}
             onChange={(e) => setState(prev => ({ ...prev, filterToken: e.target.value }))}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-800 outline-none cursor-pointer transition-all hover:bg-gray-200 dark:hover:bg-gray-700"
-            style={{ color: 'var(--text-primary)' }}
+            className="px-4 py-2 rounded-lg text-sm font-semibold outline-none cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+            style={{
+              backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+              color: 'var(--text-primary)',
+              border: `1px solid var(--border-color)`
+            }}
           >
             <option value="all">All Tokens</option>
             <option value="USDCx">USDCx</option>
@@ -320,7 +347,7 @@ export function PoolBrowser() {
         )}
 
         {/* Info */}
-        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{ 
+        <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{
           borderTop: `1px solid var(--border-color)`,
           color: 'var(--text-secondary)'
         }}>

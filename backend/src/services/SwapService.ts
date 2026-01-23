@@ -65,7 +65,13 @@ export class SwapService {
       {
         symbol: 'STX',
         name: 'Stacks',
-        address: 'STX',
+        address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM', // Use sentinel principal
+        decimals: 6,
+      },
+      {
+        symbol: 'VEX',
+        name: 'VelumX Token',
+        address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
         decimals: 6,
       },
     ];
@@ -99,19 +105,20 @@ export class SwapService {
 
       // Parse token addresses - handle both contract.name and naked principals (like STX or user addr)
       const tokenInParts = inputToken.split('.');
-      const tokenInPrincipal = tokenInParts.length === 2
+      const tokenInPrincipalInput = tokenInParts.length === 2
         ? `${tokenInParts[0]}.${tokenInParts[1]}`
         : inputToken;
 
       const tokenOutParts = outputToken.split('.');
-      const tokenOutPrincipal = tokenOutParts.length === 2
+      const tokenOutPrincipalInput = tokenOutParts.length === 2
         ? `${tokenOutParts[0]}.${tokenOutParts[1]}`
         : outputToken;
 
-      // Validate principals before calling principalCV
-      if (tokenInPrincipal === 'STX' || tokenOutPrincipal === 'STX') {
-        throw new Error('STX must be represented by a valid principal. Please connect your wallet.');
-      }
+      // STX is represented by the sentinel principal in our contract
+      const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+
+      const tokenInPrincipal = tokenInPrincipalInput === 'STX' || tokenInPrincipalInput === 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM' ? STX_SENTINEL : tokenInPrincipalInput;
+      const tokenOutPrincipal = tokenOutPrincipalInput === 'STX' || tokenOutPrincipalInput === 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM' ? STX_SENTINEL : tokenOutPrincipalInput;
 
       // Call quote-swap read-only function
       const result = await callReadOnlyFunction({

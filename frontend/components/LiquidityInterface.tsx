@@ -8,11 +8,16 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { Plus, Minus, Loader2, AlertCircle, CheckCircle, Zap, Info, Search, X, BarChart3 } from 'lucide-react';
+import { Plus, Minus, Loader2, Info, Search, X, BarChart3, Settings, Droplets, Zap, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { fetchCallReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
-import { PoolAnalytics } from './PoolAnalytics';
+import { PoolAnalytics as PoolAnalyticsComp } from './PoolAnalytics';
 import { PositionDashboard } from './PositionDashboard';
+import { AddLiquidityForm } from './ui/AddLiquidityForm';
+import { RemoveLiquidityForm } from './ui/RemoveLiquidityForm';
+import { PoolBrowserModal } from './ui/PoolBrowserModal';
+import { ImportTokenModal } from './ui/ImportTokenModal';
+import { Modal } from './ui/Modal';
 
 interface Token {
   symbol: string;
@@ -78,10 +83,19 @@ interface LiquidityState {
   showPoolAnalytics: boolean;
   // Position dashboard
   activeTab: 'liquidity' | 'positions';
+  // Settings
+  showSettings: boolean;
+  slippage: number;
 }
 
 // Default tokens for testnet
 const DEFAULT_TOKENS: Token[] = [
+  {
+    symbol: 'STX',
+    name: 'Stacks',
+    address: 'STX',
+    decimals: 6,
+  },
   {
     symbol: 'USDCx',
     name: 'USDC (xReserve)',
@@ -89,9 +103,9 @@ const DEFAULT_TOKENS: Token[] = [
     decimals: 6,
   },
   {
-    symbol: 'STX',
-    name: 'Stacks',
-    address: 'STX',
+    symbol: 'VEX',
+    name: 'VelumX Token',
+    address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1', // Will be filled from config
     decimals: 6,
   },
 ];
@@ -103,11 +117,8 @@ export function LiquidityInterface() {
   const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<LiquidityState>({
     mode: 'add',
-    tokenA: DEFAULT_TOKENS[0],
-    tokenB: {
-      ...DEFAULT_TOKENS[1],
-      address: stacksAddress || 'STX'
-    },
+    tokenA: DEFAULT_TOKENS[0], // STX
+    tokenB: DEFAULT_TOKENS[1], // USDCx
     amountA: '',
     amountB: '',
     lpTokenAmount: '',
@@ -134,6 +145,9 @@ export function LiquidityInterface() {
     showPoolAnalytics: false,
     // Position dashboard
     activeTab: 'liquidity',
+    // Settings
+    showSettings: false,
+    slippage: 0.5
   });
 
   // Update STX token address when wallet connects
@@ -142,10 +156,10 @@ export function LiquidityInterface() {
       setState(prev => {
         const newState = { ...prev };
         if (prev.tokenA?.symbol === 'STX') {
-          newState.tokenA = { ...prev.tokenA, address: stacksAddress };
+          newState.tokenA = { ...prev.tokenA as Token, address: stacksAddress };
         }
         if (prev.tokenB?.symbol === 'STX') {
-          newState.tokenB = { ...prev.tokenB, address: stacksAddress };
+          newState.tokenB = { ...prev.tokenB as Token, address: stacksAddress };
         }
         return newState;
       });
@@ -185,7 +199,6 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, loadingPools: true, error: null }));
 
     try {
-      // Fetch pools from the new pool discovery API
       const response = await fetch(`${config.backendUrl}/api/liquidity/pools`, {
         method: 'GET',
         headers: {
@@ -543,7 +556,6 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Dynamic imports for Stacks libraries
       const { openContractCall } = await import('@stacks/connect');
       const { STACKS_TESTNET } = await import('@stacks/network');
       const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
@@ -551,29 +563,44 @@ export function LiquidityInterface() {
       const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
       const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
 
-      // Calculate minimum amounts with 0.5% slippage tolerance
-      const minAmountAMicro = parseUnits((parseFloat(state.amountA) * 0.995).toFixed(6), state.tokenA.decimals);
-      const minAmountBMicro = parseUnits((parseFloat(state.amountB) * 0.995).toFixed(6), state.tokenB.decimals);
+      const slippageFactor = 1 - (state.slippage / 100);
+      const minAmountAMicro = parseUnits((parseFloat(state.amountA) * slippageFactor).toFixed(6), state.tokenA.decimals);
+      const minAmountBMicro = parseUnits((parseFloat(state.amountB) * slippageFactor).toFixed(6), state.tokenB.decimals);
 
-      // Parse token addresses (format: PRINCIPAL.CONTRACT-NAME)
-      const tokenAParts = state.tokenA.address.split('.');
-      const tokenBParts = state.tokenB.address.split('.');
+      const isTokenAStx = state.tokenA.symbol === 'STX';
+      const isTokenBStx = state.tokenB.symbol === 'STX';
+      const isStxPool = isTokenAStx || isTokenBStx;
 
-      // For gasless mode, use paymaster contract
-      // For regular mode, use swap contract directly
-      const contractAddress = state.gaslessMode
+      const useGasless = state.gaslessMode && !isStxPool;
+
+      const contractAddress = useGasless
         ? config.stacksPaymasterAddress.split('.')[0]
         : config.stacksSwapContractAddress.split('.')[0];
-      const contractName = state.gaslessMode
+      const contractName = useGasless
         ? config.stacksPaymasterAddress.split('.')[1]
         : config.stacksSwapContractAddress.split('.')[1];
 
-      // Calculate fee for gasless mode (0.01 USDCx = 10000 micro-USDCx default)
-      const gasFee = state.gaslessMode ? 10000 : 0;
+      const gasFee = 10000;
+      let functionName = 'add-liquidity';
+      let functionArgs = [];
 
-      const functionArgs = state.gaslessMode
-        ? [
-          // add-liquidity-gasless: (token-a, token-b, amount-a-desired, amount-b-desired, amount-a-min, amount-b-min, fee)
+      if (isStxPool) {
+        functionName = 'add-liquidity-stx';
+        const stxAmount = isTokenAStx ? amountAMicro : amountBMicro;
+        const tokenAmount = isTokenAStx ? amountBMicro : amountAMicro;
+        const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
+        const tokenParts = tokenToken.address.split('.');
+
+        functionArgs = [
+          contractPrincipalCV(tokenParts[0], tokenParts[1]),
+          uintCV(Number(stxAmount)),
+          uintCV(Number(tokenAmount)),
+        ];
+      } else if (useGasless) {
+        functionName = 'add-liquidity-gasless';
+        const tokenAParts = state.tokenA.address.split('.');
+        const tokenBParts = state.tokenB.address.split('.');
+        functionArgs = [
           contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
           contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
           uintCV(Number(amountAMicro)),
@@ -581,9 +608,12 @@ export function LiquidityInterface() {
           uintCV(Number(minAmountAMicro)),
           uintCV(Number(minAmountBMicro)),
           uintCV(gasFee),
-        ]
-        : [
-          // add-liquidity: (token-a, token-b, amount-a-desired, amount-b-desired, amount-a-min, amount-b-min)
+        ];
+      } else {
+        functionName = 'add-liquidity';
+        const tokenAParts = state.tokenA.address.split('.');
+        const tokenBParts = state.tokenB.address.split('.');
+        functionArgs = [
           contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
           contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
           uintCV(Number(amountAMicro)),
@@ -591,23 +621,23 @@ export function LiquidityInterface() {
           uintCV(Number(minAmountAMicro)),
           uintCV(Number(minAmountBMicro)),
         ];
+      }
 
       await new Promise<string>((resolve, reject) => {
         openContractCall({
           contractAddress,
           contractName,
-          functionName: state.gaslessMode ? 'add-liquidity-gasless' : 'add-liquidity',
+          functionName,
           functionArgs,
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
-          sponsored: state.gaslessMode,
+          sponsored: useGasless,
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
-            const txId = data.txId;
-            resolve(txId);
+            resolve(data.txId);
           },
           onCancel: () => {
             reject(new Error('User cancelled transaction'));
@@ -618,12 +648,11 @@ export function LiquidityInterface() {
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Liquidity added successfully! You received LP tokens.`,
+        success: `Liquidity added successfully!`,
         amountA: '',
         amountB: '',
       }));
 
-      // Refresh balances and pool info
       if (fetchBalances) {
         setTimeout(() => {
           fetchBalances();
@@ -640,20 +669,12 @@ export function LiquidityInterface() {
     }
   };
 
-  // Calculate expected output when removing liquidity
-  useEffect(() => {
-    if (state.mode === 'remove' && state.lpTokenAmount && parseFloat(state.lpTokenAmount) > 0 && state.poolExists) {
-      calculateRemoveAmounts();
-    }
-  }, [state.lpTokenAmount, state.mode, state.poolExists]);
-
   const calculateRemoveAmounts = async () => {
     if (!state.tokenA || !state.tokenB || !state.lpTokenAmount || !stacksAddress) return;
 
     try {
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
-      // Get pool reserves and total supply
       const poolResult = await fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
@@ -674,7 +695,6 @@ export function LiquidityInterface() {
         const reserveB = Number(poolData['reserve-b'].value);
         const totalSupply = Number(poolData['total-supply'].value);
 
-        // Calculate proportional amounts
         const lpAmountMicro = parseFloat(state.lpTokenAmount) * Math.pow(10, 6);
         const amountAMicro = (lpAmountMicro * reserveA) / totalSupply;
         const amountBMicro = (lpAmountMicro * reserveB) / totalSupply;
@@ -689,6 +709,12 @@ export function LiquidityInterface() {
     }
   };
 
+  useEffect(() => {
+    if (state.mode === 'remove' && state.lpTokenAmount && parseFloat(state.lpTokenAmount) > 0 && state.poolExists) {
+      calculateRemoveAmounts();
+    }
+  }, [state.lpTokenAmount, state.mode, state.poolExists]);
+
   const handleRemoveLiquidity = async () => {
     if (!stacksAddress || !state.tokenA || !state.tokenB) {
       setState(prev => ({ ...prev, error: 'Please connect wallet and select tokens' }));
@@ -700,31 +726,21 @@ export function LiquidityInterface() {
       return;
     }
 
-    if (parseFloat(state.lpTokenAmount) > parseFloat(state.userLpBalance)) {
-      setState(prev => ({ ...prev, error: 'Insufficient LP token balance' }));
-      return;
-    }
-
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Dynamic imports for Stacks libraries
       const { openContractCall } = await import('@stacks/connect');
       const { STACKS_TESTNET } = await import('@stacks/network');
       const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
 
-      const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6); // LP tokens have 6 decimals
+      const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6);
+      const slippageFactor = 1 - (state.slippage / 100);
+      const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * slippageFactor).toFixed(6), state.tokenA.decimals);
+      const minAmountBMicro = parseUnits((parseFloat(state.amountB || '0') * slippageFactor).toFixed(6), state.tokenB.decimals);
 
-      // Calculate minimum amounts with 0.5% slippage tolerance
-      const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * 0.995).toFixed(6), state.tokenA.decimals);
-      const minAmountBMicro = parseUnits((parseFloat(state.amountB || '0') * 0.995).toFixed(6), state.tokenB.decimals);
-
-      // Parse token addresses (format: PRINCIPAL.CONTRACT-NAME)
       const tokenAParts = state.tokenA.address.split('.');
       const tokenBParts = state.tokenB.address.split('.');
 
-      // For gasless mode, use paymaster contract
-      // For regular mode, use swap contract directly
       const contractAddress = state.gaslessMode
         ? config.stacksPaymasterAddress.split('.')[0]
         : config.stacksSwapContractAddress.split('.')[0];
@@ -732,12 +748,10 @@ export function LiquidityInterface() {
         ? config.stacksPaymasterAddress.split('.')[1]
         : config.stacksSwapContractAddress.split('.')[1];
 
-      // Calculate fee for gasless mode (0.01 USDCx = 10000 micro-USDCx default)
       const gasFee = state.gaslessMode ? 10000 : 0;
 
       const functionArgs = state.gaslessMode
         ? [
-          // remove-liquidity-gasless: (token-a, token-b, liquidity, amount-a-min, amount-b-min, fee)
           contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
           contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
           uintCV(Number(lpTokenAmountMicro)),
@@ -746,7 +760,6 @@ export function LiquidityInterface() {
           uintCV(gasFee),
         ]
         : [
-          // remove-liquidity: (token-a, token-b, liquidity, amount-a-min, amount-b-min)
           contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
           contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
           uintCV(Number(lpTokenAmountMicro)),
@@ -768,8 +781,7 @@ export function LiquidityInterface() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: async (data: any) => {
-            const txId = data.txId;
-            resolve(txId);
+            resolve(data.txId);
           },
           onCancel: () => {
             reject(new Error('User cancelled transaction'));
@@ -780,13 +792,12 @@ export function LiquidityInterface() {
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        success: `Liquidity removed successfully! You received ${state.amountA} ${state.tokenA?.symbol} and ${state.amountB} ${state.tokenB?.symbol}`,
+        success: `Liquidity removed successfully!`,
         lpTokenAmount: '',
         amountA: '',
         amountB: '',
       }));
 
-      // Refresh balances and pool info
       if (fetchBalances) {
         setTimeout(() => {
           fetchBalances();
@@ -810,16 +821,6 @@ export function LiquidityInterface() {
     return '0';
   };
 
-  const openImportModal = (tokenSlot: 'A' | 'B') => {
-    setState(prev => ({
-      ...prev,
-      showImportModal: true,
-      importingToken: tokenSlot,
-      importAddress: '',
-      error: null,
-    }));
-  };
-
   const closeImportModal = () => {
     setState(prev => ({
       ...prev,
@@ -830,18 +831,12 @@ export function LiquidityInterface() {
   };
 
   const validateStacksContractAddress = (address: string): boolean => {
-    // Format: PRINCIPAL.CONTRACT-NAME
     const parts = address.split('.');
     if (parts.length !== 2) return false;
-
-    // Check principal (address) format
     const principal = parts[0];
     if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/)) return false;
-
-    // Check contract name format
     const contractName = parts[1];
     if (!contractName.match(/^[a-z][a-z0-9-]{0,39}$/)) return false;
-
     return true;
   };
 
@@ -851,7 +846,6 @@ export function LiquidityInterface() {
       return;
     }
 
-    // Validate address format
     if (!validateStacksContractAddress(state.importAddress.trim())) {
       setState(prev => ({
         ...prev,
@@ -860,10 +854,8 @@ export function LiquidityInterface() {
       return;
     }
 
-    // Check if token already exists
     const existingToken = tokens.find(t => t.address.toLowerCase() === state.importAddress.trim().toLowerCase());
     if (existingToken) {
-      // Just select the existing token
       if (state.importingToken === 'A') {
         setState(prev => ({ ...prev, tokenA: existingToken }));
       } else {
@@ -876,8 +868,6 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null }));
 
     try {
-      // TODO: Fetch token metadata from contract (name, symbol, decimals)
-      // For now, create a basic token entry
       const parts = state.importAddress.trim().split('.');
       const contractName = parts[1];
 
@@ -885,13 +875,11 @@ export function LiquidityInterface() {
         symbol: contractName.toUpperCase().substring(0, 6),
         name: contractName,
         address: state.importAddress.trim(),
-        decimals: 6, // Default to 6 decimals
+        decimals: 6,
       };
 
-      // Add to tokens list
       setTokens(prev => [...prev, newToken]);
 
-      // Select the new token
       if (state.importingToken === 'A') {
         setState(prev => ({ ...prev, tokenA: newToken }));
       } else {
@@ -906,7 +894,6 @@ export function LiquidityInterface() {
 
       closeImportModal();
 
-      // Clear success message after 3 seconds
       setTimeout(() => {
         setState(prev => ({ ...prev, success: null }));
       }, 3000);
@@ -921,813 +908,161 @@ export function LiquidityInterface() {
   };
 
   return (
-    <div className="max-w-lg mx-auto">
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setState(prev => ({ ...prev, activeTab: 'liquidity' }))}
-          className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${state.activeTab === 'liquidity'
-            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-            : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
-          style={state.activeTab !== 'liquidity' ? { color: 'var(--text-secondary)' } : {}}
-        >
-          Manage Liquidity
-        </button>
-        <button
-          onClick={() => setState(prev => ({ ...prev, activeTab: 'positions' }))}
-          className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${state.activeTab === 'positions'
-            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-            : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
-          style={state.activeTab !== 'positions' ? { color: 'var(--text-secondary)' } : {}}
-        >
-          My Positions
-        </button>
-      </div>
-
-      {/* Show Position Dashboard or Liquidity Interface based on active tab */}
-      {state.activeTab === 'positions' ? (
-        <PositionDashboard />
-      ) : (
-        <div className="rounded-3xl vellum-shadow transition-all duration-300" style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: `1px solid var(--border-color)`,
-          padding: '2rem'
-        }}>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-              Liquidity
-            </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setState(prev => ({ ...prev, showPoolBrowser: true }))}
-                className="px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
-                style={{ color: 'var(--text-secondary)' }}
-                disabled={state.isProcessing}
-              >
-                <Search className="w-4 h-4 inline mr-1" />
-                Browse Pools
-              </button>
-              <button
-                onClick={() => setState(prev => ({ ...prev, mode: 'add', error: null, success: null }))}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.mode === 'add'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                style={state.mode !== 'add' ? { color: 'var(--text-secondary)' } : {}}
-              >
-                <Plus className="w-4 h-4 inline mr-1" />
-                Add
-              </button>
-              <button
-                onClick={() => setState(prev => ({ ...prev, mode: 'remove', error: null, success: null }))}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.mode === 'remove'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                style={state.mode !== 'remove' ? { color: 'var(--text-secondary)' } : {}}
-              >
-                <Minus className="w-4 h-4 inline mr-1" />
-                Remove
-              </button>
-            </div>
-          </div>
-
-          {/* Pool Info */}
-          {state.poolExists && (
-            <div className="rounded-xl p-4 mb-6" style={{
-              border: `1px solid var(--border-color)`,
-              backgroundColor: 'rgba(139, 92, 246, 0.05)'
-            }}>
-              <div className="flex items-start gap-3">
-                <Info className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-                    Your Position
-                  </p>
-                  <div className="space-y-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    <div className="flex justify-between">
-                      <span>LP Tokens:</span>
-                      <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(state.userLpBalance).toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Pool Share:</span>
-                      <span className="font-semibold text-purple-600 dark:text-purple-400">{state.poolShare}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Selected Pool Info */}
-          {state.selectedPoolForSwap && (
-            <div className="rounded-xl p-4 mb-6" style={{
-              border: `1px solid var(--border-color)`,
-              backgroundColor: 'rgba(16, 185, 129, 0.05)'
-            }}>
-              <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      Selected Pool: {state.selectedPoolForSwap.tokenA.symbol} / {state.selectedPoolForSwap.tokenB.symbol}
-                    </p>
-                    <button
-                      onClick={() => setState(prev => ({ ...prev, showPoolAnalytics: true }))}
-                      className="px-3 py-1 rounded-lg text-xs font-semibold transition-all bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center gap-1"
-                      disabled={state.isProcessing}
-                    >
-                      <BarChart3 className="w-3 h-3" />
-                      Analytics
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    <div className="flex justify-between">
-                      <span>TVL:</span>
-                      <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        {formatCurrency(state.selectedPoolForSwap.tvl)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>APR:</span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        {formatPercentage(state.selectedPoolForSwap.apr)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>24h Volume:</span>
-                      <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        {formatCurrency(state.selectedPoolForSwap.volume24h)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>24h Fees:</span>
-                      <span className="font-semibold text-purple-600 dark:text-purple-400">
-                        {formatCurrency(state.selectedPoolForSwap.feeEarnings24h)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {state.mode === 'add' ? (
-            <>
-              {/* Token A Input */}
-              <div className="rounded-2xl p-6 mb-4 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
-                border: `2px solid var(--border-color)`,
-                backgroundColor: 'var(--bg-surface)'
-              }}>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Token A</span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    Balance: <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(getBalance(state.tokenA)).toFixed(4)}</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="number"
-                    value={state.amountA}
-                    onChange={(e) => setState(prev => ({ ...prev, amountA: e.target.value, error: null }))}
-                    placeholder="0.00"
-                    className="flex-1 bg-transparent text-4xl font-mono outline-none placeholder:opacity-30 min-w-0"
-                    style={{ color: 'var(--text-primary)' }}
-                    disabled={state.isProcessing}
-                  />
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={state.tokenA?.symbol || ''}
-                      onChange={(e) => {
-                        const token = tokens.find(t => t.symbol === e.target.value);
-                        setState(prev => ({ ...prev, tokenA: token || null }));
-                      }}
-                      className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3.5 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg shadow-purple-500/50"
-                      disabled={state.isProcessing}
-                    >
-                      {tokens.map(token => (
-                        <option key={token.symbol} value={token.symbol} className="bg-gray-900">
-                          {token.symbol}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => openImportModal('A')}
-                      className="p-3 rounded-xl transition-all hover:bg-purple-100 dark:hover:bg-purple-900/30"
-                      style={{ border: `1px solid var(--border-color)` }}
-                      title="Import custom token"
-                      disabled={state.isProcessing}
-                    >
-                      <Search className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    </button>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setState(prev => ({ ...prev, amountA: getBalance(state.tokenA) }))}
-                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 mt-4 font-bold transition-colors"
-                  disabled={state.isProcessing}
-                >
-                  MAX
-                </button>
-              </div>
-
-              {/* Plus Icon */}
-              <div className="flex justify-center my-4">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{
-                  backgroundColor: 'var(--bg-surface)',
-                  border: `2px solid var(--border-color)`
-                }}>
-                  <Plus className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
-                </div>
-              </div>
-
-              {/* Token B Input */}
-              <div className="rounded-2xl p-6 mb-6 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-300" style={{
-                border: `2px solid var(--border-color)`,
-                backgroundColor: 'var(--bg-surface)'
-              }}>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Token B</span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    Balance: <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(getBalance(state.tokenB)).toFixed(4)}</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="number"
-                    value={state.amountB}
-                    onChange={(e) => setState(prev => ({ ...prev, amountB: e.target.value, error: null }))}
-                    placeholder="0.00"
-                    className="flex-1 bg-transparent text-4xl font-mono outline-none placeholder:opacity-30 min-w-0"
-                    style={{ color: 'var(--text-primary)' }}
-                    disabled={state.isProcessing || state.poolExists}
-                  />
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={state.tokenB?.symbol || ''}
-                      onChange={(e) => {
-                        const token = tokens.find(t => t.symbol === e.target.value);
-                        setState(prev => ({ ...prev, tokenB: token || null }));
-                      }}
-                      className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3.5 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg shadow-blue-500/50"
-                      disabled={state.isProcessing}
-                    >
-                      {tokens.map(token => (
-                        <option key={token.symbol} value={token.symbol} className="bg-gray-900">
-                          {token.symbol}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => openImportModal('B')}
-                      className="p-3 rounded-xl transition-all hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                      style={{ border: `1px solid var(--border-color)` }}
-                      title="Import custom token"
-                      disabled={state.isProcessing}
-                    >
-                      <Search className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    </button>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setState(prev => ({ ...prev, amountB: getBalance(state.tokenB) }))}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-4 font-bold transition-colors"
-                  disabled={state.isProcessing || state.poolExists}
-                >
-                  MAX
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* LP Token Input for Remove */}
-              <div className="rounded-2xl p-6 mb-6 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300" style={{
-                border: `2px solid var(--border-color)`,
-                backgroundColor: 'var(--bg-surface)'
-              }}>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>LP Tokens</span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    Balance: <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(state.userLpBalance).toFixed(6)}</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="number"
-                    value={state.lpTokenAmount}
-                    onChange={(e) => setState(prev => ({ ...prev, lpTokenAmount: e.target.value, error: null }))}
-                    placeholder="0.00"
-                    className="flex-1 bg-transparent text-4xl font-mono outline-none placeholder:opacity-30 min-w-0"
-                    style={{ color: 'var(--text-primary)' }}
-                    disabled={state.isProcessing}
-                  />
-                  <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 px-6 py-3.5 rounded-2xl font-bold shadow-lg shadow-purple-500/50">
-                    <span className="text-white text-sm">LP</span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, lpTokenAmount: (parseFloat(state.userLpBalance) * 0.25).toFixed(6) }))}
-                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-bold transition-colors"
-                    disabled={state.isProcessing}
-                  >
-                    25%
-                  </button>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, lpTokenAmount: (parseFloat(state.userLpBalance) * 0.5).toFixed(6) }))}
-                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-bold transition-colors"
-                    disabled={state.isProcessing}
-                  >
-                    50%
-                  </button>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, lpTokenAmount: (parseFloat(state.userLpBalance) * 0.75).toFixed(6) }))}
-                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-bold transition-colors"
-                    disabled={state.isProcessing}
-                  >
-                    75%
-                  </button>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, lpTokenAmount: state.userLpBalance }))}
-                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-bold transition-colors"
-                    disabled={state.isProcessing}
-                  >
-                    MAX
-                  </button>
-                </div>
-              </div>
-
-              {/* Expected Output */}
-              {state.lpTokenAmount && parseFloat(state.lpTokenAmount) > 0 && (
-                <div className="rounded-xl p-4 mb-6" style={{
-                  border: `1px solid var(--border-color)`,
-                  backgroundColor: 'var(--bg-surface)'
-                }}>
-                  <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
-                    You will receive:
-                  </p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span style={{ color: 'var(--text-secondary)' }}>{state.tokenA?.symbol}</span>
-                      <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{state.amountA || '0.00'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span style={{ color: 'var(--text-secondary)' }}>{state.tokenB?.symbol}</span>
-                      <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{state.amountB || '0.00'}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Gasless Mode Toggle */}
-          <div className="rounded-lg p-4 mb-6" style={{
-            border: `1px solid var(--border-color)`,
-            backgroundColor: 'rgba(16, 185, 129, 0.05)'
-          }}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)'
-                }}>
-                  <Zap className="w-5 h-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Gasless Mode</span>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pay fees in USDCx</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setState(prev => ({ ...prev, gaslessMode: !prev.gaslessMode }))}
-                className={`relative w-14 h-7 rounded-full transition-all ${state.gaslessMode ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
-                  }`}
-                disabled={state.isProcessing}
-              >
-                <div
-                  className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${state.gaslessMode ? 'translate-x-7' : ''
-                    }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {state.error && (
-            <div className="flex items-start gap-3 bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700 font-medium">{state.error}</p>
-            </div>
-          )}
-
-          {/* Success Message */}
-          {state.success && (
-            <div className="flex items-start gap-3 rounded-xl p-4 mb-6 border" style={{
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              borderColor: 'var(--success-color)',
-              color: 'var(--success-color)'
-            }}>
-              <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--success-color)' }} />
-              <p className="text-sm font-medium">{state.success}</p>
-            </div>
-          )}
-
-          {/* Action Button */}
-          <button
-            onClick={state.mode === 'add' ? handleAddLiquidity : handleRemoveLiquidity}
-            disabled={!stacksConnected || state.isProcessing || (state.mode === 'add' ? (!state.amountA || !state.amountB) : !state.lpTokenAmount)}
-            className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 dark:from-purple-600 dark:via-blue-600 dark:to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {state.isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Processing...
-              </>
-            ) : !stacksConnected ? (
-              'Connect Stacks Wallet'
-            ) : state.mode === 'add' ? (
-              <>
-                <Plus className="w-5 h-5" />
-                Add Liquidity
-              </>
-            ) : (
-              <>
-                <Minus className="w-5 h-5" />
-                Remove Liquidity
-              </>
-            )}
-          </button>
-
-          {/* Info */}
-          <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{
-            borderTop: `1px solid var(--border-color)`,
-            color: 'var(--text-secondary)'
-          }}>
-            <p className="flex items-center justify-center gap-2">
-              <span className="w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full dark:animate-pulse-glow animate-slide-progress"></span>
-              Earn 0.3% fees on all swaps
-            </p>
-            <p>LP tokens represent your share of the pool</p>
-          </div>
-        </div>
-      )}
-
-      {/* Pool Analytics Modal */}
+    <div className="max-w-4xl mx-auto py-8">
+      {/* Analytics Modal */}
       {state.showPoolAnalytics && state.selectedPoolForSwap && (
-        <PoolAnalytics
+        <PoolAnalyticsComp
           pool={state.selectedPoolForSwap}
           onClose={() => setState(prev => ({ ...prev, showPoolAnalytics: false }))}
         />
       )}
 
-      {/* Pool Browser Modal */}
-      {state.showPoolBrowser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden shadow-2xl" style={{
+      {/* Interface Toggle */}
+      <div className="flex justify-center mb-8">
+        <div className="inline-flex rounded-2xl gap-2">
+          <button
+            onClick={() => setState(prev => ({ ...prev, activeTab: 'liquidity' }))}
+            className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'liquidity'
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            style={state.activeTab !== 'liquidity' ? {
+              backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+              color: 'var(--text-primary)',
+              border: `1px solid var(--border-color)`
+            } : {}}
+          >
+            Manage Pools
+          </button>
+          <button
+            onClick={() => setState(prev => ({ ...prev, activeTab: 'positions' }))}
+            className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'positions'
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            style={state.activeTab !== 'positions' ? {
+              backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+              color: 'var(--text-primary)',
+              border: `1px solid var(--border-color)`
+            } : {}}
+          >
+            My Positions
+          </button>
+        </div>
+      </div>
+
+      {state.activeTab === 'positions' ? (
+        <div className="vellum-shadow-xl rounded-[2.5rem] bg-white dark:bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-800">
+          <PositionDashboard />
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-5 gap-8 items-start px-4">
+          {/* Main Action Form */}
+          <div className="lg:col-span-3 vellum-shadow-xl rounded-[2.5rem] overflow-hidden" style={{
             backgroundColor: 'var(--bg-surface)',
             border: `1px solid var(--border-color)`
           }}>
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--border-color)' }}>
-              <div>
-                <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Browse Liquidity Pools
-                </h3>
-                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                  Select a pool to add or remove liquidity
-                </p>
-              </div>
-              <button
-                onClick={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                disabled={state.loadingPools}
-              >
-                <X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
-              </button>
-            </div>
+            {state.mode === 'add' ? (
+              <AddLiquidityForm
+                state={state}
+                setState={setState}
+                tokens={tokens}
+                getBalance={getBalance}
+                handleAddLiquidity={handleAddLiquidity}
+                stacksConnected={stacksConnected}
+                openPoolBrowser={() => setState(prev => ({ ...prev, showPoolBrowser: true }))}
+              />
+            ) : (
+              <RemoveLiquidityForm
+                state={state}
+                setState={setState}
+                handleRemoveLiquidity={handleRemoveLiquidity}
+                stacksConnected={stacksConnected}
+              />
+            )}
+          </div>
 
-            {/* Search and Filter Controls */}
-            <div className="p-6 border-b" style={{ borderColor: 'var(--border-color)' }}>
-              <div className="flex flex-col sm:flex-row gap-4">
-                {/* Search Input */}
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                    <input
-                      type="text"
-                      value={state.poolSearchQuery}
-                      onChange={(e) => setState(prev => ({ ...prev, poolSearchQuery: e.target.value }))}
-                      placeholder="Search pools by token name or symbol..."
-                      className="w-full pl-10 pr-4 py-3 rounded-xl outline-none transition-all"
-                      style={{
-                        backgroundColor: 'var(--bg-primary)',
-                        border: `2px solid var(--border-color)`,
-                        color: 'var(--text-primary)'
-                      }}
-                    />
-                  </div>
-                </div>
+          {/* Side Panels */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Pool Statistics Quick Look */}
+            <div className="rounded-[2rem] p-8 vellum-shadow-lg" style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: `1px solid var(--border-color)`
+            }}>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Info className="w-5 h-5 text-purple-600" />
+                Pool Details
+              </h3>
 
-                {/* Sort Controls */}
-                <div className="flex gap-2">
-                  <select
-                    value={state.poolSortBy}
-                    onChange={(e) => setState(prev => ({ ...prev, poolSortBy: e.target.value as any }))}
-                    className="px-4 py-3 rounded-xl outline-none transition-all"
-                    style={{
-                      backgroundColor: 'var(--bg-primary)',
-                      border: `2px solid var(--border-color)`,
-                      color: 'var(--text-primary)'
-                    }}
-                  >
-                    <option value="tvl">Sort by TVL</option>
-                    <option value="apr">Sort by APR</option>
-                    <option value="volume">Sort by Volume</option>
-                    <option value="name">Sort by Name</option>
-                  </select>
-                  <button
-                    onClick={() => setState(prev => ({
-                      ...prev,
-                      poolSortOrder: prev.poolSortOrder === 'asc' ? 'desc' : 'asc'
-                    }))}
-                    className="px-4 py-3 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
-                    style={{ border: `2px solid var(--border-color)` }}
-                  >
-                    {state.poolSortOrder === 'asc' ? '↑' : '↓'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Pool Count */}
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {state.loadingPools ? 'Loading pools...' : `${state.filteredPools.length} pools found`}
-                </p>
-                <button
-                  onClick={fetchAvailablePools}
-                  disabled={state.loadingPools}
-                  className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-semibold transition-colors disabled:opacity-50"
-                >
-                  {state.loadingPools ? (
-                    <>
-                      <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
-                      Refreshing...
-                    </>
-                  ) : (
-                    'Refresh'
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Pool List */}
-            <div className="max-h-96 overflow-y-auto">
-              {state.loadingPools ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-purple-600 dark:text-purple-400" />
-                </div>
-              ) : state.filteredPools.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-                    No pools found
-                  </p>
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {state.poolSearchQuery ? 'Try adjusting your search query' : 'No liquidity pools are available yet'}
+              {!state.poolExists ? (
+                <div className="text-center py-6">
+                  <p className="text-sm italic opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                    Select a pool or enter token pairs to view details
                   </p>
                 </div>
               ) : (
-                <div className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
-                  {state.filteredPools.map((pool) => {
-                    const analytics = state.poolAnalytics[pool.id];
-                    return (
-                      <div
-                        key={pool.id}
-                        onClick={() => selectPoolFromBrowser(pool)}
-                        className="p-6 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          {/* Pool Info */}
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center -space-x-2">
-                              {/* Token A Logo */}
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                                {pool.tokenA.symbol.charAt(0)}
-                              </div>
-                              {/* Token B Logo */}
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                                {pool.tokenB.symbol.charAt(0)}
-                              </div>
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
-                                {pool.tokenA.symbol} / {pool.tokenB.symbol}
-                              </h4>
-                              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                {pool.tokenA.name} • {pool.tokenB.name}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Pool Metrics */}
-                          <div className="flex items-center gap-6 text-right">
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                                TVL
-                              </p>
-                              <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                                {formatCurrency(analytics?.tvl || pool.tvl)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                                APR
-                              </p>
-                              <p className="font-bold text-green-600 dark:text-green-400">
-                                {formatPercentage(analytics?.apr || pool.apr)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                                24h Volume
-                              </p>
-                              <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                                {formatCurrency(analytics?.volume24h || pool.volume24h)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                                24h Fees
-                              </p>
-                              <p className="font-bold text-purple-600 dark:text-purple-400">
-                                {formatCurrency(analytics?.feeEarnings24h || pool.feeEarnings24h)}
-                              </p>
-                            </div>
-
-                            {/* Analytics Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setState(prev => ({
-                                  ...prev,
-                                  selectedPoolForSwap: pool,
-                                  showPoolAnalytics: true
-                                }));
-                              }}
-                              className="px-3 py-2 rounded-lg text-xs font-semibold transition-all bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center gap-1"
-                              title="View detailed analytics"
-                            >
-                              <BarChart3 className="w-4 h-4" />
-                              Analytics
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Additional Pool Info */}
-                        <div className="mt-4 flex items-center justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          <div className="flex items-center gap-4">
-                            <span>
-                              Reserve A: {Number(pool.reserveA) / Math.pow(10, pool.tokenA.decimals)} {pool.tokenA.symbol}
-                            </span>
-                            <span>
-                              Reserve B: {Number(pool.reserveB) / Math.pow(10, pool.tokenB.decimals)} {pool.tokenB.symbol}
-                            </span>
-                          </div>
-                          <span>
-                            Created: {pool.createdAt.toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50">
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-1">Your Share</p>
+                    <p className="text-2xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{state.poolShare}%</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50">
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-1">LP Balance</p>
+                    <p className="text-xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{state.userLpBalance}</p>
+                  </div>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, mode: state.mode === 'add' ? 'remove' : 'add' }))}
+                    className="w-full py-4 rounded-2xl font-bold transition-all border border-purple-500/20 text-purple-600 dark:text-purple-400 hover:bg-purple-500/5"
+                  >
+                    {state.mode === 'add' ? 'Switch to Withdraw' : 'Switch to Deposit'}
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
-              <div className="flex items-center justify-between">
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  Click on a pool to select it for liquidity operations
-                </p>
-                <button
-                  onClick={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
-                  className="px-6 py-2 rounded-lg font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
-                  style={{
-                    border: `1px solid var(--border-color)`,
-                    color: 'var(--text-secondary)'
-                  }}
-                >
-                  Close
-                </button>
+            {/* Helper Tips */}
+            <div className="rounded-[2rem] p-8 bg-gradient-to-br from-purple-600/5 to-blue-600/5 border border-purple-100 dark:border-purple-900/20">
+              <h4 className="font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Why provide liquidity?</h4>
+              <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
+                Liquidity providers earn a 0.3% fee on all trades proportional to their share of the pool.
+              </p>
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Earn passive income from trading activity</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Contribute to DEX market stability</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Pool Browser Modal */}
+      <PoolBrowserModal
+        isOpen={state.showPoolBrowser}
+        onClose={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
+        state={state}
+        setState={setState}
+        fetchAvailablePools={fetchAvailablePools}
+        selectPoolFromBrowser={selectPoolFromBrowser}
+        formatCurrency={formatCurrency}
+        formatPercentage={formatPercentage}
+      />
 
       {/* Import Token Modal */}
-      {state.showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="rounded-2xl max-w-md w-full p-6 shadow-2xl" style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: `1px solid var(--border-color)`
-          }}>
-            {/* Modal Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                Import Token
-              </h3>
-              <button
-                onClick={closeImportModal}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                disabled={state.isProcessing}
-              >
-                <X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
-              </button>
-            </div>
-
-            {/* Token Address Input */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-                Token Contract Address
-              </label>
-              <input
-                type="text"
-                value={state.importAddress}
-                onChange={(e) => setState(prev => ({ ...prev, importAddress: e.target.value, error: null }))}
-                placeholder="PRINCIPAL.CONTRACT-NAME"
-                className="w-full px-4 py-3 rounded-xl outline-none transition-all font-mono text-sm"
-                style={{
-                  backgroundColor: 'var(--bg-primary)',
-                  border: `2px solid var(--border-color)`,
-                  color: 'var(--text-primary)'
-                }}
-                disabled={state.isProcessing}
-                autoFocus
-              />
-              <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
-                Example: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.my-token
-              </p>
-            </div>
-
-            {/* Warning */}
-            <div className="rounded-lg p-3 mb-4" style={{
-              backgroundColor: 'rgba(251, 191, 36, 0.1)',
-              border: `1px solid rgba(251, 191, 36, 0.3)`
-            }}>
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                  Anyone can create a token with any name. Always verify the contract address before trading.
-                </p>
-              </div>
-            </div>
-
-            {/* Error Message */}
-            {state.error && (
-              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
-                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-red-700 dark:text-red-300">{state.error}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={closeImportModal}
-                className="flex-1 px-4 py-3 rounded-xl font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
-                style={{
-                  border: `1px solid var(--border-color)`,
-                  color: 'var(--text-secondary)'
-                }}
-                disabled={state.isProcessing}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportToken}
-                disabled={state.isProcessing || !state.importAddress.trim()}
-                className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {state.isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                    Import
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImportTokenModal
+        isOpen={state.showImportModal}
+        onClose={closeImportModal}
+        importAddress={state.importAddress}
+        setImportAddress={(val) => setState(prev => ({ ...prev, importAddress: val, error: null }))}
+        handleImportToken={handleImportToken}
+        isProcessing={state.isProcessing}
+        error={state.error}
+      />
     </div>
   );
 }

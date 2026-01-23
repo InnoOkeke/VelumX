@@ -56,8 +56,8 @@ export function WalletButton() {
           onClick={() => setShowDropdown(!showDropdown)}
           className="flex items-center gap-3 px-4 py-2.5 rounded-full transition-colors hover:opacity-80"
           style={{
-            backgroundColor: 'rgba(139, 92, 246, 0.15)',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
+            backgroundColor: 'var(--bg-primary)',
+            border: '1px solid var(--border-color)',
             color: 'var(--text-primary)'
           }}
         >
@@ -67,8 +67,8 @@ export function WalletButton() {
               {ethereumConnected && stacksConnected
                 ? 'Both Connected'
                 : ethereumConnected
-                ? formatAddress(ethereumAddress!)
-                : formatAddress(stacksAddress!)}
+                  ? formatAddress(ethereumAddress!)
+                  : formatAddress(stacksAddress!)}
             </span>
           </div>
           <ChevronDown size={16} style={{ color: 'var(--text-secondary)' }} />

@@ -1,11 +1,15 @@
 /**
  * Address encoding utilities for cross-chain bridge
  * Handles conversion between Stacks addresses and bytes32 format
+ * Based on official Stacks USDCx bridging documentation
  */
 import { type Hex } from 'viem';
 /**
  * Encodes a Stacks address to bytes32 format for xReserve protocol
  * Format: [11 zero bytes][1 version byte][20 hash160 bytes]
+ *
+ * This implementation follows the official Stacks documentation:
+ * https://docs.stacks.co/more-guides/bridging-usdcx
  *
  * @param address - Stacks address (e.g., "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM")
  * @returns 32-byte hex string
