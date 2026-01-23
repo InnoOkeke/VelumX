@@ -8,11 +8,12 @@
 export interface FrontendConfig {
   // API endpoint
   backendUrl: string;
-  
+
   // Network configuration
   ethereumChainId: number;
+  ethereumRpcUrl: string;
   stacksNetwork: 'testnet' | 'mainnet';
-  
+
   // Contract addresses
   ethereumUsdcAddress: string;
   ethereumXReserveAddress: string;
@@ -20,11 +21,11 @@ export interface FrontendConfig {
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
   stacksSwapContractAddress: string;
-  
+
   // Domain IDs
   ethereumDomainId: number;
   stacksDomainId: number;
-  
+
   // Explorer URLs
   ethereumExplorerUrl: string;
   stacksExplorerUrl: string;
@@ -32,7 +33,7 @@ export interface FrontendConfig {
 
 // ============ Transaction Types ============
 
-export type TransactionStatus = 
+export type TransactionStatus =
   | 'pending'
   | 'confirming'
   | 'attesting'

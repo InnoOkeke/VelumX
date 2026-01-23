@@ -121,9 +121,10 @@ export function useWallet() {
     if (!address) return;
 
     try {
+      // Create public client with specific RPC URL to avoid rate limits
       const publicClient = createPublicClient({
         chain: sepolia,
-        transport: http(),
+        transport: http(config.ethereumRpcUrl),
       });
 
       // Fetch ETH balance
@@ -153,7 +154,7 @@ export function useWallet() {
     } catch (error) {
       console.error('Failed to fetch Ethereum balances:', error);
     }
-  }, [config.ethereumUsdcAddress]);
+  }, [config.ethereumUsdcAddress, config.ethereumRpcUrl]);
 
   // Fetch Stacks balances
   const fetchStacksBalances = useCallback(async (address: string) => {
@@ -556,19 +557,23 @@ export function useWallet() {
 
   // Fetch all balances - uses stored addresses to avoid stale closure issues
   const fetchBalances = useCallback(async () => {
-    // Get addresses from localStorage to ensure we have the latest
-    // This avoids the stale closure problem
+    // Get addresses - prefer state, fall back to localStorage for each independently
     let ethAddr = state.ethereumAddress;
     let stacksAddr = state.stacksAddress;
 
-    // If state doesn't have addresses, try to get them from storage
-    if (!ethAddr && !stacksAddr && typeof window !== 'undefined') {
+    // If either address is missing in state, try to get them from storage
+    if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
-          ethAddr = parsed.ethereumAddress || null;
-          stacksAddr = parsed.stacksAddress || null;
+          // Only use storage value if state doesn't have it
+          if (!ethAddr && parsed.ethereumAddress) {
+            ethAddr = parsed.ethereumAddress;
+          }
+          if (!stacksAddr && parsed.stacksAddress) {
+            stacksAddr = parsed.stacksAddress;
+          }
         }
       } catch (e) {
         // Ignore storage errors
@@ -576,9 +581,11 @@ export function useWallet() {
     }
 
     if (!ethAddr && !stacksAddr) {
+      console.log('🔍 No addresses found for balance fetch');
       return; // No addresses to fetch for
     }
 
+    console.log(`🔍 Fetching balances for: ETH=${ethAddr || 'none'}, Stacks=${stacksAddr || 'none'}`);
     setState(prev => ({ ...prev, isFetchingBalances: true }));
 
     const promises = [];
@@ -589,9 +596,14 @@ export function useWallet() {
       promises.push(fetchStacksBalances(stacksAddr));
     }
 
-    await Promise.all(promises);
-
-    setState(prev => ({ ...prev, isFetchingBalances: false }));
+    try {
+      await Promise.all(promises);
+      console.log('✅ Balance fetch complete');
+    } catch (error) {
+      console.error('❌ Balance fetch failed:', error);
+    } finally {
+      setState(prev => ({ ...prev, isFetchingBalances: false }));
+    }
   }, [state.ethereumAddress, state.stacksAddress, fetchEthereumBalances, fetchStacksBalances]);
 
   // Disconnect all wallets

@@ -24,11 +24,12 @@ export function getConfig(): FrontendConfig {
   return {
     // API endpoint
     backendUrl: getEnv('NEXT_PUBLIC_BACKEND_URL', 'https://velumx.onrender.com'),
-    
+
     // Network configuration
     ethereumChainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_CHAIN_ID', '11155111')), // Sepolia
+    ethereumRpcUrl: getEnv('NEXT_PUBLIC_ETHEREUM_RPC_URL', 'https://rpc.sepolia.org'),
     stacksNetwork: (getEnv('NEXT_PUBLIC_STACKS_NETWORK', 'testnet') as 'testnet' | 'mainnet'),
-    
+
     // Contract addresses (testnet defaults)
     ethereumUsdcAddress: getEnv('NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'),
     ethereumXReserveAddress: getEnv('NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS', '0x008888878f94C0d87defdf0B07f46B93C1934442'),
@@ -36,11 +37,11 @@ export function getConfig(): FrontendConfig {
     stacksUsdcxProtocolAddress: getEnv('NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS', 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1'),
     stacksPaymasterAddress: getEnv('NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v3'),
     stacksSwapContractAddress: getEnv('NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS', 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-contract-v12'),
-    
+
     // Domain IDs (Stacks USDCx bridging)
     ethereumDomainId: parseInt(getEnv('NEXT_PUBLIC_ETHEREUM_DOMAIN_ID', '0')), // Ethereum
     stacksDomainId: parseInt(getEnv('NEXT_PUBLIC_STACKS_DOMAIN_ID', '10003')), // Stacks
-    
+
     // Explorer URLs
     ethereumExplorerUrl: getEnv('NEXT_PUBLIC_ETHEREUM_EXPLORER_URL', 'https://sepolia.etherscan.io'),
     stacksExplorerUrl: getEnv('NEXT_PUBLIC_STACKS_EXPLORER_URL', 'https://explorer.hiro.so'),
