@@ -37,8 +37,8 @@ router.get('/circle/:messageHash', async (req: Request, res: Response) => {
     logger.info('Fetching Circle attestation', { messageHash });
 
     const attestation = await attestationService.fetchCircleAttestation(
-      messageHash,
-      { maxRetries: 1 } // Single attempt for API call
+      messageHash
+      // Uses default maxRetries from config
     );
 
     res.status(200).json({
@@ -98,8 +98,8 @@ router.get('/stacks/:txHash', async (req: Request, res: Response) => {
     logger.info('Fetching Stacks attestation', { txHash });
 
     const attestation = await attestationService.fetchStacksAttestation(
-      txHash,
-      { maxRetries: 1 } // Single attempt for API call
+      txHash
+      // Uses default maxRetries from config
     );
 
     res.status(200).json({

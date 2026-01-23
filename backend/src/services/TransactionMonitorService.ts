@@ -257,14 +257,15 @@ export class TransactionMonitorService {
         try {
           // For Ethereum→Stacks deposits, use xReserve attestation (Stacks network)
           // For Stacks→Ethereum withdrawals, use Stacks attestation
+          // Use config maxRetries to allow sufficient time for attestation to become available
           const attestation = tx.sourceChain === 'ethereum'
             ? await attestationService.fetchXReserveAttestation(
-                tx.messageHash,
-                { maxRetries: 1 } // Single attempt per monitoring cycle
+                tx.messageHash
+                // Uses default maxRetries from config (no override)
               )
             : await attestationService.fetchStacksAttestation(
-                tx.sourceTxHash,
-                { maxRetries: 1 } // Single attempt per monitoring cycle
+                tx.sourceTxHash
+                // Uses default maxRetries from config (no override)
               );
 
           await this.updateTransaction(tx.id, {
@@ -365,8 +366,8 @@ export class TransactionMonitorService {
         // Fetch attestation from Stacks
         try {
           const attestation = await attestationService.fetchStacksAttestation(
-            tx.sourceTxHash,
-            { maxRetries: 1 } // Single attempt per monitoring cycle
+            tx.sourceTxHash
+            // Uses default maxRetries from config (no override)
           );
 
           await this.updateTransaction(tx.id, {
