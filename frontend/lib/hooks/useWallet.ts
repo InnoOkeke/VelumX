@@ -6,9 +6,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createWalletClient, createPublicClient, custom, http, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { connect, isConnected, getLocalStorage, showConnect, disconnect } from '@stacks/connect';
-import { validateStacksAddress } from '@stacks/transactions';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
+import { getStacksConnect, getStacksTransactions } from '../stacks-loader';
 
 export type EthereumWalletType = 'rabby' | 'metamask' | 'injected';
 export type StacksWalletType = 'xverse' | 'leather' | 'hiro';
@@ -43,7 +42,7 @@ export interface WalletState {
 
 const STORAGE_KEY = 'velumx_wallet_state';
 
-// Stacks session management is now handled internally by @stacks/connect via localStorage
+// Stacks libraries are loaded asynchronously via loaders
 
 // Detect available Ethereum wallets
 function detectEthereumWallets() {
@@ -89,9 +88,13 @@ function getEthereumProvider(walletType?: EthereumWalletType) {
 }
 
 // Validate Stacks address and ensure it's testnet
-function assertTestnetAddress(address: string) {
-  if (!address || !address.startsWith('ST') || !validateStacksAddress(address)) {
+async function assertTestnetAddress(address: string) {
+  if (!address || !address.startsWith('ST')) {
     throw new Error('Please connect a valid STX testnet address');
+  }
+  const transactions = await getStacksTransactions();
+  if (transactions && !transactions.validateStacksAddress(address)) {
+    throw new Error('Invalid Stacks address format');
   }
 }
 
@@ -234,8 +237,9 @@ export function useWallet() {
         // Check if Stacks wallet is still connected using modern helper
         let stacksConnected = false;
         let stacksAddr = restoredStacksAddress;
-        if (isConnected()) {
-          const authData = getLocalStorage();
+        const connectLib = await getStacksConnect();
+        if (connectLib && connectLib.isConnected()) {
+          const authData = connectLib.getLocalStorage();
           if (authData?.addresses?.stx?.[0]) {
             stacksAddr = authData.addresses.stx[0].address;
             stacksConnected = true;
@@ -357,9 +361,10 @@ export function useWallet() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const checkStacksSession = () => {
-      if (isConnected()) {
-        const authData = getLocalStorage();
+    const checkStacksSession = async () => {
+      const connectLib = await getStacksConnect();
+      if (connectLib && connectLib.isConnected()) {
+        const authData = connectLib.getLocalStorage();
         const stacksAddr = authData?.addresses?.stx?.[0]?.address;
 
         setState(prev => {
@@ -486,32 +491,35 @@ export function useWallet() {
     setState(prev => ({ ...prev, isConnecting: true }));
 
     try {
+      const connectLib = await getStacksConnect();
+      if (!connectLib) throw new Error('Stacks connection library not available');
+
       return new Promise<string>((resolve, reject) => {
-        showConnect({
+        connectLib.showConnect({
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: () => {
-            if (isConnected()) {
-              const authData = getLocalStorage();
+            if (connectLib.isConnected()) {
+              const authData = connectLib.getLocalStorage();
               const address = authData?.addresses?.stx?.[0]?.address;
 
               if (address) {
                 // Validate address
-                assertTestnetAddress(address);
+                assertTestnetAddress(address).then(() => {
+                  setState(prev => ({
+                    ...prev,
+                    stacksAddress: address,
+                    stacksConnected: true,
+                    stacksWalletType: preferredWallet || 'leather',
+                    isConnecting: false,
+                  }));
 
-                setState(prev => ({
-                  ...prev,
-                  stacksAddress: address,
-                  stacksConnected: true,
-                  stacksWalletType: preferredWallet || 'leather',
-                  isConnecting: false,
-                }));
-
-                // Fetch balances immediately
-                fetchStacksBalances(address);
-                resolve(address);
+                  // Fetch balances immediately
+                  fetchStacksBalances(address);
+                  resolve(address);
+                }).catch(reject);
               } else {
                 setState(prev => ({ ...prev, isConnecting: false }));
                 reject(new Error('Address not found after connection'));
@@ -535,8 +543,11 @@ export function useWallet() {
   }, [fetchStacksBalances]);
 
   // Disconnect Stacks wallet
-  const disconnectStacks = useCallback(() => {
-    disconnect();
+  const disconnectStacks = useCallback(async () => {
+    const connectLib = await getStacksConnect();
+    if (connectLib) {
+      connectLib.disconnect();
+    }
     setState(prev => ({
       ...prev,
       stacksAddress: null,

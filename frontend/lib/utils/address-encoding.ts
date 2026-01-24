@@ -4,8 +4,8 @@
  * Based on official Stacks documentation: https://docs.stacks.co/more-guides/bridging-usdcx
  */
 
-import { createAddress, addressToString, AddressVersion } from '@stacks/transactions';
 import { type Hex, toHex, toBytes, pad } from 'viem';
+import { getStacksTransactions } from '../stacks-loader';
 
 /**
  * Encodes a Stacks address to bytes32 format for xReserve protocol
@@ -14,20 +14,22 @@ import { type Hex, toHex, toBytes, pad } from 'viem';
  * @param address - Stacks address (e.g., "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM")
  * @returns 32-byte hex string
  */
-export function encodeStacksAddress(address: string): Hex {
-  const stacksAddr = createAddress(address);
+export async function encodeStacksAddress(address: string): Promise<Hex> {
+  const transactions = await getStacksTransactions() as any;
+  if (!transactions) throw new Error('Stacks library not available');
+  const stacksAddr = transactions.createAddress(address);
   const buffer = new Uint8Array(32);
-  
+
   // 11 zero bytes (padding)
   buffer.fill(0, 0, 11);
-  
+
   // 1 version byte
   buffer[11] = stacksAddr.version;
-  
+
   // 20 hash160 bytes
   const hash = hexToBytes(stacksAddr.hash160);
   buffer.set(hash, 12);
-  
+
   return toHex(buffer);
 }
 
@@ -37,18 +39,20 @@ export function encodeStacksAddress(address: string): Hex {
  * @param bytes32 - 32-byte hex string
  * @returns Stacks address string
  */
-export function decodeStacksAddress(bytes32: Hex): string {
+export async function decodeStacksAddress(bytes32: Hex): Promise<string> {
+  const transactions = await getStacksTransactions() as any;
+  if (!transactions) throw new Error('Stacks library not available');
   const buffer = toBytes(bytes32);
-  
+
   // Skip 11 zero bytes
   // Extract version byte (position 11)
-  const version = buffer[11] as AddressVersion;
-  
+  const version = buffer[11];
+
   // Extract 20 hash160 bytes (positions 12-31)
   const hash = buffer.slice(12, 32);
   const hash160 = bytesToHex(hash);
-  
-  return addressToString({
+
+  return transactions.addressToString({
     hash160,
     version,
     type: 0, // Address type constant
@@ -64,10 +68,10 @@ export function decodeStacksAddress(bytes32: Hex): string {
  */
 export function encodeEthereumAddress(address: string): Hex {
   // Ensure address is lowercase and has 0x prefix
-  const normalizedAddress: string = address.toLowerCase().startsWith('0x') 
-    ? address.toLowerCase() 
+  const normalizedAddress: string = address.toLowerCase().startsWith('0x')
+    ? address.toLowerCase()
     : `0x${address.toLowerCase()}`;
-  
+
   // Use viem's pad function to left-pad to 32 bytes
   return pad(normalizedAddress as Hex, { size: 32 });
 }
@@ -80,10 +84,10 @@ export function encodeEthereumAddress(address: string): Hex {
  */
 export function decodeEthereumAddress(bytes32: Hex): Hex {
   const buffer = toBytes(bytes32);
-  
+
   // Extract last 20 bytes (Ethereum address is 20 bytes)
   const addressBytes = buffer.slice(12, 32);
-  
+
   return toHex(addressBytes);
 }
 
@@ -93,9 +97,11 @@ export function decodeEthereumAddress(bytes32: Hex): Hex {
  * @param address - Address to validate
  * @returns true if valid Stacks address
  */
-export function isValidStacksAddress(address: string): boolean {
+export async function isValidStacksAddress(address: string): Promise<boolean> {
   try {
-    createAddress(address);
+    const transactions = await getStacksTransactions() as any;
+    if (!transactions) return false;
+    transactions.createAddress(address);
     return true;
   } catch {
     return false;

@@ -10,10 +10,7 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
 import { ArrowDownUp, Loader2, Settings, Repeat } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
-import { makeContractCall, AnchorMode, PostConditionMode, uintCV, contractPrincipalCV } from '@stacks/transactions';
-import { STACKS_TESTNET } from '@stacks/network';
-import { bytesToHex } from '@stacks/common';
-import { openContractCall } from '@stacks/connect';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -208,6 +205,11 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      const transactions = await getStacksTransactions() as any;
+      const network = await getStacksNetwork() as any;
+      const common = await getStacksCommon() as any;
+      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minAmountOutMicro = parseUnits(
         (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
@@ -236,58 +238,58 @@ export function SwapInterface() {
         functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          uintCV(Number(amountInMicro)),
-          uintCV(Number(minAmountOutMicro)),
+          transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          transactions.uintCV(Number(amountInMicro)),
+          transactions.uintCV(Number(minAmountOutMicro)),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee));
+        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
       } else if (isOutputStx) {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          uintCV(Number(amountInMicro)),
-          uintCV(Number(minAmountOutMicro)),
+          transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          transactions.uintCV(Number(amountInMicro)),
+          transactions.uintCV(Number(minAmountOutMicro)),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee));
+        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
       } else if (useGasless) {
         functionName = 'swap-gasless';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          uintCV(Number(amountInMicro)),
-          uintCV(Number(minAmountOutMicro)),
-          uintCV(gasFee),
+          transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          transactions.uintCV(Number(amountInMicro)),
+          transactions.uintCV(Number(minAmountOutMicro)),
+          transactions.uintCV(gasFee),
         ];
       } else {
         functionName = 'swap';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          uintCV(Number(amountInMicro)),
-          uintCV(Number(minAmountOutMicro)),
+          transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          transactions.uintCV(Number(amountInMicro)),
+          transactions.uintCV(Number(minAmountOutMicro)),
         ];
       }
 
       if (useGasless) {
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
+        const tx = await transactions.makeContractCall({
           contractAddress: contractAddress,
           contractName: contractName,
           functionName: functionName,
           functionArgs: functionArgs,
           senderAddress: stacksAddress,
-          network: STACKS_TESTNET,
-          anchorMode: AnchorMode.Any,
+          network: network.STACKS_TESTNET,
+          anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
           sponsored: true,
         } as any);
 
-        const txHex = bytesToHex(tx.serialize() as any);
+        const txHex = common.bytesToHex(tx.serialize() as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
@@ -318,14 +320,18 @@ export function SwapInterface() {
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
       } else {
+        const network = await getStacksNetwork() as any;
+        const connect = await getStacksConnect() as any;
+        if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
         // Standard flow
         await new Promise<string>((resolve, reject) => {
-          openContractCall({
+          connect.openContractCall({
             contractAddress,
             contractName,
             functionName: functionName,
             functionArgs,
-            network: STACKS_TESTNET as any,
+            network: network.STACKS_TESTNET as any,
             postConditionMode: 0x01 as any,
             sponsored: false,
             appDetails: {

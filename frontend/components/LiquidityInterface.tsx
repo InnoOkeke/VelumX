@@ -10,10 +10,7 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
 import { Plus, Minus, Loader2, Info, Search, X, BarChart3, Settings, Droplets, Zap, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
-import { fetchCallReadOnlyFunction, cvToJSON, principalCV, makeContractCall, AnchorMode, PostConditionMode, uintCV, contractPrincipalCV, bufferCV } from '@stacks/transactions';
-import { STACKS_TESTNET } from '@stacks/network';
-import { bytesToHex } from '@stacks/common';
-import { openContractCall } from '@stacks/connect';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
 import { PoolAnalytics as PoolAnalyticsComp } from './PoolAnalytics';
 import { PositionDashboard } from './PositionDashboard';
 import { AddLiquidityForm } from './ui/AddLiquidityForm';
@@ -422,24 +419,27 @@ export function LiquidityInterface() {
     if (!state.tokenA || !state.tokenB || !stacksAddress) return;
 
     try {
+      const transactions = await getStacksTransactions() as any;
+      if (!transactions) return;
+
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
       const { a, b } = sortTokens(state.tokenA.address, state.tokenB.address);
 
       // Get pool reserves
-      const poolResult = await fetchCallReadOnlyFunction({
+      const poolResult = await transactions.fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          principalCV(a),
-          principalCV(b),
+          transactions.principalCV(a),
+          transactions.principalCV(b),
         ],
         network: 'testnet',
         senderAddress: stacksAddress,
       });
 
-      const poolJson = cvToJSON(poolResult);
+      const poolJson = transactions.cvToJSON(poolResult);
 
       if (poolJson.success && poolJson.value) {
         const poolData = poolJson.value.value;
@@ -451,20 +451,20 @@ export function LiquidityInterface() {
         const poolExists = rawReserveA > 0 && rawReserveB > 0;
 
         // Get user LP balance
-        const lpResult = await fetchCallReadOnlyFunction({
+        const lpResult = await transactions.fetchCallReadOnlyFunction({
           contractAddress,
           contractName,
           functionName: 'get-lp-balance',
           functionArgs: [
-            principalCV(a),
-            principalCV(b),
-            principalCV(stacksAddress),
+            transactions.principalCV(a),
+            transactions.principalCV(b),
+            transactions.principalCV(stacksAddress),
           ],
           network: 'testnet',
           senderAddress: stacksAddress,
         });
 
-        const lpJson = cvToJSON(lpResult);
+        const lpJson = transactions.cvToJSON(lpResult);
         const userLpBalanceRaw = lpJson.success && lpJson.value ? Number(lpJson.value.value) : 0;
         const userLpBalance = (userLpBalanceRaw / Math.pow(10, 6)).toFixed(6);
 
@@ -504,22 +504,25 @@ export function LiquidityInterface() {
     if (!state.tokenA || !state.tokenB || !state.amountA || !state.poolExists) return;
 
     try {
+      const transactions = await getStacksTransactions() as any;
+      if (!transactions) return;
+
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
       // Get pool reserves
-      const poolResult = await fetchCallReadOnlyFunction({
+      const poolResult = await transactions.fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          principalCV(state.tokenA.address),
-          principalCV(state.tokenB.address),
+          transactions.principalCV(state.tokenA.address),
+          transactions.principalCV(state.tokenB.address),
         ],
         network: 'testnet',
         senderAddress: stacksAddress || contractAddress,
       });
 
-      const poolJson = cvToJSON(poolResult);
+      const poolJson = transactions.cvToJSON(poolResult);
 
       if (poolJson.success && poolJson.value) {
         const poolData = poolJson.value.value;
@@ -552,6 +555,11 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      const transactions = await getStacksTransactions() as any;
+      const network = await getStacksNetwork() as any;
+      const common = await getStacksCommon() as any;
+      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
       const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
       const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
 
@@ -586,55 +594,60 @@ export function LiquidityInterface() {
         const tokenParts = tokenToken.address.split('.');
 
         functionArgs = [
-          contractPrincipalCV(tokenParts[0], tokenParts[1]),
-          uintCV(Number(stxAmount)),
-          uintCV(Number(tokenAmount)),
-          uintCV(Number(stxMin)),
-          uintCV(Number(tokenMin)),
+          transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
+          transactions.uintCV(Number(stxAmount)),
+          transactions.uintCV(Number(tokenAmount)),
+          transactions.uintCV(Number(stxMin)),
+          transactions.uintCV(Number(tokenMin)),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee));
+        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
       } else if (useGasless) {
         functionName = 'add-liquidity-gasless';
         const tokenAParts = state.tokenA.address.split('.');
         const tokenBParts = state.tokenB.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-          contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          uintCV(Number(amountAMicro)),
-          uintCV(Number(amountBMicro)),
-          uintCV(Number(minAmountAMicro)),
-          uintCV(Number(minAmountBMicro)),
-          uintCV(gasFee),
+          transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+          transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+          transactions.uintCV(Number(amountAMicro)),
+          transactions.uintCV(Number(amountBMicro)),
+          transactions.uintCV(Number(minAmountAMicro)),
+          transactions.uintCV(Number(minAmountBMicro)),
+          transactions.uintCV(gasFee),
         ];
       } else {
         functionName = 'add-liquidity';
         const tokenAParts = state.tokenA.address.split('.');
         const tokenBParts = state.tokenB.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-          contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          uintCV(Number(amountAMicro)),
-          uintCV(Number(amountBMicro)),
-          uintCV(Number(minAmountAMicro)),
-          uintCV(Number(minAmountBMicro)),
+          transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+          transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+          transactions.uintCV(Number(amountAMicro)),
+          transactions.uintCV(Number(amountBMicro)),
+          transactions.uintCV(Number(minAmountAMicro)),
+          transactions.uintCV(Number(minAmountBMicro)),
         ];
       }
 
       if (useGasless) {
+        const transactions = await getStacksTransactions() as any;
+        const network = await getStacksNetwork() as any;
+        const common = await getStacksCommon() as any;
+        if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
+        const tx = await transactions.makeContractCall({
           contractAddress: contractAddress,
           contractName: contractName,
           functionName: functionName,
           functionArgs: functionArgs,
           senderAddress: stacksAddress,
-          network: STACKS_TESTNET,
-          anchorMode: AnchorMode.Any,
+          network: network.STACKS_TESTNET,
+          anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
           sponsored: true,
         } as any);
 
-        const txHex = bytesToHex(tx.serialize() as any);
+        const txHex = common.bytesToHex(tx.serialize() as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         // We attempt to use the universal StacksProvider injection
@@ -666,14 +679,18 @@ export function LiquidityInterface() {
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
       } else {
-        // Standard flow
+        const network = await getStacksNetwork() as any;
+        const connect = await getStacksConnect() as any;
+        if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
+        // Step 2: Handle regular transaction (signed by user, self-broadcast)
         await new Promise<string>((resolve, reject) => {
-          openContractCall({
+          connect.openContractCall({
             contractAddress,
             contractName,
             functionName,
             functionArgs,
-            network: STACKS_TESTNET as any,
+            network: network.STACKS_TESTNET as any,
             postConditionMode: 0x01 as any,
             sponsored: false,
             appDetails: {
@@ -721,19 +738,22 @@ export function LiquidityInterface() {
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
       const { a, b, isReversed } = sortTokens(state.tokenA.address, state.tokenB.address);
 
-      const poolResult = await fetchCallReadOnlyFunction({
+      const transactions = await getStacksTransactions() as any;
+      if (!transactions) return;
+
+      const poolResult = await transactions.fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          principalCV(a),
-          principalCV(b),
+          transactions.principalCV(a),
+          transactions.principalCV(b),
         ],
         network: 'testnet',
         senderAddress: stacksAddress,
       });
 
-      const poolJson = cvToJSON(poolResult);
+      const poolJson = transactions.cvToJSON(poolResult);
 
       if (poolJson.success && poolJson.value) {
         const poolData = poolJson.value.value;
@@ -779,6 +799,11 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      const transactions = await getStacksTransactions() as any;
+      const network = await getStacksNetwork() as any;
+      const common = await getStacksCommon() as any;
+      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
       const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6);
       const slippageFactor = 1 - (state.slippage / 100);
       const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * slippageFactor).toFixed(6), state.tokenA.decimals);
@@ -787,15 +812,16 @@ export function LiquidityInterface() {
       const isTokenAStx = state.tokenA.symbol === 'STX';
       const isTokenBStx = state.tokenB.symbol === 'STX';
       const isStxPool = isTokenAStx || isTokenBStx;
+      const gaslessMode = state.gaslessMode;
 
-      const contractAddress = state.gaslessMode
+      const contractAddress = gaslessMode
         ? config.stacksPaymasterAddress.split('.')[0]
         : config.stacksSwapContractAddress.split('.')[0];
-      const contractName = state.gaslessMode
+      const contractName = gaslessMode
         ? config.stacksPaymasterAddress.split('.')[1]
         : config.stacksSwapContractAddress.split('.')[1];
 
-      const gasFee = state.gaslessMode ? 10000 : 0;
+      const gasFee = gaslessMode ? 10000 : 0;
 
       let functionArgs = [];
 
@@ -807,48 +833,53 @@ export function LiquidityInterface() {
         const minToken = isTokenAStx ? minAmountBMicro : minAmountAMicro;
 
         functionArgs = [
-          contractPrincipalCV(tokenParts[0], tokenParts[1]),
-          uintCV(Number(lpTokenAmountMicro)),
-          uintCV(Number(minStx)),
-          uintCV(Number(minToken)),
+          transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
+          transactions.uintCV(Number(lpTokenAmountMicro)),
+          transactions.uintCV(Number(minStx)),
+          transactions.uintCV(Number(minToken)),
         ];
-        if (state.gaslessMode) functionArgs.push(uintCV(gasFee));
+        if (gaslessMode) functionArgs.push(transactions.uintCV(gasFee));
       } else {
         const tokenAParts = state.tokenA.address.split('.');
         const tokenBParts = state.tokenB.address.split('.');
-        functionArgs = state.gaslessMode
+        functionArgs = gaslessMode
           ? [
-            contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-            contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            uintCV(Number(lpTokenAmountMicro)),
-            uintCV(Number(minAmountAMicro)),
-            uintCV(Number(minAmountBMicro)),
-            uintCV(gasFee),
+            transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+            transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+            transactions.uintCV(Number(lpTokenAmountMicro)),
+            transactions.uintCV(Number(minAmountAMicro)),
+            transactions.uintCV(Number(minAmountBMicro)),
+            transactions.uintCV(gasFee),
           ]
           : [
-            contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-            contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            uintCV(Number(lpTokenAmountMicro)),
-            uintCV(Number(minAmountAMicro)),
-            uintCV(Number(minAmountBMicro)),
+            transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+            transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+            transactions.uintCV(Number(lpTokenAmountMicro)),
+            transactions.uintCV(Number(minAmountAMicro)),
+            transactions.uintCV(Number(minAmountBMicro)),
           ];
       }
 
-      if (state.gaslessMode) {
+      if (gaslessMode) {
+        const transactions = await getStacksTransactions() as any;
+        const network = await getStacksNetwork() as any;
+        const common = await getStacksCommon() as any;
+        if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
+        const tx = await transactions.makeContractCall({
           contractAddress: contractAddress,
           contractName: contractName,
           functionName: isStxPool ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-gasless',
           functionArgs: functionArgs,
           senderAddress: stacksAddress,
-          network: STACKS_TESTNET,
-          anchorMode: AnchorMode.Any,
+          network: network.STACKS_TESTNET,
+          anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
           sponsored: true,
         } as any);
 
-        const txHex = bytesToHex(tx.serialize() as any);
+        const txHex = common.bytesToHex(tx.serialize() as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
@@ -863,7 +894,7 @@ export function LiquidityInterface() {
         const response = await provider.request('stx_signTransaction', requestParams);
         const signedTxHex = response.result.transaction;
 
-        // Step 3: send to backend relayer
+        // Step 3: Send to backend relayer
         const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -873,20 +904,23 @@ export function LiquidityInterface() {
             estimatedFee: gasFee.toString(),
           }),
         });
-
         const sponsorData = await sponsorResponse.json();
         if (!sponsorData.success) {
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
       } else {
         // Standard flow
+        const network = await getStacksNetwork() as any;
+        const connect = await getStacksConnect() as any;
+        if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
         await new Promise<string>((resolve, reject) => {
-          openContractCall({
+          connect.openContractCall({
             contractAddress,
             contractName,
             functionName: isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity',
             functionArgs,
-            network: STACKS_TESTNET as any,
+            network: network.STACKS_TESTNET as any,
             postConditionMode: 0x01 as any,
             sponsored: false,
             appDetails: {
@@ -899,7 +933,7 @@ export function LiquidityInterface() {
             onCancel: () => {
               reject(new Error('User cancelled transaction'));
             },
-          } as any);
+          });
         });
       }
 

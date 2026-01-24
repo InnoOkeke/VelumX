@@ -12,10 +12,7 @@ import { createWalletClient, createPublicClient, custom, http, parseUnits, forma
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
 import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
-import { makeContractCall, AnchorMode, PostConditionMode, uintCV, contractPrincipalCV, bufferCV } from '@stacks/transactions';
-import { STACKS_TESTNET } from '@stacks/network';
-import { bytesToHex } from '@stacks/common';
-import { openContractCall } from '@stacks/connect';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 
@@ -191,10 +188,6 @@ export function BridgeInterface() {
     }));
   };
 
-  // Encode Stacks address to bytes32
-  const encodeStacksAddress = (address: string): `0x${string}` => {
-    return encodeStacksAddressUtil(address);
-  };
 
   // Encode Ethereum address to bytes32 for Stacks contract
   const encodeEthereumAddress = (address: string): Uint8Array => {
@@ -259,7 +252,7 @@ export function BridgeInterface() {
       }
 
       // Step 3: Deposit to xReserve (Stacks official bridge)
-      const recipientBytes32 = encodeStacksAddress(stacksAddress);
+      const recipientBytes32 = await encodeStacksAddressUtil(stacksAddress);
 
       const depositHash = await walletClient.writeContract({
         address: config.ethereumXReserveAddress as `0x${string}`,
@@ -354,6 +347,11 @@ export function BridgeInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      const transactions = await getStacksTransactions() as any;
+      const network = await getStacksNetwork() as any;
+      const common = await getStacksCommon() as any;
+      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);
 
@@ -370,31 +368,31 @@ export function BridgeInterface() {
 
       const functionArgs = state.gaslessMode
         ? [
-          uintCV(Number(amountInMicroUsdc)),
-          uintCV(Number(parseUnits(state.feeEstimate?.usdcx || '0', 6))),
-          bufferCV(recipientBytes),
+          transactions.uintCV(Number(amountInMicroUsdc)),
+          transactions.uintCV(Number(parseUnits(state.feeEstimate?.usdcx || '0', 6))),
+          transactions.bufferCV(recipientBytes),
         ]
         : [
-          uintCV(Number(amountInMicroUsdc)),
-          uintCV(0), // native-domain: 0 for Ethereum
-          bufferCV(recipientBytes),
+          transactions.uintCV(Number(amountInMicroUsdc)),
+          transactions.uintCV(0), // native-domain: 0 for Ethereum
+          transactions.bufferCV(recipientBytes),
         ];
 
       if (state.gaslessMode) {
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
+        const tx = await transactions.makeContractCall({
           contractAddress: contractAddress,
           contractName: contractName,
           functionName: functionName,
           functionArgs: functionArgs,
           senderAddress: stacksAddress,
-          network: STACKS_TESTNET,
-          anchorMode: AnchorMode.Any,
+          network: network.STACKS_TESTNET,
+          anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
           sponsored: true,
         } as any);
 
-        const txHex = bytesToHex(tx.serialize() as any);
+        const txHex = common.bytesToHex(tx.serialize() as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
@@ -448,13 +446,17 @@ export function BridgeInterface() {
         });
       } else {
         // Standard flow
+        const network = await getStacksNetwork() as any;
+        const connect = await getStacksConnect() as any;
+        if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
         await new Promise<string>((resolve, reject) => {
-          openContractCall({
+          connect.openContractCall({
             contractAddress,
             contractName,
             functionName,
             functionArgs,
-            network: STACKS_TESTNET as any,
+            network: network.STACKS_TESTNET as any,
             postConditionMode: 0x01 as any,
             sponsored: false,
             appDetails: {
