@@ -20,6 +20,79 @@ export class StacksMintService {
   private network: StacksNetwork = STACKS_TESTNET;
 
   /**
+   * Funds a new Stacks account if it has low balance
+   * @param recipientAddress - Address to check and fund
+   * @returns Transaction ID of funding transfer, or null if not needed
+   */
+  async fundNewAccount(recipientAddress: string): Promise<string | null> {
+    try {
+      // Check current balance
+      const response = await fetch(
+        `${this.config.stacksRpcUrl}/v2/accounts/${recipientAddress}?proof=0`
+      );
+
+      if (!response.ok) {
+        // If 404, account likely doesn't exist, so definitely needs funding
+        if (response.status !== 404) {
+          throw new Error(`Failed to check account balance: ${response.statusText}`);
+        }
+      }
+
+      const data = (response.ok ? await response.json() : { balance: '0' }) as { balance: string };
+      const balance = BigInt(data.balance);
+      const minBalance = BigInt(100000); // 0.1 STX
+
+      // If balance is sufficient, skip
+      if (balance >= minBalance) {
+        logger.info('Account has sufficient STX, skipping gas drop', {
+          address: recipientAddress,
+          balance: balance.toString()
+        });
+        return null;
+      }
+
+      logger.info('Account needs funding, initiating gas drop', {
+        address: recipientAddress,
+        currentBalance: balance.toString()
+      });
+
+      // Send 0.5 STX
+      // Dynamically import to avoid type issues if needed, or use existing imports
+      const { makeSTXTokenTransfer, broadcastTransaction, AnchorMode } = await import('@stacks/transactions');
+
+      const txOptions = {
+        recipient: recipientAddress,
+        amount: BigInt(500000), // 0.5 STX
+        senderKey: this.config.relayerPrivateKey,
+        network: 'testnet' as const,
+        memo: 'VelumX Gas Drop',
+        anchorMode: AnchorMode.Any,
+      };
+
+      const transaction = await makeSTXTokenTransfer(txOptions);
+      const broadcastResponse = await broadcastTransaction(transaction as any);
+
+      if ('error' in broadcastResponse) {
+        throw new Error(`Gas drop broadcast failed: ${broadcastResponse.error}`);
+      }
+
+      const txId = broadcastResponse.txid;
+      logger.info('Gas drop successful', {
+        address: recipientAddress,
+        txId
+      });
+
+      return txId;
+    } catch (error) {
+      logger.error('Failed to process gas drop', {
+        address: recipientAddress,
+        error: (error as Error).message
+      });
+      return null;
+    }
+  }
+
+  /**
    * Mints USDCx on Stacks using the attestation
    * 
    * @param recipientAddress - Stacks address to receive USDCx

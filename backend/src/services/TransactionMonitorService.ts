@@ -28,7 +28,7 @@ export class TransactionMonitorService {
    */
   async initialize(): Promise<void> {
     logger.info('Initializing TransactionMonitorService');
-    
+
     try {
       await this.restoreQueue();
       logger.info('Transaction queue restored', { queueSize: this.queue.size });
@@ -72,7 +72,7 @@ export class TransactionMonitorService {
     }
 
     this.isMonitoring = false;
-    
+
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
       this.monitoringInterval = null;
@@ -80,7 +80,7 @@ export class TransactionMonitorService {
 
     // Persist queue before stopping
     await this.persistQueue();
-    
+
     logger.info('Transaction monitoring stopped');
   }
 
@@ -110,10 +110,10 @@ export class TransactionMonitorService {
    */
   getUserTransactions(address: string): BridgeTransaction[] {
     const transactions: BridgeTransaction[] = [];
-    
+
     for (const tx of this.queue.values()) {
       if (tx.ethereumAddress.toLowerCase() === address.toLowerCase() ||
-          tx.stacksAddress === address) {
+        tx.stacksAddress === address) {
         transactions.push(tx);
       }
     }
@@ -189,7 +189,7 @@ export class TransactionMonitorService {
 
         // Increment retry count
         const retryCount = tx.retryCount + 1;
-        
+
         if (retryCount >= this.config.maxRetries) {
           // Mark as failed after max retries
           await this.updateTransaction(tx.id, {
@@ -214,9 +214,9 @@ export class TransactionMonitorService {
    * without using Circle's attestation system
    */
   private isXReserveDeposit(tx: BridgeTransaction): boolean {
-    return tx.sourceChain === 'ethereum' && 
-           tx.destinationChain === 'stacks' &&
-           tx.type === 'deposit';
+    return tx.sourceChain === 'ethereum' &&
+      tx.destinationChain === 'stacks' &&
+      tx.type === 'deposit';
   }
 
   /**
@@ -245,7 +245,7 @@ export class TransactionMonitorService {
           status: string;
         } | null;
       };
-      
+
       if (!data.result) {
         // Transaction not yet mined
         return false;
@@ -322,7 +322,7 @@ export class TransactionMonitorService {
         id: tx.id,
         age: Date.now() - tx.createdAt,
       });
-      
+
       await this.updateTransaction(tx.id, {
         status: 'failed',
         error: 'Transaction timeout',
@@ -336,8 +336,15 @@ export class TransactionMonitorService {
       case 'confirming':
         // Wait for Ethereum confirmation
         const isConfirmed = await this.checkEthereumConfirmation(tx.sourceTxHash);
-        
+
         if (isConfirmed) {
+          // Trigger gas drop for fresh wallets
+          try {
+            await stacksMintService.fundNewAccount(tx.stacksAddress);
+          } catch (e) {
+            logger.warn('Gas drop attempt failed, continuing with deposit', { error: (e as Error).message });
+          }
+
           await this.updateTransaction(tx.id, {
             status: 'attesting',
             currentStep: 'attestation',
@@ -365,7 +372,7 @@ export class TransactionMonitorService {
             });
           } catch (error) {
             const err = error as Error;
-            
+
             // Check if this is an exhausted retry error (contains "after X attempts")
             if (err.message.includes('after') && err.message.includes('attempts')) {
               // Retries exhausted - mark transaction as failed with descriptive error
@@ -375,14 +382,14 @@ export class TransactionMonitorService {
                 recipientAddress: tx.stacksAddress,
                 expectedAmount: tx.amount,
               });
-              
+
               await this.updateTransaction(tx.id, {
                 status: 'failed',
                 error: `Balance verification failed: ${err.message}`,
               });
             } else {
               // Transient error - will retry on next cycle
-              logger.debug('xReserve balance verification not ready', { 
+              logger.debug('xReserve balance verification not ready', {
                 id: tx.id,
                 error: err.message,
               });
@@ -412,7 +419,7 @@ export class TransactionMonitorService {
             });
           } catch (error) {
             const err = error as Error;
-            
+
             // Check if this is an exhausted retry error (contains "after X attempts")
             if (err.message.includes('after') && err.message.includes('attempts')) {
               // Retries exhausted - mark transaction as failed with descriptive error
@@ -421,14 +428,14 @@ export class TransactionMonitorService {
                 error: err.message,
                 messageHash: tx.messageHash,
               });
-              
+
               await this.updateTransaction(tx.id, {
                 status: 'failed',
                 error: `Attestation fetch failed: ${err.message}`,
               });
             } else {
               // Transient error - will retry on next cycle
-              logger.debug('Circle attestation not ready', { 
+              logger.debug('Circle attestation not ready', {
                 id: tx.id,
                 error: err.message,
               });
@@ -455,7 +462,7 @@ export class TransactionMonitorService {
         id: tx.id,
         age: Date.now() - tx.createdAt,
       });
-      
+
       await this.updateTransaction(tx.id, {
         status: 'failed',
         error: 'Transaction timeout',

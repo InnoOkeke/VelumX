@@ -379,130 +379,122 @@ export function LiquidityInterface() {
           return state.poolSortOrder === 'asc' ? numA - numB : numB - numA;
         }
       });
+    }
 
-      setState(prev => ({ ...prev, filteredPools: filtered }));
-    };
+    setState(prev => ({ ...prev, filteredPools: filtered }));
+  };
 
-    /**
-     * Select a pool from the browser
-     */
-    const selectPoolFromBrowser = (pool: Pool) => {
-      setState(prev => ({
-        ...prev,
-        tokenA: pool.tokenA,
-        tokenB: pool.tokenB,
-        selectedPoolForSwap: pool,
-        showPoolBrowser: false,
-        error: null,
-      }));
+  /**
+   * Select a pool from the browser
+   */
+  const selectPoolFromBrowser = (pool: Pool) => {
+    setState(prev => ({
+      ...prev,
+      tokenA: pool.tokenA,
+      tokenB: pool.tokenB,
+      selectedPoolForSwap: pool,
+      showPoolBrowser: false,
+      error: null,
+    }));
 
-      // Add tokens to the tokens list if they don't exist
-      const newTokens = [...tokens];
-      if (!newTokens.find(t => t.address === pool.tokenA.address)) {
-        newTokens.push(pool.tokenA);
-      }
-      if (!newTokens.find(t => t.address === pool.tokenB.address)) {
-        newTokens.push(pool.tokenB);
-      }
-      setTokens(newTokens);
-    };
+    // Add tokens to the tokens list if they don't exist
+    const newTokens = [...tokens];
+    if (!newTokens.find(t => t.address === pool.tokenA.address)) {
+      newTokens.push(pool.tokenA);
+    }
+    if (!newTokens.find(t => t.address === pool.tokenB.address)) {
+      newTokens.push(pool.tokenB);
+    }
+    setTokens(newTokens);
+  };
 
-    /**
-     * Format currency values
-     */
-    const formatCurrency = (value: number): string => {
-      if (value >= 1000000) {
-        return `$${(value / 1000000).toFixed(2)}M`;
-      } else if (value >= 1000) {
-        return `$${(value / 1000).toFixed(2)}K`;
-      } else {
-        return `$${value.toFixed(2)}`;
-      }
-    };
+  /**
+   * Format currency values
+   */
+  const formatCurrency = (value: number): string => {
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(2)}M`;
+    } else if (value >= 1000) {
+      return `$${(value / 1000).toFixed(2)}K`;
+    } else {
+      return `$${value.toFixed(2)}`;
+    }
+  };
 
-    /**
-     * Format percentage values
-     */
-    const formatPercentage = (value: number): string => {
-      return `${value.toFixed(2)}%`;
-    };
+  /**
+   * Format percentage values
+   */
+  const formatPercentage = (value: number): string => {
+    return `${value.toFixed(2)}%`;
+  };
 
-    const fetchPoolInfo = async () => {
-      if (!state.tokenA || !state.tokenB || !stacksAddress) return;
+  const fetchPoolInfo = async () => {
+    if (!state.tokenA || !state.tokenB || !stacksAddress) return;
 
-      try {
-        const transactions = await getStacksTransactions() as any;
-        if (!transactions) return;
+    try {
+      const transactions = await getStacksTransactions() as any;
+      if (!transactions) return;
 
-        const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
-        const { a, b } = sortTokens(state.tokenA.address, state.tokenB.address);
+      const { a, b } = sortTokens(state.tokenA.address, state.tokenB.address);
 
-        // Get pool reserves
-        const poolResult = await transactions.fetchCallReadOnlyFunction({
+      // Get pool reserves
+      const poolResult = await transactions.fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-pool-reserves',
+        functionArgs: [
+          transactions.principalCV(a),
+          transactions.principalCV(b),
+        ],
+        network: 'testnet',
+        senderAddress: stacksAddress,
+      });
+
+      const poolJson = transactions.cvToJSON(poolResult);
+
+      if (poolJson.success && poolJson.value) {
+        const poolData = poolJson.value.value;
+        const rawReserveA = Number(poolData['reserve-a'].value);
+        const rawReserveB = Number(poolData['reserve-b'].value);
+        const totalSupply = Number(poolData['total-supply'].value);
+
+        // Pool exists if reserves are non-zero
+        const poolExists = rawReserveA > 0 && rawReserveB > 0;
+
+        // Get user LP balance
+        const lpResult = await transactions.fetchCallReadOnlyFunction({
           contractAddress,
           contractName,
-          functionName: 'get-pool-reserves',
+          functionName: 'get-lp-balance',
           functionArgs: [
             transactions.principalCV(a),
             transactions.principalCV(b),
+            transactions.principalCV(stacksAddress),
           ],
           network: 'testnet',
           senderAddress: stacksAddress,
         });
 
-        const poolJson = transactions.cvToJSON(poolResult);
+        const lpJson = transactions.cvToJSON(lpResult);
+        const userLpBalanceRaw = lpJson.success && lpJson.value ? Number(lpJson.value.value) : 0;
+        const userLpBalance = (userLpBalanceRaw / Math.pow(10, 6)).toFixed(6);
 
-        if (poolJson.success && poolJson.value) {
-          const poolData = poolJson.value.value;
-          const rawReserveA = Number(poolData['reserve-a'].value);
-          const rawReserveB = Number(poolData['reserve-b'].value);
-          const totalSupply = Number(poolData['total-supply'].value);
-
-          // Pool exists if reserves are non-zero
-          const poolExists = rawReserveA > 0 && rawReserveB > 0;
-
-          // Get user LP balance
-          const lpResult = await transactions.fetchCallReadOnlyFunction({
-            contractAddress,
-            contractName,
-            functionName: 'get-lp-balance',
-            functionArgs: [
-              transactions.principalCV(a),
-              transactions.principalCV(b),
-              transactions.principalCV(stacksAddress),
-            ],
-            network: 'testnet',
-            senderAddress: stacksAddress,
-          });
-
-          const lpJson = transactions.cvToJSON(lpResult);
-          const userLpBalanceRaw = lpJson.success && lpJson.value ? Number(lpJson.value.value) : 0;
-          const userLpBalance = (userLpBalanceRaw / Math.pow(10, 6)).toFixed(6);
-
-          // Local calculation of pool share percentage
-          let poolShare = '0';
-          if (totalSupply > 0 && userLpBalanceRaw > 0) {
-            poolShare = ((userLpBalanceRaw / totalSupply) * 100).toFixed(2);
-          }
-
-          setState(prev => ({
-            ...prev,
-            poolExists,
-            userLpBalance,
-            poolShare,
-          }));
-        } else {
-          // Pool doesn't exist yet
-          setState(prev => ({
-            ...prev,
-            poolExists: false,
-            userLpBalance: '0',
-            poolShare: '0',
-          }));
+        // Local calculation of pool share percentage
+        let poolShare = '0';
+        if (totalSupply > 0 && userLpBalanceRaw > 0) {
+          poolShare = ((userLpBalanceRaw / totalSupply) * 100).toFixed(2);
         }
-      } catch (error) {
-        console.error('Failed to fetch pool info:', error);
+
+        setState(prev => ({
+          ...prev,
+          poolExists,
+          userLpBalance,
+          poolShare,
+        }));
+      } else {
+        // Pool doesn't exist yet
         setState(prev => ({
           ...prev,
           poolExists: false,
@@ -510,757 +502,766 @@ export function LiquidityInterface() {
           poolShare: '0',
         }));
       }
-    };
+    } catch (error) {
+      console.error('Failed to fetch pool info:', error);
+      setState(prev => ({
+        ...prev,
+        poolExists: false,
+        userLpBalance: '0',
+        poolShare: '0',
+      }));
+    }
+  };
 
-    const calculateOptimalAmountB = async () => {
-      if (!state.tokenA || !state.tokenB || !state.amountA || !state.poolExists) return;
+  const calculateOptimalAmountB = async () => {
+    if (!state.tokenA || !state.tokenB || !state.amountA || !state.poolExists) return;
 
-      try {
-        const transactions = await getStacksTransactions() as any;
-        if (!transactions) return;
+    try {
+      const transactions = await getStacksTransactions() as any;
+      if (!transactions) return;
 
-        const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
-        // Get pool reserves
-        const poolResult = await transactions.fetchCallReadOnlyFunction({
-          contractAddress,
-          contractName,
-          functionName: 'get-pool-reserves',
-          functionArgs: [
-            transactions.principalCV(state.tokenA.address),
-            transactions.principalCV(state.tokenB.address),
-          ],
-          network: 'testnet',
-          senderAddress: stacksAddress || contractAddress,
-        });
+      // Get pool reserves
+      const poolResult = await transactions.fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-pool-reserves',
+        functionArgs: [
+          transactions.principalCV(state.tokenA.address),
+          transactions.principalCV(state.tokenB.address),
+        ],
+        network: 'testnet',
+        senderAddress: stacksAddress || contractAddress,
+      });
 
-        const poolJson = transactions.cvToJSON(poolResult);
+      const poolJson = transactions.cvToJSON(poolResult);
 
-        if (poolJson.success && poolJson.value) {
-          const poolData = poolJson.value.value;
-          const reserveA = Number(poolData['reserve-a'].value);
-          const reserveB = Number(poolData['reserve-b'].value);
+      if (poolJson.success && poolJson.value) {
+        const poolData = poolJson.value.value;
+        const reserveA = Number(poolData['reserve-a'].value);
+        const reserveB = Number(poolData['reserve-b'].value);
 
-          // Calculate optimal amount B based on pool ratio
-          const amountAMicro = parseFloat(state.amountA) * Math.pow(10, state.tokenA.decimals);
-          const amountBMicro = (amountAMicro * reserveB) / reserveA;
-          const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
+        // Calculate optimal amount B based on pool ratio
+        const amountAMicro = parseFloat(state.amountA) * Math.pow(10, state.tokenA.decimals);
+        const amountBMicro = (amountAMicro * reserveB) / reserveA;
+        const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
 
-          setState(prev => ({ ...prev, amountB }));
-        }
-      } catch (error) {
-        console.error('Failed to calculate optimal amount:', error);
+        setState(prev => ({ ...prev, amountB }));
       }
-    };
+    } catch (error) {
+      console.error('Failed to calculate optimal amount:', error);
+    }
+  };
 
-    const handleAddLiquidity = async () => {
-      if (!stacksAddress || !state.tokenA || !state.tokenB) {
-        setState(prev => ({ ...prev, error: 'Please connect wallet and select tokens' }));
-        return;
+  const handleAddLiquidity = async () => {
+    if (!stacksAddress || !state.tokenA || !state.tokenB) {
+      setState(prev => ({ ...prev, error: 'Please connect wallet and select tokens' }));
+      return;
+    }
+
+    if (!state.amountA || !state.amountB || parseFloat(state.amountA) <= 0 || parseFloat(state.amountB) <= 0) {
+      setState(prev => ({ ...prev, error: 'Please enter valid amounts' }));
+      return;
+    }
+
+    setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
+
+    try {
+      const transactions = await getStacksTransactions() as any;
+      const network = await getStacksNetwork() as any;
+      const common = await getStacksCommon() as any;
+      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
+      const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
+      const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
+
+      const slippageFactor = 1 - (state.slippage / 100);
+      const minAmountAMicro = parseUnits((parseFloat(state.amountA) * slippageFactor).toFixed(6), state.tokenA.decimals);
+      const minAmountBMicro = parseUnits((parseFloat(state.amountB) * slippageFactor).toFixed(6), state.tokenB.decimals);
+
+      const isTokenAStx = state.tokenA.symbol === 'STX';
+      const isTokenBStx = state.tokenB.symbol === 'STX';
+      const isStxPool = isTokenAStx || isTokenBStx;
+      const useGasless = state.gaslessMode;
+
+      const contractAddress = useGasless
+        ? config.stacksPaymasterAddress.split('.')[0]
+        : config.stacksSwapContractAddress.split('.')[0];
+      const contractName = useGasless
+        ? config.stacksPaymasterAddress.split('.')[1]
+        : config.stacksSwapContractAddress.split('.')[1];
+
+      const gasFee = 10000;
+      let functionName = 'add-liquidity';
+      let functionArgs = [];
+
+      if (isStxPool) {
+        functionName = useGasless ? 'add-liquidity-stx-gasless' : 'add-liquidity-stx';
+        const stxAmount = isTokenAStx ? amountAMicro : amountBMicro;
+        const tokenAmount = isTokenAStx ? amountBMicro : amountAMicro;
+        const stxMin = isTokenAStx ? minAmountAMicro : minAmountBMicro;
+        const tokenMin = isTokenAStx ? minAmountBMicro : minAmountAMicro;
+        const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
+        if (!tokenToken) throw new Error('Token not found');
+        const tokenParts = tokenToken.address.split('.');
+
+        functionArgs = [
+          transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
+          transactions.uintCV(stxAmount),
+          transactions.uintCV(tokenAmount),
+          transactions.uintCV(stxMin),
+          transactions.uintCV(tokenMin),
+        ];
+        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
+      } else if (useGasless) {
+        functionName = 'add-liquidity-gasless';
+        const tokenAParts = state.tokenA.address.split('.');
+        const tokenBParts = state.tokenB.address.split('.');
+        functionArgs = [
+          transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+          transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+          transactions.uintCV(amountAMicro),
+          transactions.uintCV(amountBMicro),
+          transactions.uintCV(minAmountAMicro),
+          transactions.uintCV(minAmountBMicro),
+          transactions.uintCV(gasFee),
+        ];
+      } else {
+        functionName = 'add-liquidity';
+        const tokenAParts = state.tokenA.address.split('.');
+        const tokenBParts = state.tokenB.address.split('.');
+        functionArgs = [
+          transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+          transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+          transactions.uintCV(amountAMicro),
+          transactions.uintCV(amountBMicro),
+          transactions.uintCV(minAmountAMicro),
+          transactions.uintCV(minAmountBMicro),
+        ];
       }
 
-      if (!state.amountA || !state.amountB || parseFloat(state.amountA) <= 0 || parseFloat(state.amountB) <= 0) {
-        setState(prev => ({ ...prev, error: 'Please enter valid amounts' }));
-        return;
-      }
-
-      setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
-
-      try {
+      if (useGasless) {
         const transactions = await getStacksTransactions() as any;
         const network = await getStacksNetwork() as any;
         const common = await getStacksCommon() as any;
         if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
 
-        const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
-        const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
+        // Step 1: Build unsigned sponsored transaction
+        const tx = await transactions.makeContractCall({
+          contractAddress: contractAddress,
+          contractName: contractName,
+          functionName: functionName,
+          functionArgs: functionArgs,
+          senderAddress: stacksAddress,
+          network: network.STACKS_TESTNET,
+          anchorMode: transactions.AnchorMode.Any,
+          postConditionMode: 0x01 as any,
+          postConditions: [],
+          sponsored: true,
+        } as any);
 
-        const slippageFactor = 1 - (state.slippage / 100);
-        const minAmountAMicro = parseUnits((parseFloat(state.amountA) * slippageFactor).toFixed(6), state.tokenA.decimals);
-        const minAmountBMicro = parseUnits((parseFloat(state.amountB) * slippageFactor).toFixed(6), state.tokenB.decimals);
+        const txHex = common.bytesToHex(tx.serialize() as any);
 
-        const isTokenAStx = state.tokenA.symbol === 'STX';
-        const isTokenBStx = state.tokenB.symbol === 'STX';
-        const isStxPool = isTokenAStx || isTokenBStx;
-        const useGasless = state.gaslessMode;
+        // Step 2: Request user signature via wallet RPC (without broadcast)
+        const getProvider = () => {
+          if (typeof window === 'undefined') return null;
+          const win = window as any;
+          // Prefer universal injection, then specific ones
+          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
+          return p && typeof p === 'object' ? p : null;
+        };
 
-        const contractAddress = useGasless
-          ? config.stacksPaymasterAddress.split('.')[0]
-          : config.stacksSwapContractAddress.split('.')[0];
-        const contractName = useGasless
-          ? config.stacksPaymasterAddress.split('.')[1]
-          : config.stacksSwapContractAddress.split('.')[1];
+        const provider = getProvider();
+        if (!provider || typeof provider.request !== 'function') {
+          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
+        }
 
-        const gasFee = 10000;
-        let functionName = 'add-liquidity';
-        let functionArgs = [];
+        const requestParams = {
+          transaction: txHex,
+          broadcast: false,
+          network: 'testnet',
+        };
 
-        if (isStxPool) {
-          functionName = useGasless ? 'add-liquidity-stx-gasless' : 'add-liquidity-stx';
-          const stxAmount = isTokenAStx ? amountAMicro : amountBMicro;
-          const tokenAmount = isTokenAStx ? amountBMicro : amountAMicro;
-          const stxMin = isTokenAStx ? minAmountAMicro : minAmountBMicro;
-          const tokenMin = isTokenAStx ? minAmountBMicro : minAmountAMicro;
-          const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
-          if (!tokenToken) throw new Error('Token not found');
-          const tokenParts = tokenToken.address.split('.');
+        const response = await provider.request({
+          method: 'stx_signTransaction',
+          params: requestParams
+        });
 
-          functionArgs = [
-            transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
-            transactions.uintCV(stxAmount),
-            transactions.uintCV(tokenAmount),
-            transactions.uintCV(stxMin),
-            transactions.uintCV(tokenMin),
-          ];
-          if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
-        } else if (useGasless) {
-          functionName = 'add-liquidity-gasless';
-          const tokenAParts = state.tokenA.address.split('.');
-          const tokenBParts = state.tokenB.address.split('.');
-          functionArgs = [
+        if (!response || !response.result || !response.result.transaction) {
+          throw new Error('Wallet failed to sign the transaction. Please try again.');
+        }
+
+        const signedTxHex = response.result.transaction;
+
+        // Step 3: send to backend relayer
+        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: signedTxHex,
+            userAddress: stacksAddress,
+            estimatedFee: gasFee.toString(),
+          }),
+        });
+
+        const sponsorData = await sponsorResponse.json();
+        if (!sponsorData.success) {
+          throw new Error(sponsorData.message || 'Sponsorship failed');
+        }
+      } else {
+        const network = await getStacksNetwork() as any;
+        const connect = await getStacksConnect() as any;
+        if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
+        // Step 2: Handle regular transaction (signed by user, self-broadcast)
+        await new Promise<string>((resolve, reject) => {
+          connect.openContractCall({
+            contractAddress,
+            contractName,
+            functionName,
+            functionArgs,
+            network: network.STACKS_TESTNET as any,
+            postConditionMode: 0x01 as any,
+            sponsored: false,
+            appDetails: {
+              name: 'VelumX DEX',
+              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+            },
+            onFinish: async (data: any) => {
+              resolve(data.txId);
+            },
+            onCancel: () => {
+              reject(new Error('User cancelled transaction'));
+            },
+          } as any);
+        });
+      }
+
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        success: `Liquidity added successfully!`,
+        amountA: '',
+        amountB: '',
+      }));
+
+      if (fetchBalances) {
+        setTimeout(() => {
+          fetchBalances();
+          fetchPoolInfo();
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Add liquidity error:', error);
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: (error as Error).message || 'Failed to add liquidity',
+      }));
+    }
+  };
+
+  const calculateRemoveAmounts = async () => {
+    if (!state.tokenA || !state.tokenB || !state.lpTokenAmount || !stacksAddress) return;
+
+    try {
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+      const { a, b, isReversed } = sortTokens(state.tokenA.address, state.tokenB.address);
+
+      const transactions = await getStacksTransactions() as any;
+      if (!transactions) return;
+
+      const poolResult = await transactions.fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: 'get-pool-reserves',
+        functionArgs: [
+          transactions.principalCV(a),
+          transactions.principalCV(b),
+        ],
+        network: 'testnet',
+        senderAddress: stacksAddress,
+      });
+
+      const poolJson = transactions.cvToJSON(poolResult);
+
+      if (poolJson.success && poolJson.value) {
+        const poolData = poolJson.value.value;
+        const reserveA = Number(poolData['reserve-a'].value);
+        const reserveB = Number(poolData['reserve-b'].value);
+        const totalSupply = Number(poolData['total-supply'].value);
+
+        // UI tokenA matches contract token-a if not reversed
+        const resA = isReversed ? reserveB : reserveA;
+        const resB = isReversed ? reserveA : reserveB;
+
+        const lpAmountMicro = parseFloat(state.lpTokenAmount) * Math.pow(10, 6);
+        const amountAMicro = (lpAmountMicro * resA) / totalSupply;
+        const amountBMicro = (lpAmountMicro * resB) / totalSupply;
+
+        const amountA = (amountAMicro / Math.pow(10, state.tokenA.decimals)).toFixed(6);
+        const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
+
+        setState(prev => ({ ...prev, amountA, amountB }));
+      }
+    } catch (error) {
+      console.error('Failed to calculate remove amounts:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (state.mode === 'remove' && state.lpTokenAmount && parseFloat(state.lpTokenAmount) > 0 && state.poolExists) {
+      calculateRemoveAmounts();
+    }
+  }, [state.lpTokenAmount, state.mode, state.poolExists]);
+
+  const handleRemoveLiquidity = async () => {
+    if (!stacksAddress || !state.tokenA || !state.tokenB) {
+      setState(prev => ({ ...prev, error: 'Please connect wallet and select tokens' }));
+      return;
+    }
+
+    if (!state.lpTokenAmount || parseFloat(state.lpTokenAmount) <= 0) {
+      setState(prev => ({ ...prev, error: 'Please enter valid LP token amount' }));
+      return;
+    }
+
+    setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
+
+    try {
+      const transactions = await getStacksTransactions() as any;
+      const network = await getStacksNetwork() as any;
+      const common = await getStacksCommon() as any;
+      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+
+      const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6);
+      const slippageFactor = 1 - (state.slippage / 100);
+      const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * slippageFactor).toFixed(6), state.tokenA.decimals);
+      const minAmountBMicro = parseUnits((parseFloat(state.amountB || '0') * slippageFactor).toFixed(6), state.tokenB.decimals);
+
+      const isTokenAStx = state.tokenA.symbol === 'STX';
+      const isTokenBStx = state.tokenB.symbol === 'STX';
+      const isStxPool = isTokenAStx || isTokenBStx;
+      const gaslessMode = state.gaslessMode;
+
+      const contractAddress = gaslessMode
+        ? config.stacksPaymasterAddress.split('.')[0]
+        : config.stacksSwapContractAddress.split('.')[0];
+      const contractName = gaslessMode
+        ? config.stacksPaymasterAddress.split('.')[1]
+        : config.stacksSwapContractAddress.split('.')[1];
+
+      const gasFee = gaslessMode ? 10000 : 0;
+
+      let functionArgs = [];
+
+      if (isStxPool) {
+        const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
+        if (!tokenToken) throw new Error('Token not found');
+        const tokenParts = tokenToken.address.split('.');
+        const minStx = isTokenAStx ? minAmountAMicro : minAmountBMicro;
+        const minToken = isTokenAStx ? minAmountBMicro : minAmountAMicro;
+
+        functionArgs = [
+          transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
+          transactions.uintCV(lpTokenAmountMicro),
+          transactions.uintCV(minStx),
+          transactions.uintCV(minToken),
+        ];
+        if (gaslessMode) functionArgs.push(transactions.uintCV(gasFee));
+      } else {
+        const tokenAParts = state.tokenA.address.split('.');
+        const tokenBParts = state.tokenB.address.split('.');
+        functionArgs = gaslessMode
+          ? [
             transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
             transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            transactions.uintCV(amountAMicro),
-            transactions.uintCV(amountBMicro),
+            transactions.uintCV(lpTokenAmountMicro),
             transactions.uintCV(minAmountAMicro),
             transactions.uintCV(minAmountBMicro),
             transactions.uintCV(gasFee),
-          ];
-        } else {
-          functionName = 'add-liquidity';
-          const tokenAParts = state.tokenA.address.split('.');
-          const tokenBParts = state.tokenB.address.split('.');
-          functionArgs = [
+          ]
+          : [
             transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
             transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            transactions.uintCV(amountAMicro),
-            transactions.uintCV(amountBMicro),
+            transactions.uintCV(lpTokenAmountMicro),
             transactions.uintCV(minAmountAMicro),
             transactions.uintCV(minAmountBMicro),
           ];
-        }
-
-        if (useGasless) {
-          const transactions = await getStacksTransactions() as any;
-          const network = await getStacksNetwork() as any;
-          const common = await getStacksCommon() as any;
-          if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
-
-          // Step 1: Build unsigned sponsored transaction
-          const tx = await transactions.makeContractCall({
-            contractAddress: contractAddress,
-            contractName: contractName,
-            functionName: functionName,
-            functionArgs: functionArgs,
-            senderAddress: stacksAddress,
-            network: network.STACKS_TESTNET,
-            anchorMode: transactions.AnchorMode.Any,
-            postConditionMode: 0x01 as any,
-            postConditions: [],
-            sponsored: true,
-          } as any);
-
-          const txHex = common.bytesToHex(tx.serialize() as any);
-
-          // Step 2: Request user signature via wallet RPC (without broadcast)
-          const getProvider = () => {
-            if (typeof window === 'undefined') return null;
-            const win = window as any;
-            // Prefer universal injection, then specific ones
-            const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
-            return p && typeof p === 'object' ? p : null;
-          };
-
-          const provider = getProvider();
-          if (!provider || typeof provider.request !== 'function') {
-            throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
-          }
-
-          const requestParams = {
-            transaction: txHex,
-            broadcast: false,
-            network: 'testnet',
-          };
-
-          const response = await provider.request({
-            method: 'stx_signTransaction',
-            params: requestParams
-          });
-
-          if (!response || !response.result || !response.result.transaction) {
-            throw new Error('Wallet failed to sign the transaction. Please try again.');
-          }
-
-          const signedTxHex = response.result.transaction;
-
-          // Step 3: send to backend relayer
-          const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              transaction: signedTxHex,
-              userAddress: stacksAddress,
-              estimatedFee: gasFee.toString(),
-            }),
-          });
-
-          const sponsorData = await sponsorResponse.json();
-          if (!sponsorData.success) {
-            throw new Error(sponsorData.message || 'Sponsorship failed');
-          }
-        } else {
-          const network = await getStacksNetwork() as any;
-          const connect = await getStacksConnect() as any;
-          if (!network || !connect) throw new Error('Stacks libraries not loaded');
-
-          // Step 2: Handle regular transaction (signed by user, self-broadcast)
-          await new Promise<string>((resolve, reject) => {
-            connect.openContractCall({
-              contractAddress,
-              contractName,
-              functionName,
-              functionArgs,
-              network: network.STACKS_TESTNET as any,
-              postConditionMode: 0x01 as any,
-              sponsored: false,
-              appDetails: {
-                name: 'VelumX DEX',
-                icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-              },
-              onFinish: async (data: any) => {
-                resolve(data.txId);
-              },
-              onCancel: () => {
-                reject(new Error('User cancelled transaction'));
-              },
-            } as any);
-          });
-        }
-
-        setState(prev => ({
-          ...prev,
-          isProcessing: false,
-          success: `Liquidity added successfully!`,
-          amountA: '',
-          amountB: '',
-        }));
-
-        if (fetchBalances) {
-          setTimeout(() => {
-            fetchBalances();
-            fetchPoolInfo();
-          }, 3000);
-        }
-      } catch (error) {
-        console.error('Add liquidity error:', error);
-        setState(prev => ({
-          ...prev,
-          isProcessing: false,
-          error: (error as Error).message || 'Failed to add liquidity',
-        }));
-      }
-    };
-
-    const calculateRemoveAmounts = async () => {
-      if (!state.tokenA || !state.tokenB || !state.lpTokenAmount || !stacksAddress) return;
-
-      try {
-        const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
-        const { a, b, isReversed } = sortTokens(state.tokenA.address, state.tokenB.address);
-
-        const transactions = await getStacksTransactions() as any;
-        if (!transactions) return;
-
-        const poolResult = await transactions.fetchCallReadOnlyFunction({
-          contractAddress,
-          contractName,
-          functionName: 'get-pool-reserves',
-          functionArgs: [
-            transactions.principalCV(a),
-            transactions.principalCV(b),
-          ],
-          network: 'testnet',
-          senderAddress: stacksAddress,
-        });
-
-        const poolJson = transactions.cvToJSON(poolResult);
-
-        if (poolJson.success && poolJson.value) {
-          const poolData = poolJson.value.value;
-          const reserveA = Number(poolData['reserve-a'].value);
-          const reserveB = Number(poolData['reserve-b'].value);
-          const totalSupply = Number(poolData['total-supply'].value);
-
-          // UI tokenA matches contract token-a if not reversed
-          const resA = isReversed ? reserveB : reserveA;
-          const resB = isReversed ? reserveA : reserveB;
-
-          const lpAmountMicro = parseFloat(state.lpTokenAmount) * Math.pow(10, 6);
-          const amountAMicro = (lpAmountMicro * resA) / totalSupply;
-          const amountBMicro = (lpAmountMicro * resB) / totalSupply;
-
-          const amountA = (amountAMicro / Math.pow(10, state.tokenA.decimals)).toFixed(6);
-          const amountB = (amountBMicro / Math.pow(10, state.tokenB.decimals)).toFixed(6);
-
-          setState(prev => ({ ...prev, amountA, amountB }));
-        }
-      } catch (error) {
-        console.error('Failed to calculate remove amounts:', error);
-      }
-    };
-
-    useEffect(() => {
-      if (state.mode === 'remove' && state.lpTokenAmount && parseFloat(state.lpTokenAmount) > 0 && state.poolExists) {
-        calculateRemoveAmounts();
-      }
-    }, [state.lpTokenAmount, state.mode, state.poolExists]);
-
-    const handleRemoveLiquidity = async () => {
-      if (!stacksAddress || !state.tokenA || !state.tokenB) {
-        setState(prev => ({ ...prev, error: 'Please connect wallet and select tokens' }));
-        return;
       }
 
-      if (!state.lpTokenAmount || parseFloat(state.lpTokenAmount) <= 0) {
-        setState(prev => ({ ...prev, error: 'Please enter valid LP token amount' }));
-        return;
-      }
-
-      setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
-
-      try {
+      if (gaslessMode) {
         const transactions = await getStacksTransactions() as any;
         const network = await getStacksNetwork() as any;
         const common = await getStacksCommon() as any;
         if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
 
-        const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6);
-        const slippageFactor = 1 - (state.slippage / 100);
-        const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * slippageFactor).toFixed(6), state.tokenA.decimals);
-        const minAmountBMicro = parseUnits((parseFloat(state.amountB || '0') * slippageFactor).toFixed(6), state.tokenB.decimals);
+        // Step 1: Build unsigned sponsored transaction
+        const tx = await transactions.makeContractCall({
+          contractAddress: contractAddress,
+          contractName: contractName,
+          functionName: isStxPool ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-gasless',
+          functionArgs: functionArgs,
+          senderAddress: stacksAddress,
+          network: network.STACKS_TESTNET,
+          anchorMode: transactions.AnchorMode.Any,
+          postConditionMode: 0x01 as any,
+          postConditions: [],
+          sponsored: true,
+        } as any);
 
-        const isTokenAStx = state.tokenA.symbol === 'STX';
-        const isTokenBStx = state.tokenB.symbol === 'STX';
-        const isStxPool = isTokenAStx || isTokenBStx;
-        const gaslessMode = state.gaslessMode;
+        const txHex = common.bytesToHex(tx.serialize() as any);
 
-        const contractAddress = gaslessMode
-          ? config.stacksPaymasterAddress.split('.')[0]
-          : config.stacksSwapContractAddress.split('.')[0];
-        const contractName = gaslessMode
-          ? config.stacksPaymasterAddress.split('.')[1]
-          : config.stacksSwapContractAddress.split('.')[1];
-
-        const gasFee = gaslessMode ? 10000 : 0;
-
-        let functionArgs = [];
-
-        if (isStxPool) {
-          const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
-          if (!tokenToken) throw new Error('Token not found');
-          const tokenParts = tokenToken.address.split('.');
-          const minStx = isTokenAStx ? minAmountAMicro : minAmountBMicro;
-          const minToken = isTokenAStx ? minAmountBMicro : minAmountAMicro;
-
-          functionArgs = [
-            transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
-            transactions.uintCV(lpTokenAmountMicro),
-            transactions.uintCV(minStx),
-            transactions.uintCV(minToken),
-          ];
-          if (gaslessMode) functionArgs.push(transactions.uintCV(gasFee));
-        } else {
-          const tokenAParts = state.tokenA.address.split('.');
-          const tokenBParts = state.tokenB.address.split('.');
-          functionArgs = gaslessMode
-            ? [
-              transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-              transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-              transactions.uintCV(lpTokenAmountMicro),
-              transactions.uintCV(minAmountAMicro),
-              transactions.uintCV(minAmountBMicro),
-              transactions.uintCV(gasFee),
-            ]
-            : [
-              transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-              transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-              transactions.uintCV(lpTokenAmountMicro),
-              transactions.uintCV(minAmountAMicro),
-              transactions.uintCV(minAmountBMicro),
-            ];
-        }
-
-        if (gaslessMode) {
-          const transactions = await getStacksTransactions() as any;
-          const network = await getStacksNetwork() as any;
-          const common = await getStacksCommon() as any;
-          if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
-
-          // Step 1: Build unsigned sponsored transaction
-          const tx = await transactions.makeContractCall({
-            contractAddress: contractAddress,
-            contractName: contractName,
-            functionName: isStxPool ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-gasless',
-            functionArgs: functionArgs,
-            senderAddress: stacksAddress,
-            network: network.STACKS_TESTNET,
-            anchorMode: transactions.AnchorMode.Any,
-            postConditionMode: 0x01 as any,
-            postConditions: [],
-            sponsored: true,
-          } as any);
-
-          const txHex = common.bytesToHex(tx.serialize() as any);
-
-          // Step 2: Request user signature via wallet RPC (without broadcast)
-          const getProvider = () => {
-            if (typeof window === 'undefined') return null;
-            const win = window as any;
-            // Prefer universal injection, then specific ones
-            const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
-            return p && typeof p === 'object' ? p : null;
-          };
-
-          const provider = getProvider();
-          if (!provider || typeof provider.request !== 'function') {
-            throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
-          }
-
-          const requestParams = {
-            transaction: txHex,
-            broadcast: false,
-            network: 'testnet',
-          };
-
-          const response = await provider.request({
-            method: 'stx_signTransaction',
-            params: requestParams
-          });
-
-          if (!response || !response.result || !response.result.transaction) {
-            throw new Error('Wallet failed to sign the transaction. Please try again.');
-          }
-
-          const signedTxHex = response.result.transaction;
-
-          // Step 3: Send to backend relayer
-          const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              transaction: signedTxHex,
-              userAddress: stacksAddress,
-              estimatedFee: gasFee.toString(),
-            }),
-          });
-          const sponsorData = await sponsorResponse.json();
-          if (!sponsorData.success) {
-            throw new Error(sponsorData.message || 'Sponsorship failed');
-          }
-        } else {
-          // Standard flow
-          const network = await getStacksNetwork() as any;
-          const connect = await getStacksConnect() as any;
-          if (!network || !connect) throw new Error('Stacks libraries not loaded');
-
-          await new Promise<string>((resolve, reject) => {
-            connect.openContractCall({
-              contractAddress,
-              contractName,
-              functionName: isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity',
-              functionArgs,
-              network: network.STACKS_TESTNET as any,
-              postConditionMode: 0x01 as any,
-              sponsored: false,
-              appDetails: {
-                name: 'VelumX DEX',
-                icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-              },
-              onFinish: async (data: any) => {
-                resolve(data.txId);
-              },
-              onCancel: () => {
-                reject(new Error('User cancelled transaction'));
-              },
-            });
-          });
-        }
-
-        setState(prev => ({
-          ...prev,
-          isProcessing: false,
-          success: `Liquidity removed successfully!`,
-          lpTokenAmount: '',
-          amountA: '',
-          amountB: '',
-        }));
-
-        if (fetchBalances) {
-          setTimeout(() => {
-            fetchBalances();
-            fetchPoolInfo();
-          }, 3000);
-        }
-      } catch (error) {
-        console.error('Remove liquidity error:', error);
-        setState(prev => ({
-          ...prev,
-          isProcessing: false,
-          error: (error as Error).message || 'Failed to remove liquidity',
-        }));
-      }
-    };
-
-    const getBalance = (token: Token | null): string => {
-      if (!token) return '0';
-      if (token.symbol === 'USDCx') return balances.usdcx;
-      if (token.symbol === 'STX') return balances.stx;
-      if (token.symbol === 'VEX') return balances.vex || '0';
-      return '0';
-    };
-
-    const closeImportModal = () => {
-      setState(prev => ({
-        ...prev,
-        showImportModal: false,
-        importingToken: null,
-        importAddress: '',
-      }));
-    };
-
-    const validateStacksContractAddress = (address: string): boolean => {
-      const parts = address.split('.');
-      if (parts.length !== 2) return false;
-      const principal = parts[0];
-      if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/)) return false;
-      const contractName = parts[1];
-      if (!contractName.match(/^[a-z][a-z0-9-]{0,39}$/)) return false;
-      return true;
-    };
-
-    const handleImportToken = async () => {
-      if (!state.importAddress.trim()) {
-        setState(prev => ({ ...prev, error: 'Please enter a token address' }));
-        return;
-      }
-
-      if (!validateStacksContractAddress(state.importAddress.trim())) {
-        setState(prev => ({
-          ...prev,
-          error: 'Invalid Stacks contract address. Format: PRINCIPAL.CONTRACT-NAME'
-        }));
-        return;
-      }
-
-      const existingToken = tokens.find(t => t.address.toLowerCase() === state.importAddress.trim().toLowerCase());
-      if (existingToken) {
-        if (state.importingToken === 'A') {
-          setState(prev => ({ ...prev, tokenA: existingToken }));
-        } else {
-          setState(prev => ({ ...prev, tokenB: existingToken }));
-        }
-        closeImportModal();
-        return;
-      }
-
-      setState(prev => ({ ...prev, isProcessing: true, error: null }));
-
-      try {
-        const parts = state.importAddress.trim().split('.');
-        const contractName = parts[1];
-
-        const newToken: Token = {
-          symbol: contractName.toUpperCase().substring(0, 6),
-          name: contractName,
-          address: state.importAddress.trim(),
-          decimals: 6,
+        // Step 2: Request user signature via wallet RPC (without broadcast)
+        const getProvider = () => {
+          if (typeof window === 'undefined') return null;
+          const win = window as any;
+          // Prefer universal injection, then specific ones
+          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
+          return p && typeof p === 'object' ? p : null;
         };
 
-        setTokens(prev => [...prev, newToken]);
-
-        if (state.importingToken === 'A') {
-          setState(prev => ({ ...prev, tokenA: newToken }));
-        } else {
-          setState(prev => ({ ...prev, tokenB: newToken }));
+        const provider = getProvider();
+        if (!provider || typeof provider.request !== 'function') {
+          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
         }
 
-        setState(prev => ({
-          ...prev,
-          isProcessing: false,
-          success: `Token ${newToken.symbol} imported successfully!`,
-        }));
+        const requestParams = {
+          transaction: txHex,
+          broadcast: false,
+          network: 'testnet',
+        };
 
-        closeImportModal();
+        const response = await provider.request({
+          method: 'stx_signTransaction',
+          params: requestParams
+        });
 
-        setTimeout(() => {
-          setState(prev => ({ ...prev, success: null }));
-        }, 3000);
-      } catch (error) {
-        console.error('Import token error:', error);
-        setState(prev => ({
-          ...prev,
-          isProcessing: false,
-          error: (error as Error).message || 'Failed to import token',
-        }));
+        if (!response || !response.result || !response.result.transaction) {
+          throw new Error('Wallet failed to sign the transaction. Please try again.');
+        }
+
+        const signedTxHex = response.result.transaction;
+
+        // Step 3: Send to backend relayer
+        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: signedTxHex,
+            userAddress: stacksAddress,
+            estimatedFee: gasFee.toString(),
+          }),
+        });
+        const sponsorData = await sponsorResponse.json();
+        if (!sponsorData.success) {
+          throw new Error(sponsorData.message || 'Sponsorship failed');
+        }
+      } else {
+        // Standard flow
+        const network = await getStacksNetwork() as any;
+        const connect = await getStacksConnect() as any;
+        if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
+        await new Promise<string>((resolve, reject) => {
+          connect.openContractCall({
+            contractAddress,
+            contractName,
+            functionName: isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity',
+            functionArgs,
+            network: network.STACKS_TESTNET as any,
+            postConditionMode: 0x01 as any,
+            sponsored: false,
+            appDetails: {
+              name: 'VelumX DEX',
+              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+            },
+            onFinish: async (data: any) => {
+              resolve(data.txId);
+            },
+            onCancel: () => {
+              reject(new Error('User cancelled transaction'));
+            },
+          });
+        });
       }
-    };
 
-    return (
-      <div className="max-w-4xl mx-auto py-8">
-        {/* Analytics Modal */}
-        {state.showPoolAnalytics && state.selectedPoolForSwap && (
-          <PoolAnalyticsComp
-            pool={state.selectedPoolForSwap}
-            onClose={() => setState(prev => ({ ...prev, showPoolAnalytics: false }))}
-          />
-        )}
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        success: `Liquidity removed successfully!`,
+        lpTokenAmount: '',
+        amountA: '',
+        amountB: '',
+      }));
 
-        {/* Interface Toggle */}
-        <div className="flex justify-center mb-8">
-          <div className="inline-flex rounded-2xl gap-2">
-            <button
-              onClick={() => setState(prev => ({ ...prev, activeTab: 'liquidity' }))}
-              className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'liquidity'
-                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              style={state.activeTab !== 'liquidity' ? {
-                backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
-                color: 'var(--text-primary)',
-                border: `1px solid var(--border-color)`
-              } : {}}
-            >
-              Manage Pools
-            </button>
-            <button
-              onClick={() => setState(prev => ({ ...prev, activeTab: 'positions' }))}
-              className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'positions'
-                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              style={state.activeTab !== 'positions' ? {
-                backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
-                color: 'var(--text-primary)',
-                border: `1px solid var(--border-color)`
-              } : {}}
-            >
-              My Positions
-            </button>
-          </div>
+      if (fetchBalances) {
+        setTimeout(() => {
+          fetchBalances();
+          fetchPoolInfo();
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Remove liquidity error:', error);
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: (error as Error).message || 'Failed to remove liquidity',
+      }));
+    }
+  };
+
+  const getBalance = (token: Token | null): string => {
+    if (!token) return '0';
+    if (token.symbol === 'USDCx') return balances.usdcx;
+    if (token.symbol === 'STX') return balances.stx;
+    if (token.symbol === 'VEX') return balances.vex || '0';
+    return '0';
+  };
+
+  const closeImportModal = () => {
+    setState(prev => ({
+      ...prev,
+      showImportModal: false,
+      importingToken: null,
+      importAddress: '',
+    }));
+  };
+
+  const validateStacksContractAddress = (address: string): boolean => {
+    const parts = address.split('.');
+    if (parts.length !== 2) return false;
+    const principal = parts[0];
+    if (!principal.match(/^(ST|SP)[0-9A-Z]{38,41}$/)) return false;
+    const contractName = parts[1];
+    if (!contractName.match(/^[a-z][a-z0-9-]{0,39}$/)) return false;
+    return true;
+  };
+
+  const handleImportToken = async () => {
+    if (!state.importAddress.trim()) {
+      setState(prev => ({ ...prev, error: 'Please enter a token address' }));
+      return;
+    }
+
+    if (!validateStacksContractAddress(state.importAddress.trim())) {
+      setState(prev => ({
+        ...prev,
+        error: 'Invalid Stacks contract address. Format: PRINCIPAL.CONTRACT-NAME'
+      }));
+      return;
+    }
+
+    const existingToken = tokens.find(t => t.address.toLowerCase() === state.importAddress.trim().toLowerCase());
+    if (existingToken) {
+      if (state.importingToken === 'A') {
+        setState(prev => ({ ...prev, tokenA: existingToken }));
+      } else {
+        setState(prev => ({ ...prev, tokenB: existingToken }));
+      }
+      closeImportModal();
+      return;
+    }
+
+    setState(prev => ({ ...prev, isProcessing: true, error: null }));
+
+    try {
+      const parts = state.importAddress.trim().split('.');
+      const contractName = parts[1];
+
+      const newToken: Token = {
+        symbol: contractName.toUpperCase().substring(0, 6),
+        name: contractName,
+        address: state.importAddress.trim(),
+        decimals: 6,
+      };
+
+      setTokens(prev => [...prev, newToken]);
+
+      if (state.importingToken === 'A') {
+        setState(prev => ({ ...prev, tokenA: newToken }));
+      } else {
+        setState(prev => ({ ...prev, tokenB: newToken }));
+      }
+
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        success: `Token ${newToken.symbol} imported successfully!`,
+      }));
+
+      closeImportModal();
+
+      setTimeout(() => {
+        setState(prev => ({ ...prev, success: null }));
+      }, 3000);
+    } catch (error) {
+      console.error('Import token error:', error);
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: (error as Error).message || 'Failed to import token',
+      }));
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto py-8">
+      {/* Analytics Modal */}
+      {state.showPoolAnalytics && state.selectedPoolForSwap && (
+        <PoolAnalyticsComp
+          pool={state.selectedPoolForSwap}
+          onClose={() => setState(prev => ({ ...prev, showPoolAnalytics: false }))}
+        />
+      )}
+
+      {/* Interface Toggle */}
+      <div className="flex justify-center mb-8">
+        <div className="inline-flex rounded-2xl gap-2">
+          <button
+            onClick={() => setState(prev => ({ ...prev, activeTab: 'liquidity' }))}
+            className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'liquidity'
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            style={state.activeTab !== 'liquidity' ? {
+              backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+              color: 'var(--text-primary)',
+              border: `1px solid var(--border-color)`
+            } : {}}
+          >
+            Manage Pools
+          </button>
+          <button
+            onClick={() => setState(prev => ({ ...prev, activeTab: 'positions' }))}
+            className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'positions'
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            style={state.activeTab !== 'positions' ? {
+              backgroundColor: 'rgba(var(--bg-primary-rgb), 0.5)',
+              color: 'var(--text-primary)',
+              border: `1px solid var(--border-color)`
+            } : {}}
+          >
+            My Positions
+          </button>
         </div>
+      </div>
 
-        {state.activeTab === 'positions' ? (
-          <div className="vellum-shadow-xl rounded-[2.5rem] bg-white dark:bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-800">
-            <PositionDashboard />
+      {state.activeTab === 'positions' ? (
+        <div className="vellum-shadow-xl rounded-[2.5rem] bg-white dark:bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-800">
+          <PositionDashboard />
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-5 gap-8 items-start px-4">
+          {/* Main Action Form */}
+          <div className="lg:col-span-3 vellum-shadow-xl rounded-[2.5rem] overflow-hidden" style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: `1px solid var(--border-color)`
+          }}>
+            {state.mode === 'add' ? (
+              <AddLiquidityForm
+                state={state}
+                setState={setState}
+                tokens={tokens}
+                getBalance={getBalance}
+                handleAddLiquidity={handleAddLiquidity}
+                stacksConnected={stacksConnected}
+                openPoolBrowser={() => setState(prev => ({ ...prev, showPoolBrowser: true }))}
+              />
+            ) : (
+              <RemoveLiquidityForm
+                state={state}
+                setState={setState}
+                handleRemoveLiquidity={handleRemoveLiquidity}
+                stacksConnected={stacksConnected}
+              />
+            )}
           </div>
-        ) : (
-          <div className="grid lg:grid-cols-5 gap-8 items-start px-4">
-            {/* Main Action Form */}
-            <div className="lg:col-span-3 vellum-shadow-xl rounded-[2.5rem] overflow-hidden" style={{
+
+          {/* Side Panels */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Pool Statistics Quick Look */}
+            <div className="rounded-[2rem] p-8 vellum-shadow-lg" style={{
               backgroundColor: 'var(--bg-surface)',
               border: `1px solid var(--border-color)`
             }}>
-              {state.mode === 'add' ? (
-                <AddLiquidityForm
-                  state={state}
-                  setState={setState}
-                  tokens={tokens}
-                  getBalance={getBalance}
-                  handleAddLiquidity={handleAddLiquidity}
-                  stacksConnected={stacksConnected}
-                  openPoolBrowser={() => setState(prev => ({ ...prev, showPoolBrowser: true }))}
-                />
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Info className="w-5 h-5 text-purple-600" />
+                Pool Details
+              </h3>
+
+              {!state.poolExists ? (
+                <div className="text-center py-6">
+                  <p className="text-sm italic opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                    Select a pool or enter token pairs to view details
+                  </p>
+                </div>
               ) : (
-                <RemoveLiquidityForm
-                  state={state}
-                  setState={setState}
-                  handleRemoveLiquidity={handleRemoveLiquidity}
-                  stacksConnected={stacksConnected}
-                />
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50">
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-1">Your Share</p>
+                    <p className="text-2xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{state.poolShare}%</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50">
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-1">LP Balance</p>
+                    <p className="text-xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{state.userLpBalance}</p>
+                  </div>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, mode: state.mode === 'add' ? 'remove' : 'add' }))}
+                    className="w-full py-4 rounded-2xl font-bold transition-all border border-purple-500/20 text-purple-600 dark:text-purple-400 hover:bg-purple-500/5"
+                  >
+                    {state.mode === 'add' ? 'Switch to Withdraw' : 'Switch to Deposit'}
+                  </button>
+                </div>
               )}
             </div>
 
-            {/* Side Panels */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Pool Statistics Quick Look */}
-              <div className="rounded-[2rem] p-8 vellum-shadow-lg" style={{
-                backgroundColor: 'var(--bg-surface)',
-                border: `1px solid var(--border-color)`
-              }}>
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  <Info className="w-5 h-5 text-purple-600" />
-                  Pool Details
-                </h3>
-
-                {!state.poolExists ? (
-                  <div className="text-center py-6">
-                    <p className="text-sm italic opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                      Select a pool or enter token pairs to view details
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50">
-                      <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-1">Your Share</p>
-                      <p className="text-2xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{state.poolShare}%</p>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50">
-                      <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-1">LP Balance</p>
-                      <p className="text-xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{state.userLpBalance}</p>
-                    </div>
-                    <button
-                      onClick={() => setState(prev => ({ ...prev, mode: state.mode === 'add' ? 'remove' : 'add' }))}
-                      className="w-full py-4 rounded-2xl font-bold transition-all border border-purple-500/20 text-purple-600 dark:text-purple-400 hover:bg-purple-500/5"
-                    >
-                      {state.mode === 'add' ? 'Switch to Withdraw' : 'Switch to Deposit'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Helper Tips */}
-              <div className="rounded-[2rem] p-8 bg-gradient-to-br from-purple-600/5 to-blue-600/5 border border-purple-100 dark:border-purple-900/20">
-                <h4 className="font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Why provide liquidity?</h4>
-                <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
-                  Liquidity providers earn a 0.3% fee on all trades proportional to their share of the pool.
-                </p>
-                <div className="space-y-3">
-                  <div className="flex gap-3">
-                    <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Earn passive income from trading activity</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Contribute to DEX market stability</p>
-                  </div>
+            {/* Helper Tips */}
+            <div className="rounded-[2rem] p-8 bg-gradient-to-br from-purple-600/5 to-blue-600/5 border border-purple-100 dark:border-purple-900/20">
+              <h4 className="font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Why provide liquidity?</h4>
+              <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
+                Liquidity providers earn a 0.3% fee on all trades proportional to their share of the pool.
+              </p>
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Earn passive income from trading activity</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Contribute to DEX market stability</p>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Pool Browser Modal */}
-        <PoolBrowserModal
-          isOpen={state.showPoolBrowser}
-          onClose={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
-          state={state}
-          setState={setState}
-          fetchAvailablePools={fetchAvailablePools}
-          selectPoolFromBrowser={selectPoolFromBrowser}
-          formatCurrency={formatCurrency}
-          formatPercentage={formatPercentage}
-        />
+      {/* Pool Browser Modal */}
+      <PoolBrowserModal
+        isOpen={state.showPoolBrowser}
+        onClose={() => setState(prev => ({ ...prev, showPoolBrowser: false }))}
+        state={state}
+        setState={setState}
+        fetchAvailablePools={fetchAvailablePools}
+        selectPoolFromBrowser={selectPoolFromBrowser}
+        formatCurrency={formatCurrency}
+        formatPercentage={formatPercentage}
+      />
 
-        {/* Import Token Modal */}
-        <ImportTokenModal
-          isOpen={state.showImportModal}
-          onClose={closeImportModal}
-          importAddress={state.importAddress}
-          setImportAddress={(val) => setState(prev => ({ ...prev, importAddress: val, error: null }))}
-          handleImportToken={handleImportToken}
-          isProcessing={state.isProcessing}
-          error={state.error}
-        />
-      </div>
-    );
-  }
+      {/* Import Token Modal */}
+      <ImportTokenModal
+        isOpen={state.showImportModal}
+        onClose={closeImportModal}
+        importAddress={state.importAddress}
+        setImportAddress={(val) => setState(prev => ({ ...prev, importAddress: val, error: null }))}
+        handleImportToken={handleImportToken}
+        isProcessing={state.isProcessing}
+        error={state.error}
+      />
+    </div>
+  );
+}
