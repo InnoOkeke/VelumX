@@ -80,7 +80,7 @@ export function WalletButton() {
               className="fixed inset-0 z-40"
               onClick={() => setShowDropdown(false)}
             />
-            <div className="absolute right-0 mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden" style={{
+            <div className="absolute right-0 bottom-full mb-3 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden" style={{
               backgroundColor: 'var(--bg-surface)',
               border: `1px solid var(--border-color)`
             }}>

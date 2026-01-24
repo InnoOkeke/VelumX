@@ -283,7 +283,6 @@ export function SwapInterface() {
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
           sponsored: useGasless,
-          fee: useGasless ? 0 : undefined,
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',

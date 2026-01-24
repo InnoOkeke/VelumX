@@ -390,7 +390,6 @@ export function BridgeInterface() {
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
           sponsored: state.gaslessMode,
-          fee: state.gaslessMode ? 0 : undefined,
           appDetails: {
             name: 'VelumX Bridge',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
