@@ -164,9 +164,12 @@ export function LiquidityInterface() {
   // Initialize VEX token from config
   useEffect(() => {
     if (config.stacksVexAddress) {
-      setTokens(prev => prev.map(t =>
-        t.symbol === 'VEX' ? { ...t, address: config.stacksVexAddress } : t
-      ));
+      setTokens(prev => {
+        if (!prev) return prev;
+        return prev.map(t =>
+          t.symbol === 'VEX' ? { ...t, address: config.stacksVexAddress } : t
+        );
+      });
     }
   }, [config.stacksVexAddress]);
 
@@ -216,7 +219,7 @@ export function LiquidityInterface() {
 
       const data = await response.json();
 
-      if (data.success && data.data) {
+      if (data.success && data.data && Array.isArray(data.data)) {
         const pools: Pool[] = data.data.map((pool: any) => ({
           id: pool.id,
           tokenA: {
@@ -272,6 +275,7 @@ export function LiquidityInterface() {
    */
   const fetchPoolAnalytics = async (pools: Pool[]) => {
     try {
+      if (!pools || !Array.isArray(pools)) return;
       const analyticsPromises = pools.map(async (pool) => {
         try {
           const response = await fetch(`${config.backendUrl}/api/liquidity/analytics/${pool.id}`, {

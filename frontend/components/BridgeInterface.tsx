@@ -35,28 +35,15 @@ export function BridgeInterface() {
     ethereumConnected,
     stacksAddress,
     stacksConnected,
+    ethereumChainId,
     balances,
     fetchBalances,
     isFetchingBalances,
+    switchEthereumNetwork,
   } = useWallet();
 
   const config = useConfig();
 
-  // Fetch balances when component mounts or wallets connect
-  useEffect(() => {
-    // Fetch balances if we have addresses (even if connected flags aren't set yet)
-    if ((ethereumAddress || stacksAddress) && fetchBalances) {
-      // Immediate fetch
-      fetchBalances();
-
-      // Also fetch after a short delay to catch late wallet state updates
-      const timeoutId = setTimeout(() => {
-        fetchBalances();
-      }, 500);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [ethereumConnected, stacksConnected, ethereumAddress, stacksAddress, fetchBalances]);
 
   // Manual refresh handler
   const handleRefreshBalances = async () => {
@@ -720,25 +707,35 @@ export function BridgeInterface() {
         )}
 
         {/* Bridge Button */}
-        <button
-          onClick={handleBridge}
-          disabled={!isConnected || state.isProcessing || !state.amount}
-          className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 dark:from-purple-600 dark:via-blue-600 dark:to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98] light:ghost-button light:text-purple-700"
-        >
-          {state.isProcessing ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Processing...
-            </>
-          ) : !isConnected ? (
-            'Connect Both Wallets'
-          ) : (
-            <>
-              <ArrowDownUp className="w-5 h-5" />
-              Bridge {sourceToken}
-            </>
-          )}
-        </button>
+        {ethereumConnected && ethereumChainId !== config.ethereumChainId ? (
+          <button
+            onClick={switchEthereumNetwork}
+            className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30"
+          >
+            <RefreshCw className="w-5 h-5" />
+            Switch to Sepolia
+          </button>
+        ) : (
+          <button
+            onClick={handleBridge}
+            disabled={!isConnected || state.isProcessing || !state.amount}
+            className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 dark:from-purple-600 dark:via-blue-600 dark:to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98] light:ghost-button light:text-purple-700"
+          >
+            {state.isProcessing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Processing...
+              </>
+            ) : !isConnected ? (
+              'Connect Both Wallets'
+            ) : (
+              <>
+                <ArrowDownUp className="w-5 h-5" />
+                Bridge {sourceToken}
+              </>
+            )}
+          </button>
+        )}
 
         {/* Info */}
         <div className="mt-6 pt-6 text-xs text-center space-y-1" style={{
