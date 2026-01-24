@@ -115,7 +115,7 @@ export function FeeEarningsDashboard() {
         const positions = data.data;
 
         // Extract fee earnings from positions
-        const earnings: FeeEarnings[] = positions.map((pos: any) => ({
+        const earnings: FeeEarnings[] = (positions || []).map((pos: any) => ({
           userAddress: stacksAddress,
           poolId: pos.poolId,
           totalEarnings: pos.feeEarnings || 0,
@@ -285,17 +285,21 @@ export function FeeEarningsDashboard() {
     const headers = ['Date', 'Pool ID', 'Amount (USD)', 'Transaction Hash', 'Block Height'];
     const rows: string[][] = [headers];
 
-    taxReport.positions.forEach((position: any) => {
-      position.transactions.forEach((tx: any) => {
-        rows.push([
-          new Date(tx.timestamp).toLocaleDateString(),
-          tx.poolId,
-          tx.amountUSD.toFixed(2),
-          tx.transactionHash || 'N/A',
-          tx.blockHeight?.toString() || 'N/A',
-        ]);
+    if (taxReport && Array.isArray(taxReport.positions)) {
+      taxReport.positions.forEach((position: any) => {
+        if (position && Array.isArray(position.transactions)) {
+          position.transactions.forEach((tx: any) => {
+            rows.push([
+              new Date(tx.timestamp).toLocaleDateString(),
+              tx.poolId,
+              tx.amountUSD.toFixed(2),
+              tx.transactionHash || 'N/A',
+              tx.blockHeight?.toString() || 'N/A',
+            ]);
+          });
+        }
       });
-    });
+    }
 
     return rows.map(row => row.join(',')).join('\n');
   };
@@ -403,8 +407,8 @@ export function FeeEarningsDashboard() {
                 key={timeframe}
                 onClick={() => setState(prev => ({ ...prev, selectedTimeframe: timeframe }))}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.selectedTimeframe === timeframe
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 style={state.selectedTimeframe !== timeframe ? { color: 'var(--text-secondary)' } : {}}
               >

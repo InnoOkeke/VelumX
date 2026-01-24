@@ -40,7 +40,7 @@ async function mintTokens() {
     // Contract Principal
     // Trying to resolve contract name from config or default 'velumx-token' if not found
     // For now, assuming standard naming
-    const contractName = 'velumx-token';
+    const contractName = 'vextoken-v1';
     const contractAddress = DEPLOYER_ADDRESS;
 
     const amountMicro = amountConfig * 1000000; // 6 decimals

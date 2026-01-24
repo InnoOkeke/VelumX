@@ -296,11 +296,15 @@ export function SwapInterface() {
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
           const win = window as any;
-          return win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
+          // Prefer universal injection, then specific ones
+          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
+          return p && typeof p === 'object' ? p : null;
         };
 
         const provider = getProvider();
-        if (!provider) throw new Error('No Stacks wallet found. Please install Leather or Xverse.');
+        if (!provider || typeof provider.request !== 'function') {
+          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
+        }
 
         const requestParams = {
           transaction: txHex,
@@ -312,6 +316,11 @@ export function SwapInterface() {
           method: 'stx_signTransaction',
           params: requestParams
         });
+
+        if (!response || !response.result || !response.result.transaction) {
+          throw new Error('Wallet failed to sign the transaction. Please try again.');
+        }
+
         const signedTxHex = response.result.transaction;
 
         // Step 3: send to backend relayer

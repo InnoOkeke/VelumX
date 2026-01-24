@@ -73,7 +73,7 @@ export function TransactionHistory() {
         );
         const data = await response.json();
 
-        if (data.success) {
+        if (data.success && data.data && Array.isArray(data.data.transactions)) {
           allTransactions.push(...data.data.transactions);
           setHasMore(data.data.hasMore);
         }
