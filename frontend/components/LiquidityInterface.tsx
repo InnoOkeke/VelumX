@@ -165,7 +165,7 @@ export function LiquidityInterface() {
   useEffect(() => {
     if (config.stacksVexAddress) {
       setTokens(prev => {
-        if (!prev) return prev;
+        if (!prev || !Array.isArray(prev)) return prev || [];
         return prev.map(t =>
           t.symbol === 'VEX' ? { ...t, address: config.stacksVexAddress } : t
         );
@@ -258,7 +258,11 @@ export function LiquidityInterface() {
         // Fetch analytics for each pool
         await fetchPoolAnalytics(pools);
       } else {
-        throw new Error(data.error || 'Failed to fetch pools');
+        setState(prev => ({
+          ...prev,
+          availablePools: [],
+          loadingPools: false,
+        }));
       }
     } catch (error) {
       console.error('Failed to fetch available pools:', error);
@@ -320,7 +324,8 @@ export function LiquidityInterface() {
    * Filter and sort pools based on search query and sort options
    */
   const filterAndSortPools = () => {
-    let filtered = [...state.availablePools];
+    let poolsToFilter = Array.isArray(state.availablePools) ? [...state.availablePools] : [];
+    let filtered = poolsToFilter;
 
     // Apply search filter
     if (state.poolSearchQuery.trim()) {
@@ -665,7 +670,10 @@ export function LiquidityInterface() {
           network: 'testnet',
         };
 
-        const response = await provider.request('stx_signTransaction', requestParams);
+        const response = await provider.request({
+          method: 'stx_signTransaction',
+          params: requestParams
+        });
         const signedTxHex = response.result.transaction;
 
         // Step 3: send to backend relayer
@@ -897,7 +905,10 @@ export function LiquidityInterface() {
           network: 'testnet',
         };
 
-        const response = await provider.request('stx_signTransaction', requestParams);
+        const response = await provider.request({
+          method: 'stx_signTransaction',
+          params: requestParams
+        });
         const signedTxHex = response.result.transaction;
 
         // Step 3: Send to backend relayer

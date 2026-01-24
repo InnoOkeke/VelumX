@@ -9,13 +9,13 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Wallet, 
-  DollarSign, 
-  Percent, 
-  Clock, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  DollarSign,
+  Percent,
+  Clock,
   RefreshCw,
   Loader2,
   AlertCircle,
@@ -141,7 +141,7 @@ export function PositionDashboard() {
 
       const data = await response.json();
 
-      if (data.success && data.data) {
+      if (data.success && data.data && Array.isArray(data.data)) {
         const positions: LiquidityPosition[] = data.data.map((pos: any) => ({
           ...pos,
           createdAt: new Date(pos.createdAt),
@@ -170,7 +170,12 @@ export function PositionDashboard() {
           isLoading: false,
         }));
       } else {
-        throw new Error(data.error || 'Failed to fetch positions');
+        setState(prev => ({
+          ...prev,
+          positions: [],
+          portfolio: null,
+          isLoading: false,
+        }));
       }
     } catch (error) {
       console.error('Failed to fetch positions:', error);
@@ -209,7 +214,7 @@ export function PositionDashboard() {
 
       const data = await response.json();
 
-      if (data.success && data.data) {
+      if (data.success && data.data && Array.isArray(data.data)) {
         const history: PositionHistory[] = data.data.map((tx: any) => ({
           ...tx,
           timestamp: new Date(tx.timestamp),
@@ -222,7 +227,11 @@ export function PositionDashboard() {
           showHistory: true,
         }));
       } else {
-        throw new Error(data.error || 'Failed to fetch history');
+        setState(prev => ({
+          ...prev,
+          history: [],
+          isRefreshing: false,
+        }));
       }
     } catch (error) {
       console.error('Failed to fetch history:', error);
@@ -414,15 +423,14 @@ export function PositionDashboard() {
                 <TrendingDown className="w-5 h-5 text-red-600 dark:text-red-400" />
               )}
             </div>
-            <p className={`text-3xl font-bold mb-1 ${
-              state.portfolio.totalReturns >= 0 
-                ? 'text-green-600 dark:text-green-400' 
+            <p className={`text-3xl font-bold mb-1 ${state.portfolio.totalReturns >= 0
+                ? 'text-green-600 dark:text-green-400'
                 : 'text-red-600 dark:text-red-400'
-            }`}>
+              }`}>
               {formatCurrency(state.portfolio.totalReturns)}
             </p>
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              {state.portfolio.totalValue > 0 
+              {state.portfolio.totalValue > 0
                 ? formatPercentage((state.portfolio.totalReturns / state.portfolio.totalValue) * 100)
                 : '0.00%'}
             </p>
@@ -459,11 +467,10 @@ export function PositionDashboard() {
               </span>
               <Activity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
-            <p className={`text-3xl font-bold mb-1 ${
-              state.portfolio.totalImpermanentLoss <= 0 
-                ? 'text-orange-600 dark:text-orange-400' 
+            <p className={`text-3xl font-bold mb-1 ${state.portfolio.totalImpermanentLoss <= 0
+                ? 'text-orange-600 dark:text-orange-400'
                 : 'text-green-600 dark:text-green-400'
-            }`}>
+              }`}>
               {formatCurrency(Math.abs(state.portfolio.totalImpermanentLoss))}
             </p>
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -561,11 +568,10 @@ export function PositionDashboard() {
                           <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
                             Returns
                           </p>
-                          <p className={`font-bold ${
-                            returnPercentage >= 0 
-                              ? 'text-green-600 dark:text-green-400' 
+                          <p className={`font-bold ${returnPercentage >= 0
+                              ? 'text-green-600 dark:text-green-400'
                               : 'text-red-600 dark:text-red-400'
-                          }`}>
+                            }`}>
                             {formatPercentage(returnPercentage)}
                           </p>
                         </div>
@@ -655,11 +661,10 @@ export function PositionDashboard() {
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span style={{ color: 'var(--text-secondary)' }}>Impermanent Loss:</span>
-                            <span className={`font-semibold ${
-                              position.impermanentLoss <= 0 
-                                ? 'text-orange-600 dark:text-orange-400' 
+                            <span className={`font-semibold ${position.impermanentLoss <= 0
+                                ? 'text-orange-600 dark:text-orange-400'
                                 : 'text-green-600 dark:text-green-400'
-                            }`}>
+                              }`}>
                               {position.impermanentLoss <= 0 ? '' : '+'}{formatCurrency(position.impermanentLoss)}
                             </span>
                           </div>
@@ -667,8 +672,8 @@ export function PositionDashboard() {
                           <div className="flex items-center justify-between text-sm font-bold">
                             <span style={{ color: 'var(--text-primary)' }}>Total Return:</span>
                             <span className={
-                              returnPercentage >= 0 
-                                ? 'text-green-600 dark:text-green-400' 
+                              returnPercentage >= 0
+                                ? 'text-green-600 dark:text-green-400'
                                 : 'text-red-600 dark:text-red-400'
                             }>
                               {formatCurrency(position.currentValue - position.initialValue + position.feeEarnings)}
@@ -738,11 +743,10 @@ export function PositionDashboard() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         {/* Action Icon */}
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          isAdd 
-                            ? 'bg-green-100 dark:bg-green-900/30' 
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isAdd
+                            ? 'bg-green-100 dark:bg-green-900/30'
                             : 'bg-red-100 dark:bg-red-900/30'
-                        }`}>
+                          }`}>
                           {isAdd ? (
                             <ArrowUpRight className="w-5 h-5 text-green-600 dark:text-green-400" />
                           ) : (

@@ -9,12 +9,12 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  Calendar, 
-  Download, 
-  Loader2, 
+import {
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  Download,
+  Loader2,
   AlertCircle,
   Info,
   BarChart3,
@@ -111,9 +111,9 @@ export function FeeEarningsDashboard() {
 
       const data = await response.json();
 
-      if (data.success && data.data) {
+      if (data.success && data.data && Array.isArray(data.data)) {
         const positions = data.data;
-        
+
         // Extract fee earnings from positions
         const earnings: FeeEarnings[] = positions.map((pos: any) => ({
           userAddress: stacksAddress,
@@ -125,8 +125,8 @@ export function FeeEarningsDashboard() {
           annualizedReturn: pos.annualizedReturn || 0,
         }));
 
-        setState(prev => ({ 
-          ...prev, 
+        setState(prev => ({
+          ...prev,
           earnings,
           isLoading: false,
         }));
@@ -135,12 +135,16 @@ export function FeeEarningsDashboard() {
         await fetchFeeHistory();
         await fetchFeeProjections(earnings);
       } else {
-        throw new Error(data.error || 'Failed to fetch fee earnings');
+        setState(prev => ({
+          ...prev,
+          earnings: [],
+          isLoading: false,
+        }));
       }
     } catch (error) {
       console.error('Failed to fetch fee earnings:', error);
-      setState(prev => ({ 
-        ...prev, 
+      setState(prev => ({
+        ...prev,
         isLoading: false,
         error: `Failed to load fee earnings: ${(error as Error).message}`,
       }));
@@ -167,9 +171,9 @@ export function FeeEarningsDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.data) {
-          setState(prev => ({ 
-            ...prev, 
+        if (data.success && data.data && Array.isArray(data.data)) {
+          setState(prev => ({
+            ...prev,
             history: data.data.map((h: any) => ({
               ...h,
               timestamp: new Date(h.timestamp),
@@ -240,11 +244,11 @@ export function FeeEarningsDashboard() {
       }
 
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         // Convert to CSV format
         const csvContent = generateCSV(data.data);
-        
+
         // Download file
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
@@ -256,8 +260,8 @@ export function FeeEarningsDashboard() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
-        setState(prev => ({ 
-          ...prev, 
+        setState(prev => ({
+          ...prev,
           isLoading: false,
           showExportModal: false,
         }));
@@ -266,8 +270,8 @@ export function FeeEarningsDashboard() {
       }
     } catch (error) {
       console.error('Failed to export tax report:', error);
-      setState(prev => ({ 
-        ...prev, 
+      setState(prev => ({
+        ...prev,
         isLoading: false,
         error: `Failed to export tax report: ${(error as Error).message}`,
       }));
@@ -398,11 +402,10 @@ export function FeeEarningsDashboard() {
               <button
                 key={timeframe}
                 onClick={() => setState(prev => ({ ...prev, selectedTimeframe: timeframe }))}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  state.selectedTimeframe === timeframe
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${state.selectedTimeframe === timeframe
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
+                  }`}
                 style={state.selectedTimeframe !== timeframe ? { color: 'var(--text-secondary)' } : {}}
               >
                 {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}
@@ -455,7 +458,7 @@ export function FeeEarningsDashboard() {
               </div>
               <p className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
                 {formatPercentage(
-                  state.earnings.reduce((sum, e) => sum + e.annualizedReturn, 0) / 
+                  state.earnings.reduce((sum, e) => sum + e.annualizedReturn, 0) /
                   (state.earnings.length || 1)
                 )}
               </p>
@@ -515,9 +518,9 @@ export function FeeEarningsDashboard() {
                         <p className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
                           {formatCurrency(
                             state.selectedTimeframe === 'daily' ? earning.dailyEarnings :
-                            state.selectedTimeframe === 'weekly' ? earning.weeklyEarnings :
-                            state.selectedTimeframe === 'monthly' ? earning.monthlyEarnings :
-                            earning.totalEarnings * 12
+                              state.selectedTimeframe === 'weekly' ? earning.weeklyEarnings :
+                                state.selectedTimeframe === 'monthly' ? earning.monthlyEarnings :
+                                  earning.totalEarnings * 12
                           )}
                         </p>
                         <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>

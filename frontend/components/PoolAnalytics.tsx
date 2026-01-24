@@ -98,7 +98,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
       }
 
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         const analyticsData: PoolAnalytics = {
           ...data.data,
@@ -145,13 +145,13 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
 
   const getChartData = () => {
     if (!analytics?.historicalData) return [];
-    
+
     return analytics.historicalData.map(point => ({
       timestamp: point.timestamp.toLocaleDateString(),
       value: selectedChart === 'tvl' ? point.tvl :
-             selectedChart === 'volume' ? point.volume :
-             selectedChart === 'price' ? point.price :
-             point.fees
+        selectedChart === 'volume' ? point.volume :
+          selectedChart === 'price' ? point.price :
+            point.fees
     }));
   };
 
@@ -167,11 +167,11 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
 
   const calculatePriceImpact = (tradeSize: number): number => {
     if (!analytics?.liquidityDepth) return 0;
-    
+
     // Simple price impact calculation based on liquidity depth
     const totalLiquidity = analytics.liquidityDepth.bids.reduce((sum, level) => sum + level.liquidity, 0);
     if (totalLiquidity === 0) return 0;
-    
+
     const impactPercentage = (tradeSize / totalLiquidity) * 100;
     return Math.min(impactPercentage, 50); // Cap at 50%
   };
@@ -299,11 +299,10 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                         <button
                           key={key}
                           onClick={() => setSelectedChart(key as any)}
-                          className={`px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1 ${
-                            selectedChart === key
+                          className={`px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1 ${selectedChart === key
                               ? 'bg-purple-600 text-white'
                               : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                          }`}
+                            }`}
                           style={selectedChart !== key ? { color: 'var(--text-secondary)' } : {}}
                         >
                           <Icon className="w-4 h-4" />
@@ -311,7 +310,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                         </button>
                       ))}
                     </div>
-                    
+
                     {/* Timeframe Selector */}
                     <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid var(--border-color)` }}>
                       {[
@@ -323,11 +322,10 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                         <button
                           key={key}
                           onClick={() => setSelectedTimeframe(key as any)}
-                          className={`px-3 py-2 text-sm font-semibold transition-all ${
-                            selectedTimeframe === key
+                          className={`px-3 py-2 text-sm font-semibold transition-all ${selectedTimeframe === key
                               ? 'bg-purple-600 text-white'
                               : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                          }`}
+                            }`}
                           style={selectedTimeframe !== key ? { color: 'var(--text-secondary)' } : {}}
                         >
                           {label}
@@ -338,15 +336,16 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                 </div>
 
                 {/* Simple Chart Visualization */}
-                <div className="h-64 rounded-xl p-4" style={{ 
+                <div className="h-64 rounded-xl p-4" style={{
                   backgroundColor: 'var(--bg-primary)',
                   border: `1px solid var(--border-color)`
                 }}>
                   {analytics.historicalData.length > 0 ? (
                     <div className="h-full flex items-end justify-between gap-1">
                       {getChartData().slice(-20).map((point, index) => {
-                        const maxValue = Math.max(...getChartData().map(p => p.value));
-                        const height = (point.value / maxValue) * 100;
+                        const chartData = getChartData();
+                        const maxValue = chartData.length > 0 ? Math.max(...chartData.map(p => p.value)) : 0;
+                        const height = maxValue > 0 ? (point.value / maxValue) * 100 : 0;
                         return (
                           <div key={index} className="flex-1 flex flex-col items-center">
                             <div
@@ -356,11 +355,10 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                                 backgroundColor: getChartColor(),
                                 minHeight: '4px',
                               }}
-                              title={`${point.timestamp}: ${
-                                selectedChart === 'tvl' || selectedChart === 'volume' || selectedChart === 'fees'
+                              title={`${point.timestamp}: ${selectedChart === 'tvl' || selectedChart === 'volume' || selectedChart === 'fees'
                                   ? formatCurrency(point.value)
                                   : formatNumber(point.value)
-                              }`}
+                                }`}
                             />
                           </div>
                         );
@@ -381,7 +379,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Reserves */}
-                  <div className="rounded-xl p-4" style={{ 
+                  <div className="rounded-xl p-4" style={{
                     backgroundColor: 'var(--bg-primary)',
                     border: `1px solid var(--border-color)`
                   }}>
@@ -415,7 +413,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                   </div>
 
                   {/* Price Impact Calculator */}
-                  <div className="rounded-xl p-4" style={{ 
+                  <div className="rounded-xl p-4" style={{
                     backgroundColor: 'var(--bg-primary)',
                     border: `1px solid var(--border-color)`
                   }}>
@@ -428,13 +426,12 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                           <span style={{ color: 'var(--text-secondary)' }}>
                             {formatCurrency(amount)} trade
                           </span>
-                          <span className={`font-semibold ${
-                            calculatePriceImpact(amount) > 5 
+                          <span className={`font-semibold ${calculatePriceImpact(amount) > 5
                               ? 'text-red-600 dark:text-red-400'
                               : calculatePriceImpact(amount) > 1
-                              ? 'text-yellow-600 dark:text-yellow-400'
-                              : 'text-green-600 dark:text-green-400'
-                          }`}>
+                                ? 'text-yellow-600 dark:text-yellow-400'
+                                : 'text-green-600 dark:text-green-400'
+                            }`}>
                             {formatPercentage(calculatePriceImpact(amount))}
                           </span>
                         </div>
@@ -450,7 +447,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                   Additional Statistics
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 rounded-xl" style={{ 
+                  <div className="text-center p-4 rounded-xl" style={{
                     backgroundColor: 'var(--bg-primary)',
                     border: `1px solid var(--border-color)`
                   }}>
@@ -461,22 +458,21 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                       {formatCurrency(analytics.volume7d)}
                     </p>
                   </div>
-                  <div className="text-center p-4 rounded-xl" style={{ 
+                  <div className="text-center p-4 rounded-xl" style={{
                     backgroundColor: 'var(--bg-primary)',
                     border: `1px solid var(--border-color)`
                   }}>
                     <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>
                       24h Price Change
                     </p>
-                    <p className={`text-lg font-bold ${
-                      analytics.priceChange24h >= 0 
+                    <p className={`text-lg font-bold ${analytics.priceChange24h >= 0
                         ? 'text-green-600 dark:text-green-400'
                         : 'text-red-600 dark:text-red-400'
-                    }`}>
+                      }`}>
                       {analytics.priceChange24h >= 0 ? '+' : ''}{formatPercentage(analytics.priceChange24h)}
                     </p>
                   </div>
-                  <div className="text-center p-4 rounded-xl" style={{ 
+                  <div className="text-center p-4 rounded-xl" style={{
                     backgroundColor: 'var(--bg-primary)',
                     border: `1px solid var(--border-color)`
                   }}>
@@ -487,7 +483,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                       {formatNumber(Number(pool.totalSupply) / Math.pow(10, 6))}
                     </p>
                   </div>
-                  <div className="text-center p-4 rounded-xl" style={{ 
+                  <div className="text-center p-4 rounded-xl" style={{
                     backgroundColor: 'var(--bg-primary)',
                     border: `1px solid var(--border-color)`
                   }}>

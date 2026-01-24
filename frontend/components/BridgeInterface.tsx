@@ -376,6 +376,7 @@ export function BridgeInterface() {
           network: network.STACKS_TESTNET,
           anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
+          postConditions: [],
           sponsored: true,
         } as any);
 
@@ -391,7 +392,10 @@ export function BridgeInterface() {
           network: 'testnet',
         };
 
-        const response = await provider.request('stx_signTransaction', requestParams);
+        const response = await provider.request({
+          method: 'stx_signTransaction',
+          params: requestParams
+        });
         const signedTxHex = response.result.transaction;
 
         // Step 3: send to backend relayer
