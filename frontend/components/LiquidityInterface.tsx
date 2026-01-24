@@ -599,10 +599,10 @@ export function LiquidityInterface() {
 
         functionArgs = [
           transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
-          transactions.uintCV(Number(stxAmount)),
-          transactions.uintCV(Number(tokenAmount)),
-          transactions.uintCV(Number(stxMin)),
-          transactions.uintCV(Number(tokenMin)),
+          transactions.uintCV(stxAmount),
+          transactions.uintCV(tokenAmount),
+          transactions.uintCV(stxMin),
+          transactions.uintCV(tokenMin),
         ];
         if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
       } else if (useGasless) {
@@ -612,10 +612,10 @@ export function LiquidityInterface() {
         functionArgs = [
           transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
           transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          transactions.uintCV(Number(amountAMicro)),
-          transactions.uintCV(Number(amountBMicro)),
-          transactions.uintCV(Number(minAmountAMicro)),
-          transactions.uintCV(Number(minAmountBMicro)),
+          transactions.uintCV(amountAMicro),
+          transactions.uintCV(amountBMicro),
+          transactions.uintCV(minAmountAMicro),
+          transactions.uintCV(minAmountBMicro),
           transactions.uintCV(gasFee),
         ];
       } else {
@@ -625,10 +625,10 @@ export function LiquidityInterface() {
         functionArgs = [
           transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
           transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          transactions.uintCV(Number(amountAMicro)),
-          transactions.uintCV(Number(amountBMicro)),
-          transactions.uintCV(Number(minAmountAMicro)),
-          transactions.uintCV(Number(minAmountBMicro)),
+          transactions.uintCV(amountAMicro),
+          transactions.uintCV(amountBMicro),
+          transactions.uintCV(minAmountAMicro),
+          transactions.uintCV(minAmountBMicro),
         ];
       }
 
@@ -648,6 +648,7 @@ export function LiquidityInterface() {
           network: network.STACKS_TESTNET,
           anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
+          postConditions: [],
           sponsored: true,
         } as any);
 
@@ -838,9 +839,9 @@ export function LiquidityInterface() {
 
         functionArgs = [
           transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
-          transactions.uintCV(Number(lpTokenAmountMicro)),
-          transactions.uintCV(Number(minStx)),
-          transactions.uintCV(Number(minToken)),
+          transactions.uintCV(lpTokenAmountMicro),
+          transactions.uintCV(minStx),
+          transactions.uintCV(minToken),
         ];
         if (gaslessMode) functionArgs.push(transactions.uintCV(gasFee));
       } else {
@@ -850,17 +851,17 @@ export function LiquidityInterface() {
           ? [
             transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
             transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            transactions.uintCV(Number(lpTokenAmountMicro)),
-            transactions.uintCV(Number(minAmountAMicro)),
-            transactions.uintCV(Number(minAmountBMicro)),
+            transactions.uintCV(lpTokenAmountMicro),
+            transactions.uintCV(minAmountAMicro),
+            transactions.uintCV(minAmountBMicro),
             transactions.uintCV(gasFee),
           ]
           : [
             transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
             transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            transactions.uintCV(Number(lpTokenAmountMicro)),
-            transactions.uintCV(Number(minAmountAMicro)),
-            transactions.uintCV(Number(minAmountBMicro)),
+            transactions.uintCV(lpTokenAmountMicro),
+            transactions.uintCV(minAmountAMicro),
+            transactions.uintCV(minAmountBMicro),
           ];
       }
 
@@ -880,6 +881,7 @@ export function LiquidityInterface() {
           network: network.STACKS_TESTNET,
           anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
+          postConditions: [],
           sponsored: true,
         } as any);
 
