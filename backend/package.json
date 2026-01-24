@@ -23,7 +23,7 @@
     "@stacks/common": "^7.3.1",
     "@stacks/keychain": "^4.3.8",
     "@stacks/network": "^7.3.1",
-    "@stacks/transactions": "^6.15.0",
+    "@stacks/transactions": "^7.3.1",
     "@stacks/wallet-sdk": "^7.2.0",
     "@velarprotocol/velar-sdk": "^0.7.6",
     "bip39": "^3.1.0",
