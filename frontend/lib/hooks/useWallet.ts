@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createWalletClient, createPublicClient, custom, http, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { connect, isConnected, getLocalStorage, showConnect, AppConfig, UserSession } from '@stacks/connect';
+import { connect, isConnected, getLocalStorage, showConnect, disconnect } from '@stacks/connect';
 import { validateStacksAddress } from '@stacks/transactions';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
 
@@ -43,15 +43,7 @@ export interface WalletState {
 
 const STORAGE_KEY = 'velumx_wallet_state';
 
-// Initialize Stacks session safely for SSR
-const getStacksSession = () => {
-  if (typeof window === 'undefined') return { appConfig: undefined, userSession: undefined };
-  const config = new AppConfig(['store_write', 'publish_data']);
-  const session = new UserSession({ appConfig: config });
-  return { appConfig: config, userSession: session };
-};
-
-const { userSession } = getStacksSession();
+// Stacks session management is now handled internally by @stacks/connect via localStorage
 
 // Detect available Ethereum wallets
 function detectEthereumWallets() {
@@ -239,13 +231,15 @@ export function useWallet() {
           }
         }
 
-        // Check if Stacks wallet is still connected
+        // Check if Stacks wallet is still connected using modern helper
         let stacksConnected = false;
         let stacksAddr = restoredStacksAddress;
-        if (userSession && userSession.isUserSignedIn()) {
-          const userData = userSession.loadUserData();
-          stacksAddr = userData.profile.stxAddress.testnet;
-          stacksConnected = true;
+        if (isConnected()) {
+          const authData = getLocalStorage();
+          if (authData?.addresses?.stx?.[0]) {
+            stacksAddr = authData.addresses.stx[0].address;
+            stacksConnected = true;
+          }
         }
 
         // Only update state once with verified data
@@ -361,16 +355,16 @@ export function useWallet() {
 
   // Monitor Stacks wallet session
   useEffect(() => {
-    if (typeof window === 'undefined' || !userSession) return;
+    if (typeof window === 'undefined') return;
 
     const checkStacksSession = () => {
-      if (userSession.isUserSignedIn()) {
-        const userData = userSession.loadUserData();
-        const stacksAddr = userData.profile.stxAddress.testnet;
+      if (isConnected()) {
+        const authData = getLocalStorage();
+        const stacksAddr = authData?.addresses?.stx?.[0]?.address;
 
         setState(prev => {
-          // Only update if address changed
-          if (prev.stacksAddress !== stacksAddr) {
+          // Only update if address changed or was null
+          if (stacksAddr && prev.stacksAddress !== stacksAddr) {
             return {
               ...prev,
               stacksAddress: stacksAddr,
@@ -499,24 +493,29 @@ export function useWallet() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
           onFinish: () => {
-            if (userSession && userSession.isUserSignedIn()) {
-              const userData = userSession.loadUserData();
-              const address = userData.profile.stxAddress.testnet;
+            if (isConnected()) {
+              const authData = getLocalStorage();
+              const address = authData?.addresses?.stx?.[0]?.address;
 
-              // Validate address
-              assertTestnetAddress(address);
+              if (address) {
+                // Validate address
+                assertTestnetAddress(address);
 
-              setState(prev => ({
-                ...prev,
-                stacksAddress: address,
-                stacksConnected: true,
-                stacksWalletType: preferredWallet || 'leather',
-                isConnecting: false,
-              }));
+                setState(prev => ({
+                  ...prev,
+                  stacksAddress: address,
+                  stacksConnected: true,
+                  stacksWalletType: preferredWallet || 'leather',
+                  isConnecting: false,
+                }));
 
-              // Fetch balances immediately
-              fetchStacksBalances(address);
-              resolve(address);
+                // Fetch balances immediately
+                fetchStacksBalances(address);
+                resolve(address);
+              } else {
+                setState(prev => ({ ...prev, isConnecting: false }));
+                reject(new Error('Address not found after connection'));
+              }
             } else {
               setState(prev => ({ ...prev, isConnecting: false }));
               reject(new Error('User signed in but session is invalid'));
@@ -525,8 +524,7 @@ export function useWallet() {
           onCancel: () => {
             setState(prev => ({ ...prev, isConnecting: false }));
             reject(new Error('User cancelled connection'));
-          },
-          userSession: userSession
+          }
         });
       });
     } catch (error) {
@@ -538,9 +536,7 @@ export function useWallet() {
 
   // Disconnect Stacks wallet
   const disconnectStacks = useCallback(() => {
-    if (userSession) {
-      userSession.signUserOut();
-    }
+    disconnect();
     setState(prev => ({
       ...prev,
       stacksAddress: null,
