@@ -6,6 +6,7 @@
 import {
   makeContractCall,
   broadcastTransaction,
+  makeSTXTokenTransfer,
   AnchorMode,
   PostConditionMode,
   bufferCV,
@@ -56,21 +57,23 @@ export class StacksMintService {
         currentBalance: balance.toString()
       });
 
-      // Send 0.5 STX
-      // Dynamically import to avoid type issues if needed, or use existing imports
-      const { makeSTXTokenTransfer, broadcastTransaction, AnchorMode } = await import('@stacks/transactions');
-
       const txOptions = {
         recipient: recipientAddress,
         amount: BigInt(500000), // 0.5 STX
         senderKey: this.config.relayerPrivateKey,
-        network: 'testnet' as const,
+        network: this.network, // Use the stored network object
         memo: 'VelumX Gas Drop',
         anchorMode: AnchorMode.Any,
       };
 
       const transaction = await makeSTXTokenTransfer(txOptions);
-      const broadcastResponse = await broadcastTransaction(transaction as any);
+
+      // Safety check
+      if (!transaction) {
+        throw new Error('Failed to create STX token transfer transaction');
+      }
+
+      const broadcastResponse = await broadcastTransaction({ transaction });
 
       if ('error' in broadcastResponse) {
         throw new Error(`Gas drop broadcast failed: ${broadcastResponse.error}`);
@@ -153,7 +156,7 @@ export class StacksMintService {
 
       // Broadcast transaction
       logger.debug('Broadcasting mint transaction');
-      const broadcastResponse = await broadcastTransaction(transaction as any);
+      const broadcastResponse = await broadcastTransaction({ transaction });
 
       if ('error' in broadcastResponse) {
         throw new Error(`Broadcast failed: ${broadcastResponse.error} - ${broadcastResponse.reason}`);
