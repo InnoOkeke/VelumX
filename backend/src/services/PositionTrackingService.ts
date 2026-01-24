@@ -10,7 +10,7 @@ import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
 import { liquidityService } from './LiquidityService';
 import { poolDiscoveryService } from './PoolDiscoveryService';
 import { poolAnalyticsService } from './PoolAnalyticsService';
-import { callReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
 import {
   LiquidityPosition,
   PortfolioSummary,
@@ -43,7 +43,7 @@ export class PositionTrackingService {
    */
   async getUserPositions(userAddress: string): Promise<LiquidityPosition[]> {
     const cacheKey = CACHE_KEYS.USER_POSITIONS(userAddress);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -66,7 +66,7 @@ export class PositionTrackingService {
       const batchSize = 10;
       for (let i = 0; i < pools.length; i += batchSize) {
         const batch = pools.slice(i, i + batchSize);
-        
+
         const batchPromises = batch.map(async (pool) => {
           try {
             // Get LP balance from blockchain
@@ -84,10 +84,10 @@ export class PositionTrackingService {
             const position = await this.calculateSinglePosition(userAddress, pool, BigInt(lpBalance));
             return position;
           } catch (error) {
-            logger.error('Failed to calculate position for pool', { 
-              userAddress, 
-              poolId: pool.id, 
-              error 
+            logger.error('Failed to calculate position for pool', {
+              userAddress,
+              poolId: pool.id,
+              error
             });
             return null;
           }
@@ -98,9 +98,9 @@ export class PositionTrackingService {
         positions.push(...validPositions);
       }
 
-      logger.debug('User positions calculated from blockchain', { 
-        userAddress, 
-        positionCount: positions.length 
+      logger.debug('User positions calculated from blockchain', {
+        userAddress,
+        positionCount: positions.length
       });
 
       return positions;
@@ -188,10 +188,10 @@ export class PositionTrackingService {
         lastUpdated: new Date(),
       };
     } catch (error) {
-      logger.error('Failed to calculate single position', { 
-        userAddress, 
-        poolId: pool.id, 
-        error 
+      logger.error('Failed to calculate single position', {
+        userAddress,
+        poolId: pool.id,
+        error
       });
       throw error;
     }
@@ -202,7 +202,7 @@ export class PositionTrackingService {
    */
   private async getTokenPrice(tokenAddress: string): Promise<number> {
     const cacheKey = CACHE_KEYS.TOKEN_PRICE(tokenAddress);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -217,7 +217,7 @@ export class PositionTrackingService {
             const response = await fetch(
               'https://api.coingecko.com/api/v3/simple/price?ids=stacks&vs_currencies=usd'
             );
-            
+
             if (response.ok) {
               const data: any = await response.json();
               return data.stacks?.usd || 2.5; // Fallback price
@@ -236,7 +236,7 @@ export class PositionTrackingService {
             'BTC': 45000,
             'ETH': 3000,
           };
-          
+
           const symbol = tokenAddress.split('.').pop()?.toLowerCase() || '';
           return fallbackPrices[symbol] || 1.0;
         }
@@ -254,11 +254,11 @@ export class PositionTrackingService {
     // - Band Protocol
     // - Pyth Network
     // - Or other decentralized oracles
-    
+
     try {
       // Example oracle call structure
       const priceOracleUrl = this.config.liquidity.priceOracleUrl;
-      
+
       if (!priceOracleUrl) {
         throw new Error('Price oracle not configured');
       }
@@ -274,7 +274,7 @@ export class PositionTrackingService {
         const data: any = await response.json();
         return data.price || 1.0;
       }
-      
+
       throw new Error('Oracle price not available');
     } catch (error) {
       logger.error('Failed to get price from oracle', { tokenAddress, error });
@@ -314,17 +314,17 @@ export class PositionTrackingService {
     try {
       // In production, query the database for the initial position value
       // This would be stored when the position was first created
-      
+
       const query = `
         SELECT initial_value_usd 
         FROM user_positions 
         WHERE user_address = ? AND pool_id = ?
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
       // return result[0]?.initial_value_usd || 0;
-      
+
       // For now, calculate based on position history
       return this.calculateInitialValueFromHistory(userAddress, poolId);
     } catch (error) {
@@ -340,7 +340,7 @@ export class PositionTrackingService {
     try {
       // In production, this would query the position_history table
       // to find the first 'add' transaction and calculate the initial value
-      
+
       const query = `
         SELECT token_a_amount, token_b_amount, value_usd, timestamp
         FROM position_history 
@@ -348,11 +348,11 @@ export class PositionTrackingService {
         ORDER BY timestamp ASC
         LIMIT 1
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
       // return result[0]?.value_usd || 0;
-      
+
       // For now, return a calculated value based on current position
       // This is a temporary fallback until database is properly integrated
       return 1000; // Placeholder
@@ -379,7 +379,7 @@ export class PositionTrackingService {
     try {
       // Get initial prices from when position was created
       const initialPrices = await this.getInitialTokenPrices(userAddress, poolId);
-      
+
       // Calculate current value
       const currentValue = await this.calculatePositionValueUSD(
         tokenAAmount,
@@ -393,9 +393,9 @@ export class PositionTrackingService {
       // Calculate what the value would be if tokens were held separately
       const initialTokenAAmount = Number(tokenAAmount) / Math.pow(10, tokenA.decimals);
       const initialTokenBAmount = Number(tokenBAmount) / Math.pow(10, tokenB.decimals);
-      
-      const wouldHaveValue = 
-        (initialTokenAAmount * currentPriceA) + 
+
+      const wouldHaveValue =
+        (initialTokenAAmount * currentPriceA) +
         (initialTokenBAmount * currentPriceB);
 
       // Impermanent loss = difference between LP value and holding separately
@@ -414,10 +414,10 @@ export class PositionTrackingService {
 
       return impermanentLoss;
     } catch (error) {
-      logger.error('Failed to calculate real impermanent loss', { 
-        userAddress, 
-        poolId, 
-        error 
+      logger.error('Failed to calculate real impermanent loss', {
+        userAddress,
+        poolId,
+        error
       });
       return 0;
     }
@@ -430,7 +430,7 @@ export class PositionTrackingService {
     try {
       // In production, this would query historical price data from database
       // or from the position_history table when the position was first created
-      
+
       const query = `
         SELECT ph.timestamp, p.token_a_address, p.token_b_address
         FROM position_history ph
@@ -439,17 +439,17 @@ export class PositionTrackingService {
         ORDER BY ph.timestamp ASC
         LIMIT 1
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
-      
+
       // For now, return current prices as fallback
       // In production, implement historical price lookup
       const pool = await poolDiscoveryService.getPoolById(poolId);
       if (!pool) {
         return { priceA: 1, priceB: 1 };
       }
-      
+
       return {
         priceA: await this.getTokenPrice(pool.tokenA.address),
         priceB: await this.getTokenPrice(pool.tokenB.address),
@@ -473,28 +473,28 @@ export class PositionTrackingService {
       // 1. Query fee_earnings table for accumulated fees
       // 2. Calculate fees from swap events since last update
       // 3. Update database with new fee earnings
-      
+
       const query = `
         SELECT SUM(amount_usd) as total_fees
         FROM fee_earnings 
         WHERE user_address = ? AND pool_id = ?
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
       // const storedFees = result[0]?.total_fees || 0;
-      
+
       // Calculate recent fees from pool analytics
       const analytics = await poolAnalyticsService.getPoolAnalytics(poolId);
       const recentFees = analytics.feeEarnings24h * sharePercentage;
-      
+
       // In production, this would be the sum of stored fees + recent fees
       return recentFees;
     } catch (error) {
-      logger.error('Failed to calculate real fee earnings', { 
-        userAddress, 
-        poolId, 
-        error 
+      logger.error('Failed to calculate real fee earnings', {
+        userAddress,
+        poolId,
+        error
       });
       return 0;
     }
@@ -511,11 +511,11 @@ export class PositionTrackingService {
         FROM user_positions 
         WHERE user_address = ? AND pool_id = ?
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
       // return result[0]?.created_at || new Date();
-      
+
       // For now, return a recent date
       return new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000); // Random date within last 30 days
     } catch (error) {
@@ -541,8 +541,8 @@ export class PositionTrackingService {
       const unrealizedPnL = position.currentValue - position.initialValue;
       const realizedPnL = position.feeEarnings; // Fees are realized gains
       const totalReturn = unrealizedPnL + realizedPnL - position.impermanentLoss;
-      const totalReturnPercentage = position.initialValue > 0 
-        ? (totalReturn / position.initialValue) * 100 
+      const totalReturnPercentage = position.initialValue > 0
+        ? (totalReturn / position.initialValue) * 100
         : 0;
 
       return {
@@ -575,8 +575,8 @@ export class PositionTrackingService {
 
       // Mock calculation for detailed IL analysis
       const currentLoss = position.impermanentLoss;
-      const currentLossPercentage = position.initialValue > 0 
-        ? (currentLoss / position.initialValue) * 100 
+      const currentLossPercentage = position.initialValue > 0
+        ? (currentLoss / position.initialValue) * 100
         : 0;
 
       // Calculate what the value would be if tokens were held separately
@@ -655,10 +655,10 @@ export class PositionTrackingService {
         ORDER BY ph.timestamp DESC
         LIMIT 100
       `;
-      
+
       // Mock database query - replace with real database call
       // const results = await this.db.query(query, [userAddress]);
-      
+
       // For now, generate some realistic history based on current positions
       const positions = await this.getUserPositions(userAddress);
       const history: PositionHistory[] = [];
@@ -715,7 +715,7 @@ export class PositionTrackingService {
           lp_token_balance = VALUES(lp_token_balance),
           updated_at = NOW()
       `;
-      
+
       // Insert into position_history table
       const insertHistoryQuery = `
         INSERT INTO position_history (
@@ -724,7 +724,7 @@ export class PositionTrackingService {
           transaction_hash, block_height, timestamp
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `;
-      
+
       // In production, execute these queries in a transaction
       // await this.db.transaction(async (trx) => {
       //   await trx.query(upsertPositionQuery, [
@@ -741,7 +741,7 @@ export class PositionTrackingService {
 
       // Clear cache after database update
       await this.clearPositionCache(userAddress);
-      
+
       logger.info('Position updated in database', {
         userAddress,
         poolId,
@@ -777,12 +777,12 @@ export class PositionTrackingService {
     try {
       // Process updates in batches for better performance
       const batchSize = 100;
-      
+
       for (let i = 0; i < updates.length; i += batchSize) {
         const batch = updates.slice(i, i + batchSize);
-        
+
         // In production, use batch insert/update queries
-        const promises = batch.map(update => 
+        const promises = batch.map(update =>
           this.updatePositionInDB(
             update.userAddress,
             update.poolId,
@@ -797,15 +797,15 @@ export class PositionTrackingService {
             logger.error('Failed to update position in batch', { update, error });
           })
         );
-        
+
         await Promise.all(promises);
-        
+
         // Small delay between batches to avoid overwhelming the database
         if (i + batchSize < updates.length) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
-      
+
       logger.info('Batch position update completed', { updateCount: updates.length });
     } catch (error) {
       logger.error('Failed to batch update positions', { error });
@@ -820,13 +820,13 @@ export class PositionTrackingService {
     logger.debug('Fetching positions for multiple users', { userCount: userAddresses.length });
 
     const results: { [userAddress: string]: LiquidityPosition[] } = {};
-    
+
     // Process users in batches to avoid overwhelming the system
     const batchSize = 50; // Optimized for 10k users
-    
+
     for (let i = 0; i < userAddresses.length; i += batchSize) {
       const batch = userAddresses.slice(i, i + batchSize);
-      
+
       const batchPromises = batch.map(async (userAddress) => {
         try {
           const positions = await this.getUserPositions(userAddress);
@@ -838,16 +838,16 @@ export class PositionTrackingService {
       });
 
       await Promise.all(batchPromises);
-      
+
       // Progress logging for large batches
       if (userAddresses.length > 1000) {
-        logger.info('Batch progress', { 
+        logger.info('Batch progress', {
           completed: Math.min(i + batchSize, userAddresses.length),
-          total: userAddresses.length 
+          total: userAddresses.length
         });
       }
     }
-    
+
     return results;
   }
 
@@ -936,7 +936,7 @@ export class PositionTrackingService {
 
     try {
       const portfolio = await this.getPortfolioSummary(userAddress);
-      
+
       if (portfolio.totalValue === 0) {
         return {
           daily: 0,
@@ -950,8 +950,8 @@ export class PositionTrackingService {
 
       // Mock return calculations based on timeframe
       const totalReturn = portfolio.totalReturns;
-      const totalReturnPercentage = portfolio.totalValue > 0 
-        ? (totalReturn / portfolio.totalValue) * 100 
+      const totalReturnPercentage = portfolio.totalValue > 0
+        ? (totalReturn / portfolio.totalValue) * 100
         : 0;
 
       // Annualize returns based on timeframe
@@ -998,7 +998,7 @@ export class PositionTrackingService {
       [Timeframe.DAY_90]: 90,
       [Timeframe.YEAR_1]: 365,
     };
-    
+
     return timeframeDays[timeframe] || 30;
   }
 
@@ -1027,7 +1027,7 @@ export class PositionTrackingService {
     try {
       // Use the more comprehensive portfolio statistics
       const stats = await this.getPortfolioStatistics();
-      
+
       return {
         totalTrackedUsers: stats.totalUsers,
         totalPositions: stats.totalPositions,

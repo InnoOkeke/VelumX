@@ -8,7 +8,7 @@ import { logger } from '../utils/logger';
 import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
 import { liquidityService } from './LiquidityService';
 import { poolDiscoveryService } from './PoolDiscoveryService';
-import { callReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
 import {
   Pool,
   PoolAnalytics,
@@ -87,18 +87,18 @@ export class PoolAnalyticsService {
 
     try {
       const pools = await poolDiscoveryService.getAllPools();
-      
+
       // Process pools in batches to avoid overwhelming the system
       const batchSize = 5;
       for (let i = 0; i < pools.length; i += batchSize) {
         const batch = pools.slice(i, i + batchSize);
-        
+
         await Promise.all(
           batch.map(pool => this.calculatePoolAnalytics(pool.id).catch(error => {
             logger.error('Failed to calculate analytics for pool', { poolId: pool.id, error });
           }))
         );
-        
+
         // Small delay between batches
         if (i + batchSize < pools.length) {
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -118,7 +118,7 @@ export class PoolAnalyticsService {
    */
   async getPoolAnalytics(poolId: string): Promise<PoolAnalytics> {
     const cacheKey = CACHE_KEYS.POOL_ANALYTICS(poolId);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -136,30 +136,30 @@ export class PoolAnalyticsService {
     try {
       const pools = await poolDiscoveryService.getAllPools();
       const pool = pools.find(p => p.id === poolId);
-      
+
       if (!pool) {
         throw new Error(`Pool ${poolId} not found`);
       }
 
       // Calculate TVL (Total Value Locked)
       const tvl = await this.calculateTVL(pool);
-      
+
       // Calculate volume metrics
       const volume24h = await this.calculateVolume24h(poolId);
       const volume7d = await this.calculateVolume7d(poolId);
-      
+
       // Calculate APR (Annual Percentage Rate)
       const apr = await this.calculateAPR(poolId, tvl, volume24h);
-      
+
       // Calculate fee earnings
       const feeEarnings24h = await this.calculateFeeEarnings24h(poolId, volume24h);
-      
+
       // Calculate price change
       const priceChange24h = await this.calculatePriceChange24h(poolId);
-      
+
       // Get liquidity depth
       const liquidityDepth = await this.calculateLiquidityDepth(pool);
-      
+
       // Get historical data
       const historicalData = await this.getHistoricalData(poolId, Timeframe.DAY_30);
 
@@ -176,7 +176,7 @@ export class PoolAnalyticsService {
       };
     } catch (error) {
       logger.error('Failed to calculate pool analytics', { poolId, error });
-      
+
       // Return default analytics on error
       return {
         poolId,
@@ -235,7 +235,7 @@ export class PoolAnalyticsService {
    */
   private async getTokenPrice(tokenAddress: string): Promise<number> {
     const cacheKey = CACHE_KEYS.TOKEN_PRICE(tokenAddress);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -250,7 +250,7 @@ export class PoolAnalyticsService {
             const response = await fetch(
               'https://api.coingecko.com/api/v3/simple/price?ids=stacks&vs_currencies=usd'
             );
-            
+
             if (response.ok) {
               const data: any = await response.json();
               return data.stacks?.usd || 2.5; // Fallback price
@@ -266,7 +266,7 @@ export class PoolAnalyticsService {
             'STX': 2.5,
             'usdcx': 1.0,
           };
-          
+
           const symbol = tokenAddress.split('.').pop()?.toLowerCase() || '';
           return fallbackPrices[symbol] || 1.0;
         }
@@ -284,9 +284,9 @@ export class PoolAnalyticsService {
       // - Chainlink Price Feeds
       // - Band Protocol
       // - Pyth Network
-      
+
       const priceOracleUrl = this.config.liquidity.priceOracleUrl;
-      
+
       if (!priceOracleUrl) {
         throw new Error('Price oracle not configured');
       }
@@ -302,7 +302,7 @@ export class PoolAnalyticsService {
         const data: any = await response.json();
         return data.price || 1.0;
       }
-      
+
       throw new Error('Oracle price not available');
     } catch (error) {
       logger.error('Failed to get price from oracle', { tokenAddress, error });
@@ -336,15 +336,15 @@ export class PoolAnalyticsService {
         // Bid levels (below current price)
         const bidPriceRatio = 1 - (i * 0.01); // 1% steps down
         const bidPrice = currentPrice * bidPriceRatio;
-        
+
         // Calculate new reserves at this price level
         const newReserveB = Math.sqrt(k * bidPrice);
         const newReserveA = k / newReserveB;
-        
+
         // Available liquidity is the difference in reserves
         const liquidityA = Math.abs(newReserveA - reserveA);
         const liquidityB = Math.abs(newReserveB - reserveB);
-        
+
         bids.push({
           price: bidPrice,
           liquidity: liquidityA, // Liquidity in token A
@@ -354,12 +354,12 @@ export class PoolAnalyticsService {
         // Ask levels (above current price)
         const askPriceRatio = 1 + (i * 0.01); // 1% steps up
         const askPrice = currentPrice * askPriceRatio;
-        
+
         const newReserveBask = Math.sqrt(k * askPrice);
         const newReserveAask = k / newReserveBask;
-        
+
         const liquidityAask = Math.abs(newReserveAask - reserveA);
-        
+
         asks.push({
           price: askPrice,
           liquidity: liquidityAask, // Liquidity in token A
@@ -384,29 +384,29 @@ export class PoolAnalyticsService {
     try {
       // In production, this would query swap events from the blockchain
       // for the last 24 hours and sum the volumes
-      
+
       const pool = await poolDiscoveryService.getPoolById(poolId);
       if (!pool) return 0;
 
       // Query blockchain events for swap transactions in this pool
       // This would involve calling the Stacks API to get transaction events
       const stacksApiUrl = `${this.config.stacksRpcUrl}/extended/v1/tx/events`;
-      
+
       // Calculate 24 hours ago timestamp
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      
+
       try {
         // In production, query for swap events in this specific pool
         // For now, estimate based on pool size and activity
         const poolSize = Number(pool.totalSupply);
         const reserveA = Number(pool.reserveA);
         const reserveB = Number(pool.reserveB);
-        
+
         // Estimate volume based on pool liquidity and typical turnover rates
         // Larger pools typically have 1-10% daily turnover
         const estimatedTurnoverRate = Math.min(0.1, Math.max(0.001, poolSize / 10000000)); // 0.1% to 10%
         const estimatedVolume = (reserveA + reserveB) * estimatedTurnoverRate;
-        
+
         return estimatedVolume;
       } catch (error) {
         logger.error('Failed to query blockchain events for volume', { poolId, error });
@@ -425,7 +425,7 @@ export class PoolAnalyticsService {
     try {
       // In production, this would query swap events for the last 7 days
       const volume24h = await this.calculateVolume24h(poolId);
-      
+
       // Estimate 7-day volume based on daily volume with some variation
       // Typically 6-8x daily volume depending on market conditions
       const weeklyMultiplier = 6.5 + Math.random(); // 6.5x to 7.5x
@@ -445,13 +445,13 @@ export class PoolAnalyticsService {
 
       // Standard AMM fee is 0.3% (30 basis points)
       const feeRate = 0.003;
-      
+
       // Calculate daily fee earnings
       const dailyFees = volume24h * feeRate;
-      
+
       // Annualize the fees
       const annualFees = dailyFees * 365;
-      
+
       // Calculate APR as percentage
       const apr = (annualFees / tvl) * 100;
 
@@ -492,30 +492,30 @@ export class PoolAnalyticsService {
     try {
       // In production, this would compare current price to price 24h ago
       // by querying historical pool snapshots from database
-      
+
       const pool = await poolDiscoveryService.getPoolById(poolId);
       if (!pool) return 0;
 
       // Get current price ratio
       const currentRatio = Number(pool.reserveB) / Number(pool.reserveA);
-      
+
       // In production, query database for price 24h ago:
       // SELECT reserve_a, reserve_b FROM pool_snapshots 
       // WHERE pool_id = ? AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 DAY)
       // ORDER BY timestamp ASC LIMIT 1
-      
+
       // For now, estimate based on volume and market conditions
       // Higher volume pools tend to have more price movement
       const volume24h = await this.calculateVolume24h(poolId);
       const tvl = await this.calculateTVL(pool);
-      
+
       // Calculate volatility based on volume/TVL ratio
       const volumeToTVLRatio = tvl > 0 ? volume24h / tvl : 0;
       const estimatedVolatility = Math.min(0.2, volumeToTVLRatio * 10); // Cap at 20%
-      
+
       // Generate realistic price change based on volatility
       const priceChange = (Math.random() - 0.5) * 2 * estimatedVolatility * 100;
-      
+
       return priceChange;
     } catch (error) {
       logger.error('Failed to calculate price change', { poolId, error });
@@ -544,36 +544,36 @@ export class PoolAnalyticsService {
           AND timestamp >= DATE_SUB(NOW(), INTERVAL ? DAY)
         ORDER BY timestamp ASC
       `;
-      
+
       const days = this.getTimeframeDays(timeframe);
-      
+
       // Mock database query - replace with real database call
       // const results = await this.db.query(query, [poolId, days]);
-      
+
       // For now, generate realistic historical data based on current pool state
       const pool = await poolDiscoveryService.getPoolById(poolId);
       if (!pool) return [];
 
       const dataPoints: HistoricalDataPoint[] = [];
       const now = new Date();
-      
+
       // Get current TVL for baseline
       const currentTVL = await this.calculateTVL(pool);
-      
+
       for (let i = days; i >= 0; i--) {
         const timestamp = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        
+
         // Generate realistic variation based on market conditions
         // More recent data should be closer to current values
         const ageWeight = 1 - (i / days) * 0.3; // Recent data has less variation
         const variation = 0.8 + Math.random() * 0.4 * ageWeight; // 80% to 120% with age weighting
-        
+
         // Get token prices for this historical point
         const [priceA, priceB] = await Promise.all([
           this.getTokenPrice(pool.tokenA.address),
           this.getTokenPrice(pool.tokenB.address)
         ]);
-        
+
         dataPoints.push({
           timestamp,
           reserveA: BigInt(Math.floor(Number(pool.reserveA) * variation)),
@@ -585,7 +585,7 @@ export class PoolAnalyticsService {
           priceB: priceB * (0.9 + Math.random() * 0.2),
         });
       }
-      
+
       return dataPoints;
     } catch (error) {
       logger.error('Failed to get historical data', { poolId, timeframe, error });
@@ -607,7 +607,7 @@ export class PoolAnalyticsService {
       [Timeframe.DAY_90]: 90,
       [Timeframe.YEAR_1]: 365,
     };
-    
+
     return timeframeDays[timeframe] || 30;
   }
 
@@ -618,7 +618,7 @@ export class PoolAnalyticsService {
     logger.debug('Fetching analytics for multiple pools', { poolIds });
 
     const results: { [poolId: string]: PoolAnalytics } = {};
-    
+
     // Process pools in parallel
     const analyticsPromises = poolIds.map(async (poolId) => {
       try {
@@ -631,7 +631,7 @@ export class PoolAnalyticsService {
     });
 
     await Promise.all(analyticsPromises);
-    
+
     return results;
   }
 
@@ -656,7 +656,7 @@ export class PoolAnalyticsService {
       // Sort by the specified metric
       const sorted = poolAnalytics.sort((a, b) => {
         let valueA: number, valueB: number;
-        
+
         switch (metric) {
           case 'tvl':
             valueA = a.analytics.tvl;
@@ -677,16 +677,16 @@ export class PoolAnalyticsService {
           default:
             valueA = valueB = 0;
         }
-        
+
         return valueB - valueA; // Descending order
       });
 
       return sorted.slice(0, limit).map(item => ({
         poolId: item.poolId,
         value: metric === 'tvl' ? item.analytics.tvl :
-               metric === 'volume' ? item.analytics.volume24h :
-               metric === 'apr' ? item.analytics.apr :
-               item.analytics.feeEarnings24h,
+          metric === 'volume' ? item.analytics.volume24h :
+            metric === 'apr' ? item.analytics.apr :
+              item.analytics.feeEarnings24h,
       }));
     } catch (error) {
       logger.error('Failed to get top pools by metric', { metric, error });
@@ -715,7 +715,7 @@ export class PoolAnalyticsService {
       const totalTVL = allAnalytics.reduce((sum, analytics) => sum + analytics.tvl, 0);
       const totalVolume24h = allAnalytics.reduce((sum, analytics) => sum + analytics.volume24h, 0);
       const totalFees24h = allAnalytics.reduce((sum, analytics) => sum + analytics.feeEarnings24h, 0);
-      const averageAPR = allAnalytics.length > 0 
+      const averageAPR = allAnalytics.length > 0
         ? allAnalytics.reduce((sum, analytics) => sum + analytics.apr, 0) / allAnalytics.length
         : 0;
 

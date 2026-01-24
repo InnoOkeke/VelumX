@@ -169,9 +169,9 @@ export class PaymasterService {
       });
 
       // Broadcast the sponsored transaction
-      const broadcastResponse = await broadcastTransaction(sponsoredTx, 'testnet');
+      const broadcastResponse = await broadcastTransaction(sponsoredTx as any);
 
-      if (broadcastResponse.error) {
+      if ('error' in broadcastResponse) {
         logger.error('Failed to broadcast sponsored transaction', {
           error: broadcastResponse.error,
           reason: broadcastResponse.reason,

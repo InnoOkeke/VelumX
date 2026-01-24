@@ -12,7 +12,7 @@ import { poolDiscoveryService } from './PoolDiscoveryService';
 import { poolAnalyticsService } from './PoolAnalyticsService';
 import { positionTrackingService } from './PositionTrackingService';
 import { liquidityService } from './LiquidityService';
-import { callReadOnlyFunction, cvToJSON } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToJSON } from '@stacks/transactions';
 import {
   PoolUpdate,
   PositionUpdate,
@@ -74,7 +74,7 @@ export class RealTimeDataService {
   async start(port: number = 8080): Promise<void> {
     try {
       // Initialize WebSocket server
-      this.wss = new WebSocketServer({ 
+      this.wss = new WebSocketServer({
         port,
         perMessageDeflate: false,
         maxPayload: 1024 * 1024, // 1MB max message size
@@ -164,9 +164,9 @@ export class RealTimeDataService {
   private handleClientConnection(socket: WebSocket, request: any): void {
     // Check connection limits
     if (this.clients.size >= this.maxConnections) {
-      logger.warn('Connection limit reached, rejecting new connection', { 
+      logger.warn('Connection limit reached, rejecting new connection', {
         currentConnections: this.clients.size,
-        maxConnections: this.maxConnections 
+        maxConnections: this.maxConnections
       });
       socket.close(1013, 'Server overloaded');
       return;
@@ -174,7 +174,7 @@ export class RealTimeDataService {
 
     const clientId = this.generateClientId();
     const now = Date.now();
-    
+
     const client: WebSocketClient = {
       id: clientId,
       socket,
@@ -194,8 +194,8 @@ export class RealTimeDataService {
 
     this.clients.set(clientId, client);
 
-    logger.info('Client connected with enhanced tracking', { 
-      clientId, 
+    logger.info('Client connected with enhanced tracking', {
+      clientId,
       clientCount: this.clients.size,
       userAgent: client.connectionMetadata.userAgent,
       ip: client.connectionMetadata.ip,
@@ -256,7 +256,7 @@ export class RealTimeDataService {
     if (!client) return false;
 
     const now = Date.now();
-    
+
     // Refill tokens if enough time has passed
     const timeSinceLastReset = now - client.lastRateLimitReset;
     if (timeSinceLastReset >= this.rateLimitConfig.refillInterval) {
@@ -272,10 +272,10 @@ export class RealTimeDataService {
       return true;
     }
 
-    logger.warn('Rate limit exceeded for client', { 
-      clientId, 
+    logger.warn('Rate limit exceeded for client', {
+      clientId,
       tokens: client.rateLimitTokens,
-      messageCount: client.messageCount 
+      messageCount: client.messageCount
     });
     return false;
   }
@@ -295,10 +295,10 @@ export class RealTimeDataService {
 
         // Remove stale connections
         if (timeSinceLastPing > staleTimeout) {
-          logger.warn('Removing stale connection', { 
-            clientId, 
+          logger.warn('Removing stale connection', {
+            clientId,
             timeSinceLastPing,
-            connectionAge 
+            connectionAge
           });
           client.socket.close(1000, 'Connection stale');
           continue;
@@ -306,9 +306,9 @@ export class RealTimeDataService {
 
         // Remove idle unauthenticated connections
         if (!client.isAuthenticated && connectionAge > maxIdleTime) {
-          logger.warn('Removing idle unauthenticated connection', { 
-            clientId, 
-            connectionAge 
+          logger.warn('Removing idle unauthenticated connection', {
+            clientId,
+            connectionAge
           });
           client.socket.close(1000, 'Idle timeout');
           continue;
@@ -336,10 +336,10 @@ export class RealTimeDataService {
   private startRateLimitCleanup(): void {
     this.rateLimitCleanupInterval = setInterval(() => {
       const now = Date.now();
-      
+
       for (const client of this.clients.values()) {
         const timeSinceLastReset = now - client.lastRateLimitReset;
-        
+
         if (timeSinceLastReset >= this.rateLimitConfig.refillInterval) {
           const tokensToAdd = Math.floor(timeSinceLastReset / this.rateLimitConfig.refillInterval) * this.rateLimitConfig.refillRate;
           client.rateLimitTokens = Math.min(this.rateLimitConfig.maxTokens, client.rateLimitTokens + tokensToAdd);
@@ -371,9 +371,9 @@ export class RealTimeDataService {
 
     this.clients.delete(clientId);
 
-    logger.info('Client disconnected', { 
-      clientId, 
-      code, 
+    logger.info('Client disconnected', {
+      clientId,
+      code,
       reason: reason?.toString(),
       clientCount: this.clients.size,
     });
@@ -386,7 +386,7 @@ export class RealTimeDataService {
     try {
       const message = JSON.parse(data.toString());
       const client = this.clients.get(clientId);
-      
+
       if (!client) {
         logger.warn('Message from unknown client', { clientId });
         return;
@@ -409,16 +409,16 @@ export class RealTimeDataService {
           break;
         default:
           logger.warn('Unknown message type', { clientId, type: message.type });
-          this.sendToClient(clientId, { 
-            type: 'error', 
+          this.sendToClient(clientId, {
+            type: 'error',
             message: 'Unknown message type',
             timestamp: new Date().toISOString(),
           });
       }
     } catch (error) {
       logger.error('Error handling client message', { clientId, error });
-      this.sendToClient(clientId, { 
-        type: 'error', 
+      this.sendToClient(clientId, {
+        type: 'error',
         message: 'Invalid message format',
         timestamp: new Date().toISOString(),
       });
@@ -433,7 +433,7 @@ export class RealTimeDataService {
     if (!client) return;
 
     const { target, subscriptionType } = message;
-    
+
     if (!target || !subscriptionType) {
       this.sendToClient(clientId, {
         type: 'error',
@@ -486,7 +486,7 @@ export class RealTimeDataService {
     }
 
     const subscriptionKey = `${subscriptionType}:${target}`;
-    
+
     // Check if already subscribed
     if (client.subscriptions.has(subscriptionKey)) {
       this.sendToClient(clientId, {
@@ -496,7 +496,7 @@ export class RealTimeDataService {
       });
       return;
     }
-    
+
     // Add client to subscription
     if (!this.subscriptions.has(subscriptionKey)) {
       this.subscriptions.set(subscriptionKey, new Set());
@@ -509,8 +509,8 @@ export class RealTimeDataService {
       client.userAddress = target;
     }
 
-    logger.info('Client subscribed with validation', { 
-      clientId, 
+    logger.info('Client subscribed with validation', {
+      clientId,
       subscriptionKey,
       subscriptionCount: client.subscriptions.size,
       totalSubscriptions: this.subscriptions.size,
@@ -557,7 +557,7 @@ export class RealTimeDataService {
 
     const { target, subscriptionType } = message;
     const subscriptionKey = `${subscriptionType}:${target}`;
-    
+
     // Remove client from subscription
     const subscribers = this.subscriptions.get(subscriptionKey);
     if (subscribers) {
@@ -586,7 +586,7 @@ export class RealTimeDataService {
     if (!client) return;
 
     const { userAddress, signature, timestamp } = message;
-    
+
     if (!userAddress) {
       this.sendToClient(clientId, {
         type: 'error',
@@ -611,9 +611,9 @@ export class RealTimeDataService {
     // 1. Verifying the signature against the user's public key
     // 2. Checking the timestamp to prevent replay attacks
     // 3. Validating the message format and content
-    
+
     const isValidSignature = this.verifySignature(userAddress, signature, timestamp);
-    
+
     if (!isValidSignature) {
       this.sendToClient(clientId, {
         type: 'error',
@@ -631,14 +631,14 @@ export class RealTimeDataService {
         existingClientId: existingConnection,
         newClientId: clientId,
       });
-      
+
       // Optionally close the existing connection or allow multiple connections
       // For now, we'll allow multiple connections but log it
     }
 
     client.userAddress = userAddress;
     client.isAuthenticated = true;
-    
+
     this.sendToClient(clientId, {
       type: 'authenticated',
       userAddress,
@@ -650,8 +650,8 @@ export class RealTimeDataService {
       },
     });
 
-    logger.info('Client authenticated successfully', { 
-      clientId, 
+    logger.info('Client authenticated successfully', {
+      clientId,
       userAddress,
       connectionAge: Date.now() - client.connectedAt.getTime(),
     });
@@ -666,7 +666,7 @@ export class RealTimeDataService {
     // 2. Verify the signature using the user's public key
     // 3. Check timestamp to prevent replay attacks (within 5 minutes)
     // 4. Validate signature format and encoding
-    
+
     if (!signature || !timestamp) {
       return false;
     }
@@ -675,11 +675,11 @@ export class RealTimeDataService {
     const now = Date.now();
     const maxAge = 5 * 60 * 1000; // 5 minutes
     if (Math.abs(now - timestamp) > maxAge) {
-      logger.warn('Authentication timestamp too old', { 
-        userAddress, 
-        timestamp, 
-        now, 
-        age: now - timestamp 
+      logger.warn('Authentication timestamp too old', {
+        userAddress,
+        timestamp,
+        now,
+        age: now - timestamp
       });
       return false;
     }
@@ -793,7 +793,7 @@ export class RealTimeDataService {
       const response = await fetch(
         `${this.config.stacksRpcUrl}/extended/v1/block/by_height/${height}`
       );
-      
+
       if (!response.ok) return;
 
       const blockData: any = await response.json();
@@ -817,10 +817,10 @@ export class RealTimeDataService {
     try {
       // Check if transaction involves our swap contract
       const swapContractAddress = this.config.stacksSwapContractAddress;
-      
+
       if (tx.contract_call?.contract_id === swapContractAddress) {
         const functionName = tx.contract_call.function_name;
-        
+
         switch (functionName) {
           case 'add-liquidity':
           case 'remove-liquidity':
@@ -843,11 +843,11 @@ export class RealTimeDataService {
     try {
       const functionArgs = tx.contract_call.function_args;
       const senderAddress = tx.sender_address;
-      
+
       // Extract token addresses from function arguments
       const tokenA = functionArgs[0]?.repr?.replace(/'/g, '');
       const tokenB = functionArgs[1]?.repr?.replace(/'/g, '');
-      
+
       if (!tokenA || !tokenB) return;
 
       // Generate pool ID
@@ -886,11 +886,11 @@ export class RealTimeDataService {
   private async handleSwapTransaction(tx: any): Promise<void> {
     try {
       const functionArgs = tx.contract_call.function_args;
-      
+
       // Extract token addresses
       const tokenIn = functionArgs[0]?.repr?.replace(/'/g, '');
       const tokenOut = functionArgs[1]?.repr?.replace(/'/g, '');
-      
+
       if (!tokenIn || !tokenOut) return;
 
       // Generate pool ID
@@ -949,7 +949,7 @@ export class RealTimeDataService {
   private async getUserData(userAddress: string): Promise<PositionUpdate[] | null> {
     try {
       const positions = await positionTrackingService.getUserPositions(userAddress);
-      
+
       return positions.map(position => ({
         userAddress,
         poolId: position.poolId,
@@ -970,14 +970,14 @@ export class RealTimeDataService {
   private async getGlobalData(): Promise<any> {
     try {
       const summary = await poolAnalyticsService.getAnalyticsSummary();
-      
+
       return {
         totalTVL: summary.totalTVL,
         totalVolume24h: summary.totalVolume24h,
         totalFees24h: summary.totalFees24h,
         averageAPR: summary.averageAPR,
         poolCount: summary.poolCount,
-   
+
         timestamp: new Date(),
       };
     } catch (error) {
@@ -999,7 +999,7 @@ export class RealTimeDataService {
   private broadcastPoolUpdate(poolId: string, data: PoolUpdate): void {
     const subscriptionKey = `pool:${poolId}`;
     const subscribers = this.subscriptions.get(subscriptionKey);
-    
+
     if (subscribers && subscribers.size > 0) {
       const message = {
         type: 'pool_update',
@@ -1021,7 +1021,7 @@ export class RealTimeDataService {
   private broadcastUserUpdate(userAddress: string, data: PositionUpdate[]): void {
     const subscriptionKey = `user:${userAddress}`;
     const subscribers = this.subscriptions.get(subscriptionKey);
-    
+
     if (subscribers && subscribers.size > 0) {
       const message = {
         type: 'user_update',
@@ -1043,7 +1043,7 @@ export class RealTimeDataService {
   private broadcastGlobalUpdate(data: any): void {
     const subscriptionKey = 'global:market';
     const subscribers = this.subscriptions.get(subscriptionKey);
-    
+
     if (subscribers && subscribers.size > 0) {
       const message = {
         type: 'global_update',
@@ -1117,10 +1117,10 @@ export class RealTimeDataService {
    */
   subscribeToPool(poolId: string, callback: (data: PoolUpdate) => void): string {
     const subscriptionId = `pool_${poolId}_${Date.now()}`;
-    
+
     // Store callback for programmatic subscriptions
     // This would be used for server-side subscriptions
-    
+
     logger.info('Programmatic pool subscription created', { poolId, subscriptionId });
     return subscriptionId;
   }
@@ -1130,9 +1130,9 @@ export class RealTimeDataService {
    */
   subscribeToUserPositions(userAddress: string, callback: (data: PositionUpdate[]) => void): string {
     const subscriptionId = `user_${userAddress}_${Date.now()}`;
-    
+
     // Store callback for programmatic subscriptions
-    
+
     logger.info('Programmatic user subscription created', { userAddress, subscriptionId });
     return subscriptionId;
   }
@@ -1185,14 +1185,14 @@ export class RealTimeDataService {
   } {
     const subscriptionStats = { pool: 0, user: 0, global: 0, total: 0 };
     const subscriptionDistribution: { [key: string]: number } = {};
-    
+
     for (const key of this.subscriptions.keys()) {
       const [type] = key.split(':');
       if (type in subscriptionStats) {
         subscriptionStats[type as keyof typeof subscriptionStats]++;
       }
       subscriptionStats.total++;
-      
+
       // Track subscription distribution
       subscriptionDistribution[key] = this.subscriptions.get(key)?.size || 0;
     }
@@ -1209,11 +1209,11 @@ export class RealTimeDataService {
       totalAge += now - client.connectedAt.getTime();
       totalMessages += client.messageCount;
       totalTokens += client.rateLimitTokens;
-      
+
       if (client.isAuthenticated) {
         authenticatedCount++;
       }
-      
+
       if (client.rateLimitTokens < this.rateLimitConfig.maxTokens * 0.1) {
         rateLimitedCount++;
       }
@@ -1365,7 +1365,7 @@ export class RealTimeDataService {
 
     for (const [subscriptionKey, subscribers] of this.subscriptions.entries()) {
       const [type, target] = subscriptionKey.split(':');
-      
+
       for (const clientId of subscribers) {
         try {
           await this.sendInitialData(clientId, type, target);

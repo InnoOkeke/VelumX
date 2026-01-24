@@ -5,7 +5,7 @@
 
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
-import { callReadOnlyFunction, cvToJSON, principalCV, uintCV } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToJSON, principalCV, uintCV } from '@stacks/transactions';
 
 export interface TokenInfo {
   symbol: string;
@@ -137,7 +137,7 @@ export class SwapService {
       }
 
       // Call quote-swap read-only function
-      const result = await callReadOnlyFunction({
+      const result = await fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'quote-swap',

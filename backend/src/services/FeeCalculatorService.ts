@@ -10,7 +10,7 @@ import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
 import { poolDiscoveryService } from './PoolDiscoveryService';
 import { poolAnalyticsService } from './PoolAnalyticsService';
 import { liquidityService } from './LiquidityService';
-import { callReadOnlyFunction, cvToJSON, principalCV, uintCV } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToJSON, principalCV, uintCV } from '@stacks/transactions';
 import {
   FeeEarnings,
   FeeHistory,
@@ -45,7 +45,7 @@ export class FeeCalculatorService {
    */
   async calculateAccumulatedFees(userAddress: string, poolId: string): Promise<FeeEarnings> {
     const cacheKey = CACHE_KEYS.FEE_EARNINGS(userAddress, poolId);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -89,13 +89,13 @@ export class FeeCalculatorService {
 
       // Get stored fee earnings from database
       const storedFees = await this.getStoredFeeEarnings(userAddress, poolId);
-      
+
       // Calculate recent fees since last database update
       const recentFees = await this.calculateRecentFees(userAddress, poolId, sharePercentage);
-      
+
       // Get position creation date for accurate calculations
       const positionAge = await this.getPositionAge(userAddress, poolId);
-      
+
       // Calculate time-based earnings
       const dailyEarnings = recentFees.daily;
       const weeklyEarnings = dailyEarnings * 7;
@@ -146,11 +146,11 @@ export class FeeCalculatorService {
         FROM fee_earnings 
         WHERE user_address = ? AND pool_id = ?
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
       // return parseFloat(result[0]?.total_fees || '0');
-      
+
       // For now, return 0 - in production this would return actual stored fees
       return 0;
     } catch (error) {
@@ -163,27 +163,27 @@ export class FeeCalculatorService {
    * Calculate recent fees since last database update using blockchain events
    */
   private async calculateRecentFees(
-    userAddress: string, 
-    poolId: string, 
+    userAddress: string,
+    poolId: string,
     sharePercentage: number
   ): Promise<{ daily: number; total: number }> {
     try {
       // Get pool analytics for recent volume data
       const analytics = await poolAnalyticsService.getPoolAnalytics(poolId);
-      
+
       // Calculate fees from recent volume
       const dailyVolume = analytics.volume24h;
       const dailyPoolFees = dailyVolume * this.STANDARD_FEE_RATE;
       const userDailyFees = dailyPoolFees * sharePercentage;
-      
+
       // In production, this would also:
       // 1. Query blockchain events for swap transactions in this pool
       // 2. Calculate exact fees generated since last database update
       // 3. Apply user's historical share percentage for each time period
-      
+
       // For now, estimate based on current share and recent volume
       const estimatedTotalRecent = userDailyFees * 7; // Estimate for last week
-      
+
       return {
         daily: userDailyFees,
         total: estimatedTotalRecent,
@@ -205,11 +205,11 @@ export class FeeCalculatorService {
         FROM user_positions 
         WHERE user_address = ? AND pool_id = ?
       `;
-      
+
       // Mock database query - replace with real database call
       // const result = await this.db.query(query, [userAddress, poolId]);
       // return parseInt(result[0]?.age_days || '0');
-      
+
       // For now, return a reasonable default
       return 30; // 30 days
     } catch (error) {
@@ -258,7 +258,7 @@ export class FeeCalculatorService {
    */
   private async getTokenPrice(tokenAddress: string): Promise<number> {
     const cacheKey = CACHE_KEYS.TOKEN_PRICE(tokenAddress);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -273,7 +273,7 @@ export class FeeCalculatorService {
             const response = await fetch(
               'https://api.coingecko.com/api/v3/simple/price?ids=stacks&vs_currencies=usd'
             );
-            
+
             if (response.ok) {
               const data: any = await response.json();
               return data.stacks?.usd || 2.5; // Fallback price
@@ -289,7 +289,7 @@ export class FeeCalculatorService {
             'STX': 2.5,
             'usdcx': 1.0,
           };
-          
+
           const symbol = tokenAddress.split('.').pop()?.toLowerCase() || '';
           return fallbackPrices[symbol] || 1.0;
         }
@@ -307,9 +307,9 @@ export class FeeCalculatorService {
       // - Chainlink Price Feeds
       // - Band Protocol
       // - Pyth Network
-      
+
       const priceOracleUrl = this.config.liquidity.priceOracleUrl;
-      
+
       if (!priceOracleUrl) {
         throw new Error('Price oracle not configured');
       }
@@ -325,7 +325,7 @@ export class FeeCalculatorService {
         const data: any = await response.json();
         return data.price || 1.0;
       }
-      
+
       throw new Error('Oracle price not available');
     } catch (error) {
       logger.error('Failed to get price from oracle', { tokenAddress, error });
@@ -371,16 +371,16 @@ export class FeeCalculatorService {
         ORDER BY fe.timestamp DESC
         LIMIT 1000
       `;
-      
+
       const days = this.getTimeframeDays(timeframe);
-      
+
       // Mock database query - replace with real database call
       // const results = await this.db.query(query, [userAddress, days]);
-      
+
       // For now, generate realistic fee history based on current positions
       const history: FeeHistory[] = [];
       const pools = await poolDiscoveryService.getAllPools();
-      
+
       // Find pools where user has positions
       const userPools: string[] = [];
       for (const pool of pools) {
@@ -390,7 +390,7 @@ export class FeeCalculatorService {
             pool.tokenA.address,
             pool.tokenB.address
           );
-          
+
           if (BigInt(lpBalance) > 0n) {
             userPools.push(pool.id);
           }
@@ -408,7 +408,7 @@ export class FeeCalculatorService {
         // Generate daily fee entries based on real volume patterns
         for (let i = 0; i < days && i < 90; i++) { // Limit to 90 days for performance
           const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-          
+
           // Use real volume data to estimate historical fees
           const analytics = await poolAnalyticsService.getPoolAnalytics(poolId);
           const volumeVariation = 0.7 + Math.random() * 0.6; // 70% to 130% variation
@@ -455,13 +455,13 @@ export class FeeCalculatorService {
           user_address, pool_id, amount_usd, transaction_hash, block_height, timestamp
         ) VALUES (?, ?, ?, ?, ?, NOW())
       `;
-      
+
       // In production, execute this query
       // await this.db.query(insertQuery, [userAddress, poolId, amountUSD, transactionHash, blockHeight]);
 
       // Clear cache after database update
       await this.clearFeeCache(userAddress, poolId);
-      
+
       logger.info('Fee earnings stored in database', {
         userAddress,
         poolId,
@@ -492,12 +492,12 @@ export class FeeCalculatorService {
     try {
       // Process earnings in batches for better performance
       const batchSize = this.BATCH_SIZE;
-      
+
       for (let i = 0; i < earnings.length; i += batchSize) {
         const batch = earnings.slice(i, i + batchSize);
-        
+
         // In production, use batch insert queries
-        const promises = batch.map(earning => 
+        const promises = batch.map(earning =>
           this.storeFeeEarnings(
             earning.userAddress,
             earning.poolId,
@@ -508,15 +508,15 @@ export class FeeCalculatorService {
             logger.error('Failed to store fee earning in batch', { earning, error });
           })
         );
-        
+
         await Promise.all(promises);
-        
+
         // Small delay between batches
         if (i + batchSize < earnings.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
-      
+
       logger.info('Batch fee earnings processing completed', { earningsCount: earnings.length });
     } catch (error) {
       logger.error('Failed to batch process fee earnings', { error });
@@ -542,7 +542,7 @@ export class FeeCalculatorService {
 
       // Get real pool analytics
       const analytics = await poolAnalyticsService.getPoolAnalytics(poolId);
-      
+
       // Calculate what percentage of the pool this amount would represent
       const poolTVL = analytics.tvl;
       const sharePercentage = poolTVL > 0 ? amount / poolTVL : 0;
@@ -550,7 +550,7 @@ export class FeeCalculatorService {
       // Use real volume data for projections
       const dailyVolume = analytics.volume24h;
       const weeklyVolume = analytics.volume7d;
-      
+
       // Calculate projected fees based on real volume patterns
       const dailyFees = dailyVolume * this.STANDARD_FEE_RATE * sharePercentage;
       const weeklyFees = (weeklyVolume / 7) * this.STANDARD_FEE_RATE * sharePercentage * 7;
@@ -600,32 +600,32 @@ export class FeeCalculatorService {
   private calculateProjectionConfidence(analytics: any, tvl: number, volume: number): number {
     try {
       let confidence = 0.3; // Base confidence
-      
+
       // TVL factor (higher TVL = higher confidence)
       if (tvl > 10000000) confidence += 0.3; // $10M+
       else if (tvl > 1000000) confidence += 0.2; // $1M+
       else if (tvl > 100000) confidence += 0.1; // $100K+
-      
+
       // Volume factor (consistent volume = higher confidence)
       if (volume > 100000) confidence += 0.2; // $100K+ daily volume
       else if (volume > 10000) confidence += 0.15; // $10K+ daily volume
       else if (volume > 1000) confidence += 0.1; // $1K+ daily volume
-      
+
       // Volume/TVL ratio (healthy ratio = higher confidence)
       const volumeToTVLRatio = tvl > 0 ? volume / tvl : 0;
       if (volumeToTVLRatio > 0.1) confidence += 0.1; // High activity
       else if (volumeToTVLRatio > 0.01) confidence += 0.05; // Moderate activity
-      
+
       // APR reasonableness (too high APR = lower confidence)
       if (analytics.apr > 200) confidence -= 0.3; // Very high APR is suspicious
       else if (analytics.apr > 100) confidence -= 0.2; // High APR reduces confidence
       else if (analytics.apr > 50) confidence -= 0.1; // Moderately high APR
-      
+
       // Historical data availability (more data = higher confidence)
       if (analytics.historicalData && analytics.historicalData.length > 30) {
         confidence += 0.1; // 30+ days of data
       }
-      
+
       return Math.max(0.1, Math.min(1, confidence)); // Clamp between 0.1 and 1
     } catch (error) {
       logger.error('Failed to calculate projection confidence', { error });
@@ -643,7 +643,7 @@ export class FeeCalculatorService {
       // Get all fee history for the year from database
       const startDate = new Date(year, 0, 1);
       const endDate = new Date(year + 1, 0, 1);
-      
+
       // In production, query database for actual fee earnings
       const query = `
         SELECT 
@@ -658,13 +658,13 @@ export class FeeCalculatorService {
           AND fe.timestamp < ?
         ORDER BY fe.timestamp ASC
       `;
-      
+
       // Mock database query - replace with real database call
       // const yearHistory = await this.db.query(query, [userAddress, startDate, endDate]);
-      
+
       // For now, get fee history and filter by year
       const allHistory = await this.getFeeHistory(userAddress, Timeframe.YEAR_1);
-      const yearHistory = allHistory.filter(fee => 
+      const yearHistory = allHistory.filter(fee =>
         fee.timestamp >= startDate && fee.timestamp < endDate
       );
 
@@ -681,7 +681,7 @@ export class FeeCalculatorService {
       const positions = Object.keys(poolGroups).map(poolId => {
         const poolFees = poolGroups[poolId];
         const earnings = poolFees.reduce((sum, fee) => sum + fee.amountUSD, 0);
-        
+
         return {
           poolId,
           earnings,
@@ -728,19 +728,19 @@ export class FeeCalculatorService {
     userAddresses: string[],
     poolId?: string
   ): Promise<{ [userAddress: string]: FeeEarnings[] }> {
-    logger.debug('Fetching fee earnings for multiple users', { 
+    logger.debug('Fetching fee earnings for multiple users', {
       userCount: userAddresses.length,
-      poolId 
+      poolId
     });
 
     const results: { [userAddress: string]: FeeEarnings[] } = {};
-    
+
     // Process users in batches for scalability
     const batchSize = this.BATCH_SIZE;
-    
+
     for (let i = 0; i < userAddresses.length; i += batchSize) {
       const batch = userAddresses.slice(i, i + batchSize);
-      
+
       const batchPromises = batch.map(async (userAddress) => {
         try {
           if (poolId) {
@@ -751,12 +751,12 @@ export class FeeCalculatorService {
             // Get earnings for all pools where user has positions
             const pools = await poolDiscoveryService.getAllPools();
             const userEarnings: FeeEarnings[] = [];
-            
+
             // Process pools in smaller batches to avoid overwhelming blockchain calls
             const poolBatchSize = 5;
             for (let j = 0; j < pools.length; j += poolBatchSize) {
               const poolBatch = pools.slice(j, j + poolBatchSize);
-              
+
               const poolPromises = poolBatch.map(async (pool) => {
                 try {
                   const lpBalance = await liquidityService.getUserLPBalance(
@@ -764,7 +764,7 @@ export class FeeCalculatorService {
                     pool.tokenA.address,
                     pool.tokenB.address
                   );
-                  
+
                   if (BigInt(lpBalance) > 0n) {
                     const earnings = await this.calculateAccumulatedFees(userAddress, pool.id);
                     return earnings;
@@ -775,12 +775,12 @@ export class FeeCalculatorService {
                   return null;
                 }
               });
-              
+
               const poolResults = await Promise.all(poolPromises);
               const validEarnings = poolResults.filter(e => e !== null) as FeeEarnings[];
               userEarnings.push(...validEarnings);
             }
-            
+
             results[userAddress] = userEarnings;
           }
         } catch (error) {
@@ -790,16 +790,16 @@ export class FeeCalculatorService {
       });
 
       await Promise.all(batchPromises);
-      
+
       // Progress logging for large batches
       if (userAddresses.length > 1000) {
-        logger.info('Fee earnings batch progress', { 
+        logger.info('Fee earnings batch progress', {
           completed: Math.min(i + batchSize, userAddresses.length),
-          total: userAddresses.length 
+          total: userAddresses.length
         });
       }
     }
-    
+
     return results;
   }
 
@@ -845,7 +845,7 @@ export class FeeCalculatorService {
       [Timeframe.DAY_90]: 90,
       [Timeframe.YEAR_1]: 365,
     };
-    
+
     return timeframeDays[timeframe] || 30;
   }
 
@@ -874,22 +874,22 @@ export class FeeCalculatorService {
       const batchSize = 10;
       for (let i = 0; i < pools.length; i += batchSize) {
         const batch = pools.slice(i, i + batchSize);
-        
+
         const batchPromises = batch.map(async (pool) => {
           try {
             const analytics = await poolAnalyticsService.getPoolAnalytics(pool.id);
             const fees24h = analytics.feeEarnings24h;
             const fees7d = analytics.volume7d * this.STANDARD_FEE_RATE;
-            
+
             if (fees24h > 0) {
               totalFees24h += fees24h;
               totalFees7d += fees7d;
               totalAPR += analytics.apr;
               activePoolCount++;
-              
+
               poolFees.push({ poolId: pool.id, fees24h });
             }
-            
+
             return { fees24h, fees7d, apr: analytics.apr };
           } catch (error) {
             logger.error('Failed to get analytics for pool in fee statistics', { poolId: pool.id, error });
@@ -901,7 +901,7 @@ export class FeeCalculatorService {
       }
 
       const averageFeeAPR = activePoolCount > 0 ? totalAPR / activePoolCount : 0;
-      
+
       // Sort pools by fees and get top 10
       const topEarningPools = poolFees
         .sort((a, b) => b.fees24h - a.fees24h)
@@ -1003,7 +1003,7 @@ export class FeeCalculatorService {
   }> {
     try {
       const cacheConnected = await this.cache.healthCheck();
-      
+
       // Check price oracle connectivity
       let priceOracleConnected = true;
       try {

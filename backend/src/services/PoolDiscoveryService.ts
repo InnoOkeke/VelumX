@@ -7,10 +7,10 @@ import { getExtendedConfig } from '../config';
 import { logger } from '../utils/logger';
 import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
 import { liquidityService } from './LiquidityService';
-import { 
-  callReadOnlyFunction, 
-  cvToJSON, 
-  principalCV 
+import {
+  fetchCallReadOnlyFunction,
+  cvToJSON,
+  principalCV
 } from '@stacks/transactions';
 import {
   Pool,
@@ -168,7 +168,7 @@ export class PoolDiscoveryService {
    */
   async getPoolMetadata(poolId: string): Promise<PoolMetadata> {
     const cacheKey = CACHE_KEYS.POOL_METADATA(poolId);
-    
+
     return withCache(
       cacheKey,
       async () => {
@@ -176,14 +176,14 @@ export class PoolDiscoveryService {
 
         // Parse pool ID to get token symbols
         const [tokenASymbol, tokenBSymbol] = poolId.split('-');
-        
+
         // Find tokens in default list
         const tokenA = DEFAULT_TOKENS.find(t => t.symbol === tokenASymbol);
         const tokenB = DEFAULT_TOKENS.find(t => t.symbol === tokenBSymbol);
 
         // Calculate risk level based on pool characteristics
         let riskLevel: 'low' | 'medium' | 'high' = 'high';
-        
+
         try {
           // Get pool reserves to calculate TVL (mock calculation)
           const reserves = await liquidityService.getPoolReserves(
@@ -193,7 +193,7 @@ export class PoolDiscoveryService {
 
           // Mock TVL calculation (would need price data in production)
           const mockTVL = Number(reserves.reserveA) + Number(reserves.reserveB);
-          
+
           if (mockTVL >= RISK_CRITERIA.LOW.minTVL && tokenA?.verified && tokenB?.verified) {
             riskLevel = 'low';
           } else if (mockTVL >= RISK_CRITERIA.MEDIUM.minTVL) {
@@ -230,15 +230,15 @@ export class PoolDiscoveryService {
    */
   async getAllPools(): Promise<Pool[]> {
     const cacheKey = CACHE_KEYS.POOL_LIST;
-    
+
     return withCache(
       cacheKey,
       async () => {
         logger.debug('Fetching all pools');
-        
+
         // Try to get from cache first, otherwise discover
         let pools = await this.cache.get<Pool[]>(cacheKey);
-        
+
         if (!pools || pools.length === 0) {
           pools = await this.discoverPools();
         }
@@ -276,7 +276,7 @@ export class PoolDiscoveryService {
     logger.debug('Fetching popular pools', { limit });
 
     const allPools = await this.getAllPools();
-    
+
     // Sort by total supply as a proxy for popularity (would use TVL in production)
     return allPools
       .sort((a, b) => {
@@ -319,7 +319,7 @@ export class PoolDiscoveryService {
     logger.debug('Fetching pool by tokens', { tokenA, tokenB });
 
     const allPools = await this.getAllPools();
-    
+
     return allPools.find(pool => {
       return (
         (pool.tokenA.address === tokenA && pool.tokenB.address === tokenB) ||
@@ -335,7 +335,7 @@ export class PoolDiscoveryService {
     logger.debug('Fetching pools by token', { tokenAddress });
 
     const allPools = await this.getAllPools();
-    
+
     return allPools.filter(pool => {
       return pool.tokenA.address === tokenAddress || pool.tokenB.address === tokenAddress;
     });
@@ -348,7 +348,7 @@ export class PoolDiscoveryService {
     logger.debug('Fetching pool by ID', { poolId });
 
     const allPools = await this.getAllPools();
-    
+
     return allPools.find(pool => pool.id === poolId) || null;
   }
 
@@ -377,15 +377,15 @@ export class PoolDiscoveryService {
 
     // Find best performers
     if (comparison.pools.length > 0) {
-      comparison.bestByTVL = comparison.pools.reduce((best, current) => 
+      comparison.bestByTVL = comparison.pools.reduce((best, current) =>
         current.tvl > best.tvl ? current : best
       ).poolId;
 
-      comparison.bestByAPR = comparison.pools.reduce((best, current) => 
+      comparison.bestByAPR = comparison.pools.reduce((best, current) =>
         current.apr > best.apr ? current : best
       ).poolId;
 
-      comparison.bestByVolume = comparison.pools.reduce((best, current) => 
+      comparison.bestByVolume = comparison.pools.reduce((best, current) =>
         current.volume24h > best.volume24h ? current : best
       ).poolId;
     }

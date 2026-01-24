@@ -7,7 +7,7 @@ import { getExtendedConfig } from '../config';
 import { logger } from '../utils/logger';
 import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
 import {
-  callReadOnlyFunction,
+  fetchCallReadOnlyFunction,
   cvToJSON,
   principalCV,
   uintCV,
@@ -68,7 +68,7 @@ export class LiquidityService {
 
           const { a, b, isReversed } = this.sortTokens(tokenA, tokenB);
 
-          const result = await callReadOnlyFunction({
+          const result = await fetchCallReadOnlyFunction({
             contractAddress,
             contractName,
             functionName: 'get-pool-reserves',
@@ -118,7 +118,7 @@ export class LiquidityService {
         try {
           const [contractAddress, contractName] = this.config.liquidity.swapContractAddress.split('.');
 
-          const result = await callReadOnlyFunction({
+          const result = await fetchCallReadOnlyFunction({
             contractAddress,
             contractName,
             functionName: 'get-lp-balance',

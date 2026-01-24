@@ -43,7 +43,7 @@ export class StacksMintService {
     try {
       // Parse contract address
       const [contractAddress, contractName] = this.config.stacksUsdcxProtocolAddress.split('.');
-      
+
       if (!contractAddress || !contractName) {
         throw new Error('Invalid Stacks USDCx protocol address format');
       }
@@ -80,7 +80,7 @@ export class StacksMintService {
 
       // Broadcast transaction
       logger.debug('Broadcasting mint transaction');
-      const broadcastResponse = await broadcastTransaction(transaction, 'testnet');
+      const broadcastResponse = await broadcastTransaction(transaction as any);
 
       if ('error' in broadcastResponse) {
         throw new Error(`Broadcast failed: ${broadcastResponse.error} - ${broadcastResponse.reason}`);
