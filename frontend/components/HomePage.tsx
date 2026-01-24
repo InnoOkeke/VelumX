@@ -6,14 +6,17 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Sidebar } from './Sidebar';
 import { NotificationContainer } from './NotificationContainer';
-import { BridgeInterface } from './BridgeInterface';
-import { SwapInterface } from './SwapInterface';
-import { LiquidityInterface } from './LiquidityInterface';
 import { PoolBrowser } from './PoolBrowser';
 import { TransactionHistory } from './TransactionHistory';
 import { Shield, Zap, Repeat } from 'lucide-react';
+
+// Dynamically import interfaces to resolve Turbopack module factory issues with Stacks libraries
+const BridgeInterface = dynamic(() => import('./BridgeInterface').then(mod => mod.BridgeInterface), { ssr: false });
+const SwapInterface = dynamic(() => import('./SwapInterface').then(mod => mod.SwapInterface), { ssr: false });
+const LiquidityInterface = dynamic(() => import('./LiquidityInterface').then(mod => mod.LiquidityInterface), { ssr: false });
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'liquidity' | 'pools' | 'history'>('bridge');

@@ -18,7 +18,9 @@ import {
     Twitter,
     ExternalLink
 } from 'lucide-react';
-import { WalletButton } from './WalletButton';
+import dynamic from 'next/dynamic';
+
+const WalletButton = dynamic(() => import('./WalletButton').then(mod => mod.WalletButton), { ssr: false });
 
 interface SidebarProps {
     activeTab: 'bridge' | 'swap' | 'liquidity' | 'pools' | 'history';
