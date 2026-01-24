@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createWalletClient, createPublicClient, custom, http, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { connect, isConnected, getLocalStorage, showConnect } from '@stacks/connect';
+import { connect, isConnected, getLocalStorage, showConnect, AppConfig, UserSession } from '@stacks/connect';
 import { validateStacksAddress } from '@stacks/transactions';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
 
@@ -43,15 +43,15 @@ export interface WalletState {
 
 const STORAGE_KEY = 'velumx_wallet_state';
 
-// Initialize Stacks session only on client side
-let appConfig: any = null;
-let userSession: any = null;
+// Initialize Stacks session safely for SSR
+const getStacksSession = () => {
+  if (typeof window === 'undefined') return { appConfig: undefined, userSession: undefined };
+  const config = new AppConfig(['store_write', 'publish_data']);
+  const session = new UserSession({ appConfig: config });
+  return { appConfig: config, userSession: session };
+};
 
-if (typeof window !== 'undefined') {
-  const { AppConfig, UserSession } = require('@stacks/connect');
-  appConfig = new AppConfig(['store_write', 'publish_data']);
-  userSession = new UserSession({ appConfig });
-}
+const { userSession } = getStacksSession();
 
 // Detect available Ethereum wallets
 function detectEthereumWallets() {
