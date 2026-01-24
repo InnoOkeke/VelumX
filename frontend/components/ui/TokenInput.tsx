@@ -78,7 +78,7 @@ export function TokenInput({
                         className={`appearance-none bg-gradient-to-r ${gradientClass} text-white pl-5 pr-10 py-3 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg flex items-center gap-2 border-none`}
                         disabled={isProcessing}
                     >
-                        {tokens && tokens.map(t => (
+                        {Array.isArray(tokens) && tokens.map(t => (
                             <option key={t.symbol} value={t.symbol} className="text-black dark:text-white bg-white dark:bg-gray-900">
                                 {t.symbol}
                             </option>

@@ -72,7 +72,7 @@ export function PoolBrowser() {
 
       const data = await response.json();
 
-      if (data.success && data.data) {
+      if (data.success && data.data && Array.isArray(data.data)) {
         const pools: Pool[] = data.data.map((pool: any) => ({
           id: pool.id,
           tokenA: {
@@ -99,7 +99,11 @@ export function PoolBrowser() {
           isLoading: false,
         }));
       } else {
-        throw new Error(data.error || 'Failed to fetch pools');
+        setState(prev => ({
+          ...prev,
+          pools: [],
+          isLoading: false,
+        }));
       }
     } catch (error) {
       console.error('Failed to fetch pools:', error);
@@ -107,12 +111,12 @@ export function PoolBrowser() {
         ...prev,
         error: 'Failed to load live pools. Showing placeholder data for preview.',
         isLoading: false,
-        pools: [], // We can leave it empty or fallback to nothing
+        pools: [],
       }));
     }
   };
 
-  const sortedPools = [...state.pools].sort((a, b) => {
+  const sortedPools = Array.isArray(state.pools) ? [...state.pools].sort((a, b) => {
     switch (state.sortBy) {
       case 'tvl':
         return parseFloat(b.tvl) - parseFloat(a.tvl);
@@ -123,7 +127,7 @@ export function PoolBrowser() {
       default:
         return 0;
     }
-  });
+  }) : [];
 
   const filteredPools = state.filterToken === 'all'
     ? sortedPools

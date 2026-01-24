@@ -92,11 +92,11 @@ export function PoolBrowserModal({
                         </div>
                     ) : (
                         <div className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
-                            {state.filteredPools.map((pool: any) => (
+                            {Array.isArray(state.filteredPools) && state.filteredPools.map((pool: any) => (
                                 <PoolItem
                                     key={pool.id}
                                     pool={pool}
-                                    analytics={state.poolAnalytics[pool.id]}
+                                    analytics={state.poolAnalytics?.[pool.id]}
                                     onSelect={selectPoolFromBrowser}
                                     onViewAnalytics={(p) => setState((prev: any) => ({ ...prev, selectedPoolForSwap: p, showPoolAnalytics: true }))}
                                     formatCurrency={formatCurrency}

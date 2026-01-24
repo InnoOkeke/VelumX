@@ -293,8 +293,14 @@ export function SwapInterface() {
         const txHex = common.bytesToHex(tx.serialize() as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
-        const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
-        if (!provider) throw new Error('No Stacks wallet found');
+        const getProvider = () => {
+          if (typeof window === 'undefined') return null;
+          const win = window as any;
+          return win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
+        };
+
+        const provider = getProvider();
+        if (!provider) throw new Error('No Stacks wallet found. Please install Leather or Xverse.');
 
         const requestParams = {
           transaction: txHex,
