@@ -63,7 +63,7 @@ async function deploy() {
 
         console.log("\nStep 4: Building transaction...");
         const tx = await makeContractDeploy({
-            contractName: 'paymaster-v5',
+            contractName: 'paymaster-v7',
             codeBody: codeBody,
             senderKey: privateKey,
             network: network,
@@ -95,7 +95,7 @@ async function deploy() {
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("📋 Transaction ID:", txid);
             console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/" + txid + "?chain=testnet");
-            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".paymaster-v4");
+            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".paymaster-v7");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
             console.log("⏳ Waiting for confirmation (10-20 minutes)...");
@@ -104,15 +104,15 @@ async function deploy() {
             console.log("📝 Next Steps:");
             console.log("1. Wait for transaction confirmation");
             console.log("2. Update backend/.env:");
-            console.log(`   STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v4`);
+            console.log(`   STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v7`);
             console.log("3. Update frontend/.env.local:");
-            console.log(`   NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v4`);
+            console.log(`   NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=${TESTNET_ADDRESS}.paymaster-v7`);
             console.log("4. Test gasless swaps with USDCx fees\n");
 
             // Save deployment info
             const deploymentInfo = {
                 txid: txid,
-                contractAddress: `${TESTNET_ADDRESS}.paymaster-v5`,
+                contractAddress: `${TESTNET_ADDRESS}.paymaster-v7`,
                 deployerAddress: TESTNET_ADDRESS,
                 network: 'testnet',
                 timestamp: new Date().toISOString(),

@@ -166,6 +166,16 @@ export function BridgeInterface() {
     }
   }, [state.gaslessMode, state.direction]);
 
+  // Auto-enable gasless mode if STX balance is low
+  useEffect(() => {
+    if (stacksConnected && balances.stx) {
+      const stxBalance = parseFloat(balances.stx);
+      if (stxBalance < 0.1) {
+        setState(prev => ({ ...prev, gaslessMode: true }));
+      }
+    }
+  }, [stacksConnected, balances.stx]);
+
   // Switch direction
   const switchDirection = () => {
     setState(prev => ({
@@ -173,7 +183,7 @@ export function BridgeInterface() {
       direction: prev.direction === 'eth-to-stacks' ? 'stacks-to-eth' : 'eth-to-stacks',
       error: null,
       success: null,
-      gaslessMode: false,
+      // Keep gaslessMode as is - usually if a user wants it for withdrawal, they want it to stay
     }));
   };
 
@@ -584,7 +594,7 @@ export function BridgeInterface() {
         </div>
 
         {/* Gasless Mode Toggle (only for Stacks → Ethereum) */}
-        {state.direction === 'stacks-to-eth' && (
+        {state.direction === 'stacks-to-eth' ? (
           <div className="rounded-lg p-4 mb-6" style={{
             border: `1px solid var(--border-color)`,
             backgroundColor: 'rgba(16, 185, 129, 0.05)'
@@ -621,6 +631,27 @@ export function BridgeInterface() {
                 <span style={{ color: 'var(--text-secondary)' }}>Fee:</span> <span className="font-mono font-semibold">{parseFloat(state.feeEstimate.usdcx).toFixed(4)}</span> USDCx
               </div>
             )}
+          </div>
+        ) : (
+          /* eth-to-stacks direction */
+          <div className="rounded-lg p-4 mb-6" style={{
+            border: `1px solid var(--border-color)`,
+            backgroundColor: 'rgba(16, 185, 129, 0.05)'
+          }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{
+                backgroundColor: 'rgba(59, 130, 246, 0.1)'
+              }}>
+                <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Sponsored Minting</span>
+                  <span className="text-[10px] bg-blue-500/20 text-blue-600 px-1 rounded uppercase font-bold">Auto</span>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Zero STX required to receive tokens on Stacks</p>
+              </div>
+            </div>
           </div>
         )}
 

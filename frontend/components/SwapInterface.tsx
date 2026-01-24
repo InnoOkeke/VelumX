@@ -78,7 +78,7 @@ export function SwapInterface() {
     outputToken: DEFAULT_TOKENS[1], // USDCx
     inputAmount: '',
     outputAmount: '',
-    gaslessMode: false, // Default to false for STX pairs
+    gaslessMode: true, // Default to true for gas abstraction
     isProcessing: false,
     isFetchingQuote: false,
     error: null,
@@ -91,16 +91,16 @@ export function SwapInterface() {
   // Initialize tokens from config
   useEffect(() => {
     const updatedTokens = DEFAULT_TOKENS.map(t => {
-      if (t.symbol === 'VEX') return { ...t, address: config.stacksVexAddress };
+      if (t.symbol === 'VEX') return { ...t, address: config.stacksVexAddress || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1' };
       return t;
     });
     setTokens(updatedTokens);
 
-    // Update initial state tokens if they were VEX
+    // Update initial state tokens - Default to STX -> VEX
     setState(prev => ({
       ...prev,
-      inputToken: updatedTokens[0],
-      outputToken: updatedTokens[1]
+      inputToken: updatedTokens[0], // STX
+      outputToken: updatedTokens[2]  // VEX
     }));
   }, [config.stacksVexAddress]);
 
@@ -218,9 +218,9 @@ export function SwapInterface() {
       const isInputStx = state.inputToken.symbol === 'STX';
       const isOutputStx = state.outputToken.symbol === 'STX';
 
-      // For gasless mode, use paymaster contract (Currently only supports token-to-token)
+      // For gasless mode, use paymaster contract
       // For regular mode, use swap contract directly
-      const useGasless = state.gaslessMode && !isInputStx && !isOutputStx;
+      const useGasless = state.gaslessMode;
 
       const contractAddress = useGasless
         ? config.stacksPaymasterAddress.split('.')[0]
@@ -231,28 +231,30 @@ export function SwapInterface() {
 
       let functionName = 'swap';
       let functionArgs = [];
+      const gasFee = 10000;
 
       if (isInputStx) {
-        functionName = 'swap-stx-to-token';
+        functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
           contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
           uintCV(Number(amountInMicro)),
           uintCV(Number(minAmountOutMicro)),
         ];
+        if (useGasless) functionArgs.push(uintCV(gasFee));
       } else if (isOutputStx) {
-        functionName = 'swap-token-to-stx';
+        functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
           contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
           uintCV(Number(amountInMicro)),
           uintCV(Number(minAmountOutMicro)),
         ];
+        if (useGasless) functionArgs.push(uintCV(gasFee));
       } else if (useGasless) {
         functionName = 'swap-gasless';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
-        const gasFee = 10000;
         functionArgs = [
           contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
           contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
@@ -382,6 +384,22 @@ export function SwapInterface() {
           setSlippage={(val) => setState(prev => ({ ...prev, slippage: val }))}
           isOpen={state.showSettings}
         />
+
+        {/* Suggested Pairs */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setState(prev => ({ ...prev, inputToken: tokens[0], outputToken: tokens[2] }))}
+            className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-all text-purple-600 dark:text-purple-400"
+          >
+            STX/VEX
+          </button>
+          <button
+            onClick={() => setState(prev => ({ ...prev, inputToken: tokens[1], outputToken: tokens[2] }))}
+            className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10 transition-all text-blue-600 dark:text-blue-400"
+          >
+            USDCx/VEX
+          </button>
+        </div>
 
         <div className="relative">
           <TokenInput

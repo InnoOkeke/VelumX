@@ -6,7 +6,7 @@
 (use-trait sip-010 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; Import swap contract
-(define-constant SWAP-CONTRACT 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-contract-v12)
+(define-constant SWAP-CONTRACT 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v6-stx)
 
 (define-constant ERR-NOT-SPONSORED (err u200))
 (define-constant ERR-WRONG-SPONSOR (err u201))
@@ -113,5 +113,76 @@
       token-a token-b 
       liquidity 
       amount-a-min amount-b-min)
+  )
+)
+
+;; 6. Gasless STX to Token Swap
+(define-public (swap-stx-to-token-gasless 
+    (token-out <sip-010>) 
+    (amount-in uint) 
+    (min-amount-out uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Execute swap on our DEX contract
+    (contract-call? SWAP-CONTRACT swap-stx-to-token token-out amount-in min-amount-out)
+  )
+)
+
+;; 7. Gasless Token to STX Swap
+(define-public (swap-token-to-stx-gasless 
+    (token-in <sip-010>) 
+    (amount-in uint) 
+    (min-amount-out uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Execute swap on our DEX contract
+    (contract-call? SWAP-CONTRACT swap-token-to-stx token-in amount-in min-amount-out)
+  )
+)
+
+;; 8. Gasless Add STX Liquidity
+(define-public (add-liquidity-stx-gasless
+    (token <sip-010>)
+    (stx-amount uint)
+    (token-amount uint)
+    (stx-min uint)
+    (token-min uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Add liquidity to our DEX contract
+    (contract-call? SWAP-CONTRACT add-liquidity-stx token stx-amount token-amount stx-min token-min)
+  )
+)
+
+;; 9. Gasless Remove STX Liquidity
+(define-public (remove-liquidity-stx-gasless
+    (token <sip-010>)
+    (liquidity uint)
+    (stx-min uint)
+    (token-min uint)
+    (fee uint))
+  (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
+    (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
+    
+    ;; 1. Pay the fee to the relayer in USDCx
+    (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
+    
+    ;; 2. Remove liquidity from our DEX contract
+    (contract-call? SWAP-CONTRACT remove-liquidity-stx token liquidity stx-min token-min)
   )
 )

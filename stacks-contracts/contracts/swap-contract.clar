@@ -171,7 +171,7 @@
 
 ;; --- Liquidity functions - STX ---
 
-(define-public (add-liquidity-stx (token <sip-010-trait>) (stx-amount uint) (token-amount uint))
+(define-public (add-liquidity-stx (token <sip-010-trait>) (stx-amount uint) (token-amount uint) (stx-min uint) (token-min uint))
   (let (
     (ta stx-principal)
     (tb (contract-of token))
@@ -180,7 +180,7 @@
     (pool-opt (map-get? pools sorted))
   )
     (match pool-opt
-      pool (err u999) ;; Simplified: only support initial or proportional in full impl
+      pool (err u999) ;; Simplified
       (let ((liq (sqrt (* stx-amount token-amount))))
         (try! (stx-transfer? stx-amount tx-sender (as-contract tx-sender)))
         (try! (contract-call? token transfer token-amount tx-sender (as-contract tx-sender) none))
@@ -190,3 +190,73 @@
           total-supply: liq})
         (map-set lp-balances {pool-id: sorted, owner: tx-sender} liq)
         (ok liq)))))
+
+;; --- Liquidity functions - Token/Token ---
+
+(define-public (add-liquidity (token-a <sip-010-trait>) (token-b <sip-010-trait>) (amount-a uint) (amount-b uint) (amount-a-min uint) (amount-b-min uint))
+  (let (
+    (ta (contract-of token-a))
+    (tb (contract-of token-b))
+    (sorted (sort-tokens ta tb))
+    (is-ta-first (is-eq ta (get token-a sorted)))
+    (pool-opt (map-get? pools sorted))
+  )
+    (match pool-opt
+      pool (err u999) ;; Simplified
+      (let ((liq (sqrt (* amount-a amount-b))))
+        (try! (contract-call? token-a transfer amount-a tx-sender (as-contract tx-sender) none))
+        (try! (contract-call? token-b transfer amount-b tx-sender (as-contract tx-sender) none))
+        (map-set pools sorted {
+          reserve-a: (if is-ta-first amount-a amount-b),
+          reserve-b: (if is-ta-first amount-b amount-a),
+          total-supply: liq})
+        (map-set lp-balances {pool-id: sorted, owner: tx-sender} liq)
+        (ok liq)))))
+
+(define-public (remove-liquidity (token-a <sip-010-trait>) (token-b <sip-010-trait>) (liquidity uint) (amount-a-min uint) (amount-b-min uint))
+  (let (
+    (ta (contract-of token-a))
+    (tb (contract-of token-b))
+    (sorted (sort-tokens ta tb))
+    (pool (unwrap! (map-get? pools sorted) err-pool-not-found))
+    (is-ta-first (is-eq ta (get token-a sorted)))
+    (ra (get reserve-a pool))
+    (rb (get reserve-b pool))
+    (ts (get total-supply pool))
+    (aa (/ (* liquidity ra) ts))
+    (ab (/ (* liquidity rb) ts))
+    (user tx-sender)
+  )
+    (asserts! (>= (if is-ta-first aa ab) amount-a-min) err-slippage-exceeded)
+    (asserts! (>= (if is-ta-first ab aa) amount-b-min) err-slippage-exceeded)
+    (map-set pools sorted {
+      reserve-a: (- ra aa),
+      reserve-b: (- rb ab),
+      total-supply: (- ts liquidity)})
+    (try! (as-contract (contract-call? token-a transfer (if is-ta-first aa ab) tx-sender user none)))
+    (try! (as-contract (contract-call? token-b transfer (if is-ta-first ab aa) tx-sender user none)))
+    (ok {amount-a: aa, amount-b: ab})))
+
+(define-public (remove-liquidity-stx (token <sip-010-trait>) (liquidity uint) (amount-stx-min uint) (amount-token-min uint))
+  (let (
+    (ta stx-principal)
+    (tb (contract-of token))
+    (sorted (sort-tokens ta tb))
+    (pool (unwrap! (map-get? pools sorted) err-pool-not-found))
+    (is-ta-first (is-eq ta (get token-a sorted)))
+    (ra (get reserve-a pool))
+    (rb (get reserve-b pool))
+    (ts (get total-supply pool))
+    (aa (/ (* liquidity ra) ts))
+    (ab (/ (* liquidity rb) ts))
+    (user tx-sender)
+  )
+    (asserts! (>= (if is-ta-first aa ab) amount-stx-min) err-slippage-exceeded)
+    (asserts! (>= (if is-ta-first ab aa) amount-token-min) err-slippage-exceeded)
+    (map-set pools sorted {
+      reserve-a: (- ra aa),
+      reserve-b: (- rb ab),
+      total-supply: (- ts liquidity)})
+    (try! (as-contract (stx-transfer? (if is-ta-first aa ab) tx-sender user)))
+    (try! (as-contract (contract-call? token transfer (if is-ta-first ab aa) tx-sender user none)))
+    (ok {stx: aa, token: ab})))

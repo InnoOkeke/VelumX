@@ -161,6 +161,15 @@ export function LiquidityInterface() {
 
   // Replaced STX address overwrite with static sentinel usage in contract calls
 
+  // Initialize VEX token from config
+  useEffect(() => {
+    if (config.stacksVexAddress) {
+      setTokens(prev => prev.map(t =>
+        t.symbol === 'VEX' ? { ...t, address: config.stacksVexAddress } : t
+      ));
+    }
+  }, [config.stacksVexAddress]);
+
   // Fetch available pools on component mount
   useEffect(() => {
     if (stacksConnected) {
@@ -554,8 +563,7 @@ export function LiquidityInterface() {
       const isTokenAStx = state.tokenA.symbol === 'STX';
       const isTokenBStx = state.tokenB.symbol === 'STX';
       const isStxPool = isTokenAStx || isTokenBStx;
-
-      const useGasless = state.gaslessMode && !isStxPool;
+      const useGasless = state.gaslessMode;
 
       const contractAddress = useGasless
         ? config.stacksPaymasterAddress.split('.')[0]
@@ -569,17 +577,23 @@ export function LiquidityInterface() {
       let functionArgs = [];
 
       if (isStxPool) {
-        functionName = 'add-liquidity-stx';
+        functionName = useGasless ? 'add-liquidity-stx-gasless' : 'add-liquidity-stx';
         const stxAmount = isTokenAStx ? amountAMicro : amountBMicro;
         const tokenAmount = isTokenAStx ? amountBMicro : amountAMicro;
+        const stxMin = isTokenAStx ? minAmountAMicro : minAmountBMicro;
+        const tokenMin = isTokenAStx ? minAmountBMicro : minAmountAMicro;
         const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
+        if (!tokenToken) throw new Error('Token not found');
         const tokenParts = tokenToken.address.split('.');
 
         functionArgs = [
           contractPrincipalCV(tokenParts[0], tokenParts[1]),
           uintCV(Number(stxAmount)),
           uintCV(Number(tokenAmount)),
+          uintCV(Number(stxMin)),
+          uintCV(Number(tokenMin)),
         ];
+        if (useGasless) functionArgs.push(uintCV(gasFee));
       } else if (useGasless) {
         functionName = 'add-liquidity-gasless';
         const tokenAParts = state.tokenA.address.split('.');
@@ -753,8 +767,9 @@ export function LiquidityInterface() {
       const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * slippageFactor).toFixed(6), state.tokenA.decimals);
       const minAmountBMicro = parseUnits((parseFloat(state.amountB || '0') * slippageFactor).toFixed(6), state.tokenB.decimals);
 
-      const tokenAParts = state.tokenA.address.split('.');
-      const tokenBParts = state.tokenB.address.split('.');
+      const isTokenAStx = state.tokenA.symbol === 'STX';
+      const isTokenBStx = state.tokenB.symbol === 'STX';
+      const isStxPool = isTokenAStx || isTokenBStx;
 
       const contractAddress = state.gaslessMode
         ? config.stacksPaymasterAddress.split('.')[0]
@@ -765,28 +780,50 @@ export function LiquidityInterface() {
 
       const gasFee = state.gaslessMode ? 10000 : 0;
 
-      const functionArgs = state.gaslessMode
-        ? [
-          contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-          contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+      let functionArgs = [];
+
+      if (isStxPool) {
+        const tokenToken = isTokenAStx ? state.tokenB : state.tokenA;
+        if (!tokenToken) throw new Error('Token not found');
+        const tokenParts = tokenToken.address.split('.');
+        const minStx = isTokenAStx ? minAmountAMicro : minAmountBMicro;
+        const minToken = isTokenAStx ? minAmountBMicro : minAmountAMicro;
+
+        functionArgs = [
+          contractPrincipalCV(tokenParts[0], tokenParts[1]),
           uintCV(Number(lpTokenAmountMicro)),
-          uintCV(Number(minAmountAMicro)),
-          uintCV(Number(minAmountBMicro)),
-          uintCV(gasFee),
-        ]
-        : [
-          contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-          contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          uintCV(Number(lpTokenAmountMicro)),
-          uintCV(Number(minAmountAMicro)),
-          uintCV(Number(minAmountBMicro)),
+          uintCV(Number(minStx)),
+          uintCV(Number(minToken)),
         ];
+        if (state.gaslessMode) functionArgs.push(uintCV(gasFee));
+      } else {
+        const tokenAParts = state.tokenA.address.split('.');
+        const tokenBParts = state.tokenB.address.split('.');
+        functionArgs = state.gaslessMode
+          ? [
+            contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+            contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+            uintCV(Number(lpTokenAmountMicro)),
+            uintCV(Number(minAmountAMicro)),
+            uintCV(Number(minAmountBMicro)),
+            uintCV(gasFee),
+          ]
+          : [
+            contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
+            contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
+            uintCV(Number(lpTokenAmountMicro)),
+            uintCV(Number(minAmountAMicro)),
+            uintCV(Number(minAmountBMicro)),
+          ];
+      }
 
       await new Promise<string>((resolve, reject) => {
         openContractCall({
           contractAddress,
           contractName,
-          functionName: state.gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity',
+          functionName: isStxPool
+            ? (state.gaslessMode ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-stx')
+            : (state.gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity'),
           functionArgs,
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
