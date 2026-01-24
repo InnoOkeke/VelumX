@@ -206,7 +206,7 @@ export function useWallet() {
     } catch (error) {
       console.error('Failed to fetch Stacks balances:', error);
     }
-  }, [config.stacksUsdcxAddress]);
+  }, [config.stacksUsdcxAddress, config.stacksVexAddress]);
 
   // Restore wallet state from localStorage and reconnect
   useEffect(() => {

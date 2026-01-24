@@ -630,6 +630,7 @@ export function LiquidityInterface() {
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
           sponsored: useGasless,
+          fee: useGasless ? 0 : undefined,
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
@@ -828,6 +829,7 @@ export function LiquidityInterface() {
           network: STACKS_TESTNET,
           postConditionMode: PostConditionMode.Allow,
           sponsored: state.gaslessMode,
+          fee: state.gaslessMode ? 0 : undefined,
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
@@ -896,6 +898,7 @@ export function LiquidityInterface() {
     if (!token) return '0';
     if (token.symbol === 'USDCx') return balances.usdcx;
     if (token.symbol === 'STX') return balances.stx;
+    if (token.symbol === 'VEX') return balances.vex || '0';
     return '0';
   };
 
