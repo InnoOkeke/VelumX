@@ -64,6 +64,7 @@ export class StacksMintService {
         network: this.network, // Use the stored network object
         memo: 'VelumX Gas Drop',
         anchorMode: AnchorMode.Any,
+        fee: BigInt(2000), // 0.002 STX hardcoded fee to ensure acceptance
       };
 
       const transaction = await makeSTXTokenTransfer(txOptions);
@@ -76,7 +77,12 @@ export class StacksMintService {
       const broadcastResponse = await broadcastTransaction({ transaction });
 
       if ('error' in broadcastResponse) {
-        throw new Error(`Gas drop broadcast failed: ${broadcastResponse.error}`);
+        // Log the full response for debugging
+        logger.error('Gas drop broadcast failed', {
+          response: broadcastResponse,
+          address: recipientAddress
+        });
+        throw new Error(`Gas drop broadcast failed: ${broadcastResponse.error} - Reason: ${broadcastResponse.reason}`);
       }
 
       const txId = broadcastResponse.txid;
