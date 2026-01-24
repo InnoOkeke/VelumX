@@ -12,6 +12,10 @@ import { createWalletClient, createPublicClient, custom, http, parseUnits, forma
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
 import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
+import { makeContractCall, AnchorMode, PostConditionMode, uintCV, contractPrincipalCV, bufferCV } from '@stacks/transactions';
+import { STACKS_TESTNET } from '@stacks/network';
+import { bytesToHex } from '@stacks/common';
+import { openContractCall } from '@stacks/connect';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 
@@ -350,11 +354,6 @@ export function BridgeInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Dynamic imports for Stacks libraries
-      const { openContractCall } = await import('@stacks/connect');
-      const { STACKS_TESTNET } = await import('@stacks/network');
-      const { uintCV, bufferCV, PostConditionMode } = await import('@stacks/transactions');
-
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);
 
@@ -381,74 +380,117 @@ export function BridgeInterface() {
           bufferCV(recipientBytes),
         ];
 
-      await new Promise<string>((resolve, reject) => {
-        openContractCall({
-          contractAddress,
-          contractName,
-          functionName,
-          functionArgs,
+      if (state.gaslessMode) {
+        // Step 1: Build unsigned sponsored transaction
+        const tx = await makeContractCall({
+          contractAddress: contractAddress,
+          contractName: contractName,
+          functionName: functionName,
+          functionArgs: functionArgs,
+          senderAddress: stacksAddress,
           network: STACKS_TESTNET,
-          postConditionMode: PostConditionMode.Allow,
-          sponsored: state.gaslessMode,
-          appDetails: {
-            name: 'VelumX Bridge',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          onFinish: async (data: any) => {
-            let finalTxId = data.txId;
+          anchorMode: AnchorMode.Any,
+          postConditionMode: 0x01 as any,
+          sponsored: true,
+        } as any);
 
-            // If gasless, we MUST send the txRaw back to our backend for sponsorship completion
-            if (state.gaslessMode) {
-              try {
-                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    transaction: data.txRaw,
-                    userAddress: stacksAddress,
-                    estimatedFee: parseUnits(state.feeEstimate?.usdcx || '0', 6).toString(),
-                  }),
-                });
+        const txHex = bytesToHex(tx.serialize() as any);
 
-                const sponsorData = await sponsorResponse.json();
-                if (!sponsorData.success) {
-                  throw new Error(sponsorData.message || 'Sponsorship failed');
-                }
-                finalTxId = sponsorData.data.txid;
-              } catch (err) {
-                console.error('Gasless sponsorship failed:', err);
-                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}` }));
-                return;
-              }
-            }
+        // Step 2: Request user signature via wallet RPC (without broadcast)
+        const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
+        if (!provider) throw new Error('No Stacks wallet found');
 
-            // Submit to monitoring service
-            await fetch(`${config.backendUrl}/api/transactions/monitor`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: finalTxId,
-                type: 'withdrawal',
-                sourceTxHash: finalTxId,
-                sourceChain: 'stacks',
-                destinationChain: 'ethereum',
-                amount: state.amount,
-                sender: stacksAddress,
-                recipient: ethereumAddress,
-                status: 'pending',
-                timestamp: Date.now(),
-                isGasless: state.gaslessMode,
-                gasFeeInUsdcx: state.feeEstimate?.usdcx,
-              }),
-            });
+        const requestParams = {
+          transaction: txHex,
+          broadcast: false,
+          network: 'testnet',
+        };
 
-            resolve(finalTxId);
-          },
-          onCancel: () => {
-            reject(new Error('User cancelled transaction'));
-          },
+        const response = await provider.request('stx_signTransaction', requestParams);
+        const signedTxHex = response.result.transaction;
+
+        // Step 3: send to backend relayer
+        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: signedTxHex,
+            userAddress: stacksAddress,
+            estimatedFee: parseUnits(state.feeEstimate?.usdcx || '0', 6).toString(),
+          }),
         });
-      });
+
+        const sponsorData = await sponsorResponse.json();
+        if (!sponsorData.success) {
+          throw new Error(sponsorData.message || 'Sponsorship failed');
+        }
+
+        const finalTxId = sponsorData.data.txid;
+
+        // Submit to monitoring service
+        await fetch(`${config.backendUrl}/api/transactions/monitor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: finalTxId,
+            type: 'withdrawal',
+            sourceTxHash: finalTxId,
+            sourceChain: 'stacks',
+            destinationChain: 'ethereum',
+            amount: state.amount,
+            sender: stacksAddress,
+            recipient: ethereumAddress,
+            status: 'pending',
+            timestamp: Date.now(),
+            isGasless: state.gaslessMode,
+            gasFeeInUsdcx: state.feeEstimate?.usdcx,
+          }),
+        });
+      } else {
+        // Standard flow
+        await new Promise<string>((resolve, reject) => {
+          openContractCall({
+            contractAddress,
+            contractName,
+            functionName,
+            functionArgs,
+            network: STACKS_TESTNET as any,
+            postConditionMode: 0x01 as any,
+            sponsored: false,
+            appDetails: {
+              name: 'VelumX Bridge',
+              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+            },
+            onFinish: async (data: any) => {
+              const finalTxId = data.txId;
+
+              // Submit to monitoring service
+              await fetch(`${config.backendUrl}/api/transactions/monitor`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: finalTxId,
+                  type: 'withdrawal',
+                  sourceTxHash: finalTxId,
+                  sourceChain: 'stacks',
+                  destinationChain: 'ethereum',
+                  amount: state.amount,
+                  sender: stacksAddress,
+                  recipient: ethereumAddress,
+                  status: 'pending',
+                  timestamp: Date.now(),
+                  isGasless: false,
+                }),
+              });
+
+              resolve(finalTxId);
+            },
+            onCancel: () => {
+              reject(new Error('User cancelled transaction'));
+            },
+          });
+        });
+      }
 
       setState(prev => ({
         ...prev,

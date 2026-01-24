@@ -10,7 +10,10 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
 import { Plus, Minus, Loader2, Info, Search, X, BarChart3, Settings, Droplets, Zap, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
-import { fetchCallReadOnlyFunction, cvToJSON, principalCV } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToJSON, principalCV, makeContractCall, AnchorMode, PostConditionMode, uintCV, contractPrincipalCV, bufferCV } from '@stacks/transactions';
+import { STACKS_TESTNET } from '@stacks/network';
+import { bytesToHex } from '@stacks/common';
+import { openContractCall } from '@stacks/connect';
 import { PoolAnalytics as PoolAnalyticsComp } from './PoolAnalytics';
 import { PositionDashboard } from './PositionDashboard';
 import { AddLiquidityForm } from './ui/AddLiquidityForm';
@@ -549,10 +552,6 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      const { openContractCall } = await import('@stacks/connect');
-      const { STACKS_TESTNET } = await import('@stacks/network');
-      const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
-
       const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
       const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
 
@@ -621,53 +620,75 @@ export function LiquidityInterface() {
         ];
       }
 
-      await new Promise<string>((resolve, reject) => {
-        openContractCall({
-          contractAddress,
-          contractName,
-          functionName,
-          functionArgs,
+      if (useGasless) {
+        // Step 1: Build unsigned sponsored transaction
+        const tx = await makeContractCall({
+          contractAddress: contractAddress,
+          contractName: contractName,
+          functionName: functionName,
+          functionArgs: functionArgs,
+          senderAddress: stacksAddress,
           network: STACKS_TESTNET,
-          postConditionMode: PostConditionMode.Allow,
-          sponsored: useGasless,
-          appDetails: {
-            name: 'VelumX DEX',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          onFinish: async (data: any) => {
-            let finalTxId = data.txId;
+          anchorMode: AnchorMode.Any,
+          postConditionMode: 0x01 as any,
+          sponsored: true,
+        } as any);
 
-            if (useGasless) {
-              try {
-                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    transaction: data.txRaw,
-                    userAddress: stacksAddress,
-                    estimatedFee: gasFee.toString(),
-                  }),
-                });
+        const txHex = bytesToHex(tx.serialize() as any);
 
-                const sponsorData = await sponsorResponse.json();
-                if (!sponsorData.success) {
-                  throw new Error(sponsorData.message || 'Sponsorship failed');
-                }
-                finalTxId = sponsorData.data.txid;
-              } catch (err) {
-                console.error('Gasless sponsorship failed:', err);
-                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}`, isProcessing: false }));
-                return;
-              }
-            }
+        // Step 2: Request user signature via wallet RPC (without broadcast)
+        // We attempt to use the universal StacksProvider injection
+        const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
+        if (!provider) throw new Error('No Stacks wallet found');
 
-            resolve(finalTxId);
-          },
-          onCancel: () => {
-            reject(new Error('User cancelled transaction'));
-          },
+        const requestParams = {
+          transaction: txHex,
+          broadcast: false,
+          network: 'testnet',
+        };
+
+        const response = await provider.request('stx_signTransaction', requestParams);
+        const signedTxHex = response.result.transaction;
+
+        // Step 3: send to backend relayer
+        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: signedTxHex,
+            userAddress: stacksAddress,
+            estimatedFee: gasFee.toString(),
+          }),
         });
-      });
+
+        const sponsorData = await sponsorResponse.json();
+        if (!sponsorData.success) {
+          throw new Error(sponsorData.message || 'Sponsorship failed');
+        }
+      } else {
+        // Standard flow
+        await new Promise<string>((resolve, reject) => {
+          openContractCall({
+            contractAddress,
+            contractName,
+            functionName,
+            functionArgs,
+            network: STACKS_TESTNET as any,
+            postConditionMode: 0x01 as any,
+            sponsored: false,
+            appDetails: {
+              name: 'VelumX DEX',
+              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+            },
+            onFinish: async (data: any) => {
+              resolve(data.txId);
+            },
+            onCancel: () => {
+              reject(new Error('User cancelled transaction'));
+            },
+          } as any);
+        });
+      }
 
       setState(prev => ({
         ...prev,
@@ -758,10 +779,6 @@ export function LiquidityInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      const { openContractCall } = await import('@stacks/connect');
-      const { STACKS_TESTNET } = await import('@stacks/network');
-      const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
-
       const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6);
       const slippageFactor = 1 - (state.slippage / 100);
       const minAmountAMicro = parseUnits((parseFloat(state.amountA || '0') * slippageFactor).toFixed(6), state.tokenA.decimals);
@@ -817,55 +834,74 @@ export function LiquidityInterface() {
           ];
       }
 
-      await new Promise<string>((resolve, reject) => {
-        openContractCall({
-          contractAddress,
-          contractName,
-          functionName: isStxPool
-            ? (state.gaslessMode ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-stx')
-            : (state.gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity'),
-          functionArgs,
+      if (state.gaslessMode) {
+        // Step 1: Build unsigned sponsored transaction
+        const tx = await makeContractCall({
+          contractAddress: contractAddress,
+          contractName: contractName,
+          functionName: isStxPool ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-gasless',
+          functionArgs: functionArgs,
+          senderAddress: stacksAddress,
           network: STACKS_TESTNET,
-          postConditionMode: PostConditionMode.Allow,
-          sponsored: state.gaslessMode,
-          appDetails: {
-            name: 'VelumX DEX',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          onFinish: async (data: any) => {
-            let finalTxId = data.txId;
+          anchorMode: AnchorMode.Any,
+          postConditionMode: 0x01 as any,
+          sponsored: true,
+        } as any);
 
-            if (state.gaslessMode) {
-              try {
-                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    transaction: data.txRaw,
-                    userAddress: stacksAddress,
-                    estimatedFee: gasFee.toString(),
-                  }),
-                });
+        const txHex = bytesToHex(tx.serialize() as any);
 
-                const sponsorData = await sponsorResponse.json();
-                if (!sponsorData.success) {
-                  throw new Error(sponsorData.message || 'Sponsorship failed');
-                }
-                finalTxId = sponsorData.data.txid;
-              } catch (err) {
-                console.error('Gasless sponsorship failed:', err);
-                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}`, isProcessing: false }));
-                return;
-              }
-            }
+        // Step 2: Request user signature via wallet RPC (without broadcast)
+        const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
+        if (!provider) throw new Error('No Stacks wallet found');
 
-            resolve(finalTxId);
-          },
-          onCancel: () => {
-            reject(new Error('User cancelled transaction'));
-          },
+        const requestParams = {
+          transaction: txHex,
+          broadcast: false,
+          network: 'testnet',
+        };
+
+        const response = await provider.request('stx_signTransaction', requestParams);
+        const signedTxHex = response.result.transaction;
+
+        // Step 3: send to backend relayer
+        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: signedTxHex,
+            userAddress: stacksAddress,
+            estimatedFee: gasFee.toString(),
+          }),
         });
-      });
+
+        const sponsorData = await sponsorResponse.json();
+        if (!sponsorData.success) {
+          throw new Error(sponsorData.message || 'Sponsorship failed');
+        }
+      } else {
+        // Standard flow
+        await new Promise<string>((resolve, reject) => {
+          openContractCall({
+            contractAddress,
+            contractName,
+            functionName: isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity',
+            functionArgs,
+            network: STACKS_TESTNET as any,
+            postConditionMode: 0x01 as any,
+            sponsored: false,
+            appDetails: {
+              name: 'VelumX DEX',
+              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+            },
+            onFinish: async (data: any) => {
+              resolve(data.txId);
+            },
+            onCancel: () => {
+              reject(new Error('User cancelled transaction'));
+            },
+          } as any);
+        });
+      }
 
       setState(prev => ({
         ...prev,

@@ -10,6 +10,10 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
 import { ArrowDownUp, Loader2, Settings, Repeat } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
+import { makeContractCall, AnchorMode, PostConditionMode, uintCV, contractPrincipalCV } from '@stacks/transactions';
+import { STACKS_TESTNET } from '@stacks/network';
+import { bytesToHex } from '@stacks/common';
+import { openContractCall } from '@stacks/connect';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -63,7 +67,7 @@ const DEFAULT_TOKENS: Token[] = [
   {
     symbol: 'VEX',
     name: 'VelumX Token',
-    address: '', // Will be filled from config
+    address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1', // Will be filled from config
     decimals: 6,
   },
 ];
@@ -204,11 +208,6 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Dynamic imports for Stacks libraries
-      const { openContractCall } = await import('@stacks/connect');
-      const { STACKS_TESTNET } = await import('@stacks/network');
-      const { uintCV, contractPrincipalCV, PostConditionMode } = await import('@stacks/transactions');
-
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minAmountOutMicro = parseUnits(
         (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
@@ -274,56 +273,74 @@ export function SwapInterface() {
         ];
       }
 
-      await new Promise<string>((resolve, reject) => {
-        openContractCall({
-          contractAddress,
-          contractName,
-          functionName,
-          functionArgs,
+      if (useGasless) {
+        // Step 1: Build unsigned sponsored transaction
+        const tx = await makeContractCall({
+          contractAddress: contractAddress,
+          contractName: contractName,
+          functionName: functionName,
+          functionArgs: functionArgs,
+          senderAddress: stacksAddress,
           network: STACKS_TESTNET,
-          postConditionMode: PostConditionMode.Allow,
-          sponsored: useGasless,
-          appDetails: {
-            name: 'VelumX DEX',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          onFinish: async (data: any) => {
-            let finalTxId = data.txId;
+          anchorMode: AnchorMode.Any,
+          postConditionMode: 0x01 as any,
+          sponsored: true,
+        } as any);
 
-            // If gasless, we MUST send the txRaw back to our backend for sponsorship completion
-            // useGasless is true only for token-to-token swaps when gaslessMode is enabled
-            if (useGasless) {
-              try {
-                const gasFeeInMicroUsdcx = 10000; // Match the amount in functionArgs
-                const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    transaction: data.txRaw,
-                    userAddress: stacksAddress,
-                    estimatedFee: gasFeeInMicroUsdcx.toString(),
-                  }),
-                });
+        const txHex = bytesToHex(tx.serialize() as any);
 
-                const sponsorData = await sponsorResponse.json();
-                if (!sponsorData.success) {
-                  throw new Error(sponsorData.message || 'Sponsorship failed');
-                }
-                finalTxId = sponsorData.data.txid;
-              } catch (err) {
-                console.error('Gasless sponsorship failed:', err);
-                setState(prev => ({ ...prev, error: `Gasless sponsorship failed: ${(err as Error).message}`, isProcessing: false }));
-                return;
-              }
-            }
+        // Step 2: Request user signature via wallet RPC (without broadcast)
+        const provider = (window as any).StacksProvider || (window as any).LeatherProvider || (window as any).XverseProvider;
+        if (!provider) throw new Error('No Stacks wallet found');
 
-            resolve(finalTxId);
-          },
-          onCancel: () => {
-            reject(new Error('User cancelled transaction'));
-          },
+        const requestParams = {
+          transaction: txHex,
+          broadcast: false,
+          network: 'testnet',
+        };
+
+        const response = await provider.request('stx_signTransaction', requestParams);
+        const signedTxHex = response.result.transaction;
+
+        // Step 3: send to backend relayer
+        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: signedTxHex,
+            userAddress: stacksAddress,
+            estimatedFee: gasFee.toString(),
+          }),
         });
-      });
+
+        const sponsorData = await sponsorResponse.json();
+        if (!sponsorData.success) {
+          throw new Error(sponsorData.message || 'Sponsorship failed');
+        }
+      } else {
+        // Standard flow
+        await new Promise<string>((resolve, reject) => {
+          openContractCall({
+            contractAddress,
+            contractName,
+            functionName: functionName,
+            functionArgs,
+            network: STACKS_TESTNET as any,
+            postConditionMode: 0x01 as any,
+            sponsored: false,
+            appDetails: {
+              name: 'VelumX DEX',
+              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+            },
+            onFinish: async (data: any) => {
+              resolve(data.txId);
+            },
+            onCancel: () => {
+              reject(new Error('User cancelled transaction'));
+            },
+          } as any);
+        });
+      }
 
       setState(prev => ({
         ...prev,
