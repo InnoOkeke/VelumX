@@ -138,8 +138,8 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
             <button
               onClick={() => setActiveTab('ethereum')}
               className={`flex-1 py-3 px-4 text-sm font-semibold rounded-xl transition-all ${activeTab === 'ethereum'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               style={{ color: activeTab === 'ethereum' ? '#FFFFFF' : 'var(--text-secondary)' }}
             >
@@ -148,8 +148,8 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
             <button
               onClick={() => setActiveTab('stacks')}
               className={`flex-1 py-3 px-4 text-sm font-semibold rounded-xl transition-all ${activeTab === 'stacks'
-                  ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/30'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/30'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               style={{ color: activeTab === 'stacks' ? '#FFFFFF' : 'var(--text-secondary)' }}
             >
@@ -256,7 +256,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                         </p>
                       </div>
                     ) : (
-                      availableWallets.ethereum?.map((wallet) => (
+                      (availableWallets.ethereum || []).map((wallet) => (
                         <button
                           key={wallet}
                           onClick={() => handleConnectEthereum(wallet)}
