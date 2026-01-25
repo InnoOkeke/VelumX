@@ -29,9 +29,11 @@ export const getStacksTransactions = async (): Promise<any> => {
 export const getStacksNetwork = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
-        const mod = await import('@stacks/network');
-        // Flatten exports to handle CJS/ESM interop
-        return { ...mod, ...(mod.default || {}) };
+        const mod = await import('@stacks/network') as any;
+        // Normalize export structure
+        return {
+            StacksTestnet: mod.StacksTestnet || mod.default?.StacksTestnet || mod.default
+        };
     } catch (e) {
         console.error('Failed to load @stacks/network', e);
         return null;
