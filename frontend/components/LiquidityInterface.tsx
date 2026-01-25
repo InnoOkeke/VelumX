@@ -846,7 +846,7 @@ export function LiquidityInterface() {
         const tx = await makeContractCall({
           contractAddress: contractAddress,
           contractName: contractName,
-          functionName: isStxPool ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-gasless',
+          functionName,
           functionArgs: functionArgs,
           senderAddress: stacksAddress,
           network: new networkModule.StacksTestnet() as any,
@@ -921,7 +921,7 @@ export function LiquidityInterface() {
           connect.openContractCall({
             contractAddress,
             contractName,
-            functionName: isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity',
+            functionName,
             functionArgs,
             network: network as any,
             anchorMode: AnchorMode?.Any || 0,
