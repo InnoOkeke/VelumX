@@ -819,10 +819,14 @@ export function LiquidityInterface() {
           ];
       }
 
+      const functionName = isStxPool
+        ? (gaslessMode ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-stx')
+        : (gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity');
+
       console.log('Stacks Remove Liquidity Tx Params (Modern Cl):', {
         contractAddress,
         contractName,
-        functionName: isStxPool ? (gaslessMode ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-stx') : (gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity'),
+        functionName,
         functionArgsLength: functionArgs.length,
         network: !!networkModule,
         AnchorMode: !!AnchorMode,
