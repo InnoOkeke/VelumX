@@ -13,6 +13,21 @@ const getRobustExport = (mod: any, testProp: string) => {
     return mod.default || mod;
 };
 
+/**
+ * Wraps a network candidate to ensure it can be used with the 'new' keyword.
+ * If candidate is an object (instance), returns a function that returns that object.
+ */
+const wrapNetworkConstructor = (candidate: any) => {
+    if (!candidate) return null;
+    if (typeof candidate === 'object' && typeof candidate !== 'function') {
+        const factory = function () { return candidate; };
+        // Mark as wrapped for debugging
+        (factory as any).isWrappedInstance = true;
+        return factory;
+    }
+    return candidate;
+};
+
 // Helper to get @stacks/connect safely
 export const getStacksConnect = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
@@ -43,18 +58,17 @@ export const getStacksNetwork = async (): Promise<any> => {
     try {
         const mod = await import('@stacks/network') as any;
 
-        // Use user-recommended robust class search
-        const StacksTestnet = mod.StacksTestnet || mod.default?.StacksTestnet || mod.default;
-        const StacksMainnet = mod.StacksMainnet || mod.default?.StacksMainnet || mod.default;
-        const StacksMocknet = mod.StacksMocknet || mod.default?.StacksMocknet || mod.default;
+        // Multi-path search for network candidates
+        const testnet = mod.StacksTestnet || mod.default?.StacksTestnet || mod.default;
+        const mainnet = mod.StacksMainnet || mod.default?.StacksMainnet || mod.default;
 
-        const base = mod.default || mod;
+        // Base module resolution
+        const base = getRobustExport(mod, 'StacksTestnet') || (mod.default || mod);
 
         return {
             ...base,
-            StacksTestnet,
-            StacksMainnet,
-            StacksMocknet
+            StacksTestnet: wrapNetworkConstructor(testnet),
+            StacksMainnet: wrapNetworkConstructor(mainnet),
         };
     } catch (e) {
         console.error('Failed to load @stacks/network', e);
