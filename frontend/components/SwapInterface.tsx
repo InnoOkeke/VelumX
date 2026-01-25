@@ -303,7 +303,7 @@ export function SwapInterface() {
         if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
         const publicKey = (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || (balances as any).publicKey || undefined;
 
-        // Step 1: Build unsigned sponsored transaction
+        // Create transaction options
         const txOptions: any = {
           contractAddress,
           contractName,
@@ -319,6 +319,8 @@ export function SwapInterface() {
 
         if (publicKey) {
           txOptions.publicKey = publicKey;
+        } else {
+          throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
         }
 
         const tx = await makeUnsignedContractCall(txOptions);
