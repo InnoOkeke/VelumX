@@ -425,7 +425,7 @@ export function BridgeInterface() {
 
       if (useGasless) {
         if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
-        const publicKey = (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
+        const publicKey = stacksPublicKey || (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
 
         // Create transaction options
         const txOptions: any = {

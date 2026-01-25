@@ -301,7 +301,7 @@ export function SwapInterface() {
 
       if (useGasless) {
         if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
-        const publicKey = (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || (balances as any).publicKey || undefined;
+        const publicKey = stacksPublicKey || (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
 
         // Create transaction options
         const txOptions: any = {
