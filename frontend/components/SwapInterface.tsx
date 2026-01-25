@@ -207,11 +207,14 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const network = await getStacksNetwork() as any;
+      const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
 
-      if (!transactions || !network || !common || !connect) throw new Error('Stacks libraries not loaded');
+      if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
+
+      const StacksTestnet = networkModule.StacksTestnet || networkModule.default?.StacksTestnet;
+      const network = new StacksTestnet();
 
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minAmountOutMicro = parseUnits(
@@ -280,7 +283,7 @@ export function SwapInterface() {
           functionName,
           functionArgs,
           senderAddress: stacksAddress,
-          network: new network.StacksTestnet(),
+          network: network,
           anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
           postConditions: [],
