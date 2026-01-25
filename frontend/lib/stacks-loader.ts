@@ -3,61 +3,58 @@
  * Centrally manages Stacks libraries to ensure they are only evaluated in the browser.
  */
 
-// Internal helper to merge module root and default export safely
-const flattenModule = (mod: any) => {
+const getRobustExport = (mod: any, testProp: string) => {
     if (!mod) return null;
-    // Merge both to handle cases where some exports are on default and some on root
-    const result = { ...mod };
-    if (mod.default && typeof mod.default === 'object') {
-        Object.assign(result, mod.default);
-    }
-    return result;
+    // If the test property is on the root, it's likely a flattened ESM or CJS module
+    if (mod[testProp]) return mod;
+    // Otherwise, check the default export
+    if (mod.default && mod.default[testProp]) return mod.default;
+    // Fallback to whatever we have
+    return mod.default || mod;
 };
 
+// Helper to get @stacks/connect safely
 export const getStacksConnect = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
-        return flattenModule(await import('@stacks/connect'));
+        const mod = await import('@stacks/connect') as any;
+        return getRobustExport(mod, 'openContractCall');
     } catch (e) {
         console.error('Failed to load @stacks/connect', e);
         return null;
     }
 };
 
+// Helper to get @stacks/transactions safely
 export const getStacksTransactions = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
-        return flattenModule(await import('@stacks/transactions'));
+        const mod = await import('@stacks/transactions') as any;
+        return getRobustExport(mod, 'uintCV');
     } catch (e) {
         console.error('Failed to load @stacks/transactions', e);
         return null;
     }
 };
 
+// Helper to get @stacks/network safely
 export const getStacksNetwork = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
-        const mod = await import('@stacks/network');
-        const merged = flattenModule(mod) as any;
+        const mod = await import('@stacks/network') as any;
 
-        // Helper to normalize network exports (handling Class vs Instance vs Mixed)
-        const normalize = (className: string, constantName: string) => {
-            const candidate = merged[className] || merged[constantName];
+        // Use user-recommended robust class search
+        const StacksTestnet = mod.StacksTestnet || mod.default?.StacksTestnet || mod.default;
+        const StacksMainnet = mod.StacksMainnet || mod.default?.StacksMainnet || mod.default;
+        const StacksMocknet = mod.StacksMocknet || mod.default?.StacksMocknet || mod.default;
 
-            // If we found an object instance but need a constructor (for 'new'), wrap it
-            if (candidate && typeof candidate === 'object') {
-                const wrapper = function () { return candidate; };
-                (wrapper as any).isWrappedInstance = true;
-                return wrapper;
-            }
-            return candidate;
-        };
+        const base = mod.default || mod;
 
         return {
-            ...merged,
-            StacksTestnet: normalize('StacksTestnet', 'STACKS_TESTNET'),
-            StacksMainnet: normalize('StacksMainnet', 'STACKS_MAINNET'),
-            StacksMocknet: normalize('StacksMocknet', 'STACKS_MOCKNET')
+            ...base,
+            StacksTestnet,
+            StacksMainnet,
+            StacksMocknet
         };
     } catch (e) {
         console.error('Failed to load @stacks/network', e);
@@ -65,10 +62,12 @@ export const getStacksNetwork = async (): Promise<any> => {
     }
 };
 
+// Helper to get @stacks/common safely
 export const getStacksCommon = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
-        return flattenModule(await import('@stacks/common'));
+        const mod = await import('@stacks/common') as any;
+        return getRobustExport(mod, 'bytesToHex');
     } catch (e) {
         console.error('Failed to load @stacks/common', e);
         return null;

@@ -277,6 +277,20 @@ export function SwapInterface() {
         ];
       }
 
+      console.log('Stacks Swap Tx Params:', {
+        contractAddress,
+        contractName,
+        functionName,
+        functionArgsLength: functionArgs.length,
+        network: !!network,
+        AnchorMode: !!AnchorMode,
+        PostConditionMode: !!PostConditionMode
+      });
+
+      if (functionArgs.some(arg => !arg)) {
+        throw new Error('Transaction arguments encoding failed');
+      }
+
       if (useGasless) {
         // Step 1: Build unsigned sponsored transaction
         const tx = await makeContractCall({
@@ -286,8 +300,8 @@ export function SwapInterface() {
           functionArgs,
           senderAddress: stacksAddress,
           network,
-          anchorMode: AnchorMode.Any,
-          postConditionMode: PostConditionMode.Allow,
+          anchorMode: AnchorMode?.Any || 0,
+          postConditionMode: PostConditionMode?.Allow || 0x01,
           postConditions: [],
           sponsored: true,
         } as any);
