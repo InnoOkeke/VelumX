@@ -368,14 +368,7 @@ export function SwapInterface() {
           fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
         };
 
-        // Explicit Uint8Array conversion (Native Browser Safe)
-        const toUint8Array = (input: Uint8Array | string): Uint8Array => {
-          if (typeof input === 'string') {
-            return common.hexToBytes(input);
-          }
-          if (input instanceof Uint8Array) return input;
-          return new Uint8Array(input);
-        };
+
 
         if (publicKey) {
           // Fix: Pass publicKey as hex string. The SDK handles string->bytes conversion internally 

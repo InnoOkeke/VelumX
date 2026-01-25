@@ -450,11 +450,9 @@ export function BridgeInterface() {
 
         // Explicit Uint8Array conversion (Native Browser Safe)
         const toUint8Array = (input: Uint8Array | string): Uint8Array => {
-          if (typeof input === 'string') {
-            return common.hexToBytes(input);
-          }
-          if (input instanceof Uint8Array) return input;
-          return new Uint8Array(input);
+          const bytes = typeof input === 'string' ? common.hexToBytes(input) : input;
+          // Force copy to new clean Uint8Array to strip Buffer/Polyfill properties that confuse strict checks
+          return new Uint8Array(bytes);
         };
 
         const recipientBytesNative = toUint8Array(recipientBytes);
