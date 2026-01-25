@@ -320,6 +320,12 @@ export function SwapInterface() {
         if (publicKey) {
           txOptions.publicKey = publicKey;
         } else {
+          console.error('Gasless Swap Failed: Missing Public Key', {
+            stacksAddress,
+            walletStateKey: publicKey,
+            windowXverseKey: (window as any).xverse?.stacks?.publicKey,
+            windowLeatherKey: (window as any).LeatherProvider?.publicKey
+          });
           throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
         }
 

@@ -190,7 +190,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const parsed = JSON.parse(stored);
       setState(prev => ({ ...prev, ...parsed }));
       if (parsed.ethereumAddress) fetchEthereumBalances(parsed.ethereumAddress);
-      if (parsed.stacksAddress) fetchStacksBalances(parsed.stacksAddress);
+      if (parsed.stacksAddress) {
+        // Attempt to recover public key from local storage if missing in state
+        if (!parsed.stacksPublicKey) {
+          // We can't access connectLib easily here, but we will rely on a fresh connect
+          // if the user needs gasless features.
+        }
+        fetchStacksBalances(parsed.stacksAddress);
+      }
     } catch (e) {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -275,10 +282,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return new Promise<string>((resolve, reject) => {
         connectLib.showConnect({
           appDetails: { name: 'VelumX DEX', icon: window.location.origin + '/favicon.ico' },
-          onFinish: () => {
+          onFinish: (authData: any) => {
             const address = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.address;
-            const publicKey = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey;
+            const userSession = authData.userSession;
+            const publicKey = userSession?.loadUserData()?.profile?.stxAddress?.publicKey ||
+              connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey ||
+              authData.authResponsePayload?.profile?.stxAddress?.publicKey;
+
+            console.log('Stacks Wallet Auth Data:', {
+              hasUserSession: !!userSession,
+              hasLocalStorageKey: !!connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey,
+              hasPayloadKey: !!authData.authResponsePayload?.profile?.stxAddress?.publicKey,
+              payloadKeys: Object.keys(authData || {}),
+            });
+
+            console.log('Stacks Wallet Auth Data:', {
+              hasUserSession: !!userSession,
+              hasLocalStorageKey: !!connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey,
+              hasPayloadKey: !!authData.authResponsePayload?.profile?.stxAddress?.publicKey,
+              payloadKeys: Object.keys(authData || {}),
+              userSessionKeys: userSession ? Object.keys(userSession) : ['none'],
+              userDataProfile: userSession?.loadUserData()?.profile ? 'present' : 'missing',
+            });
+
+            console.log('Stacks Wallet Connected:', { address, hasPublicKey: !!publicKey });
+
             if (address) {
+              if (!publicKey) {
+                console.warn('Stacks Public Key not found. Gasless transactions will not work.');
+                // We don't throw here to allow standard transactions to work
+              }
+
               setState(prev => ({
                 ...prev,
                 stacksAddress: address,
