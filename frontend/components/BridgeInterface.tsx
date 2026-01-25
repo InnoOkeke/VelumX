@@ -373,14 +373,18 @@ export function BridgeInterface() {
 
       const functionName = useGasless ? 'withdraw-gasless' : 'burn';
 
+      if (useGasless && !state.feeEstimate) {
+        throw new Error('Fee estimate not available. Cannot proceed with gasless transaction.');
+      }
+
       const functionArgs = useGasless
         ? [
-          transactions.uintCV(Number(amountInMicroUsdc)),
-          transactions.uintCV(Number(parseUnits(state.feeEstimate?.usdcx || '0', 6))),
+          transactions.uintCV(amountInMicroUsdc.toString()),
+          transactions.uintCV(parseUnits(state.feeEstimate?.usdcx || '0', 6).toString()),
           transactions.bufferCV(recipientBytes),
         ]
         : [
-          transactions.uintCV(Number(amountInMicroUsdc)),
+          transactions.uintCV(amountInMicroUsdc.toString()),
           transactions.uintCV(0), // native-domain: 0 for Ethereum
           transactions.bufferCV(recipientBytes),
         ];
@@ -395,7 +399,7 @@ export function BridgeInterface() {
           senderAddress: stacksAddress,
           network: network,
           anchorMode: transactions.AnchorMode.Any,
-          postConditionMode: 0x01 as any,
+          postConditionMode: transactions.PostConditionMode.Allow,
           postConditions: [],
           sponsored: true,
         } as any);
@@ -406,9 +410,10 @@ export function BridgeInterface() {
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
           const win = window as any;
-          // Prefer universal injection, then specific ones
-          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
-          return p && typeof p === 'object' ? p : null;
+          // Robust provider detection for 2026+
+          if (win.xverse?.stacks) return win.xverse.stacks;
+          if (win.stx?.request) return win.stx;
+          return win.StacksProvider || win.LeatherProvider || win.XverseProvider || null;
         };
 
         const provider = getProvider();
@@ -478,8 +483,8 @@ export function BridgeInterface() {
             contractName,
             functionName,
             functionArgs,
-            network: network.STACKS_TESTNET as any,
-            postConditionMode: 0x01 as any,
+            network: network as any,
+            postConditionMode: transactions.PostConditionMode.Allow,
             sponsored: false,
             appDetails: {
               name: 'VelumX Bridge',

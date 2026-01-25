@@ -249,8 +249,8 @@ export function SwapInterface() {
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
           transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          transactions.uintCV(Number(amountInMicro)),
-          transactions.uintCV(Number(minAmountOutMicro)),
+          transactions.uintCV(amountInMicro.toString()),
+          transactions.uintCV(minAmountOutMicro.toString()),
         ];
         if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
       } else if (isOutputStx) {
@@ -258,8 +258,8 @@ export function SwapInterface() {
         const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
           transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          transactions.uintCV(Number(amountInMicro)),
-          transactions.uintCV(Number(minAmountOutMicro)),
+          transactions.uintCV(amountInMicro.toString()),
+          transactions.uintCV(minAmountOutMicro.toString()),
         ];
         if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
       } else if (useGasless) {
@@ -269,8 +269,8 @@ export function SwapInterface() {
         functionArgs = [
           transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
           transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          transactions.uintCV(Number(amountInMicro)),
-          transactions.uintCV(Number(minAmountOutMicro)),
+          transactions.uintCV(amountInMicro.toString()),
+          transactions.uintCV(minAmountOutMicro.toString()),
           transactions.uintCV(gasFee),
         ];
       } else {
@@ -280,8 +280,8 @@ export function SwapInterface() {
         functionArgs = [
           transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
           transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          transactions.uintCV(Number(amountInMicro)),
-          transactions.uintCV(Number(minAmountOutMicro)),
+          transactions.uintCV(amountInMicro.toString()),
+          transactions.uintCV(minAmountOutMicro.toString()),
         ];
       }
 
@@ -295,7 +295,7 @@ export function SwapInterface() {
           senderAddress: stacksAddress,
           network: network,
           anchorMode: transactions.AnchorMode.Any,
-          postConditionMode: 0x01 as any,
+          postConditionMode: transactions.PostConditionMode.Allow,
           postConditions: [],
           sponsored: true,
         } as any);
@@ -306,9 +306,10 @@ export function SwapInterface() {
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
           const win = window as any;
-          // Prefer universal injection, then specific ones
-          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
-          return p && typeof p === 'object' ? p : null;
+          // Robust provider detection
+          if (win.xverse?.stacks) return win.xverse.stacks;
+          if (win.stx?.request) return win.stx;
+          return win.StacksProvider || win.LeatherProvider || win.XverseProvider || null;
         };
 
         const provider = getProvider();
@@ -356,8 +357,8 @@ export function SwapInterface() {
             contractName,
             functionName,
             functionArgs,
-            network: network.STACKS_TESTNET as any,
-            postConditionMode: 0x01 as any,
+            network: network as any,
+            postConditionMode: transactions.PostConditionMode.Allow,
             sponsored: false,
             appDetails: {
               name: 'VelumX DEX',
