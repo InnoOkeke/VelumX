@@ -471,7 +471,7 @@ export function BridgeInterface() {
             functionName,
             functionArgs,
             network: network as any,
-            postConditionMode: transactions.PostConditionMode.Allow,
+            postConditionMode: PostConditionMode.Allow,
             sponsored: false,
             appDetails: {
               name: 'VelumX Bridge',

@@ -240,40 +240,40 @@ export function SwapInterface() {
         functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          transactions.uintCV(amountInMicro.toString()),
-          transactions.uintCV(minAmountOutMicro.toString()),
+          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          uintCV(amountInMicro.toString()),
+          uintCV(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
+        if (useGasless) functionArgs.push(uintCV(gasFee));
       } else if (isOutputStx) {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
-          transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          transactions.uintCV(amountInMicro.toString()),
-          transactions.uintCV(minAmountOutMicro.toString()),
+          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          uintCV(amountInMicro.toString()),
+          uintCV(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
+        if (useGasless) functionArgs.push(uintCV(gasFee));
       } else if (useGasless) {
         functionName = 'swap-gasless';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          transactions.uintCV(amountInMicro.toString()),
-          transactions.uintCV(minAmountOutMicro.toString()),
-          transactions.uintCV(gasFee),
+          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          uintCV(amountInMicro.toString()),
+          uintCV(minAmountOutMicro.toString()),
+          uintCV(gasFee),
         ];
       } else {
         functionName = 'swap';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          transactions.contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          transactions.contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          transactions.uintCV(amountInMicro.toString()),
-          transactions.uintCV(minAmountOutMicro.toString()),
+          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
+          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
+          uintCV(amountInMicro.toString()),
+          uintCV(minAmountOutMicro.toString()),
         ];
       }
 
