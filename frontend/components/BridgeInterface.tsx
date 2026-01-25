@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
+import { Buffer } from 'buffer';
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
 import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
@@ -457,11 +458,14 @@ export function BridgeInterface() {
 
         const recipientBytesNative = toUint8Array(recipientBytes);
 
-        // Re-create args with Uint8Array
+        // Re-create args with Buffer (Uint8Array subclass) to satisfy strict SDK checks
+        // The SDK's Cl.buffer might explicitly check for Buffer.isBuffer()
+        const recipientBuffer = Buffer.from(recipientBytesNative);
+
         const safeFunctionArgs = [
           Cl.uint(amountInMicroUsdc.toString()),
           Cl.uint(parseUnits(feeEstimateUsdcx, 6).toString()),
-          Cl.buffer(recipientBytesNative),
+          Cl.buffer(recipientBuffer),
         ];
 
         if (publicKey) {
