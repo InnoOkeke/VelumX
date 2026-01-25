@@ -101,11 +101,7 @@ export function AddLiquidityForm({
             </div>
 
             <div className="mt-8">
-                <GaslessToggle
-                    enabled={state.gaslessMode}
-                    setEnabled={(val) => setState((prev: any) => ({ ...prev, gaslessMode: val }))}
-                    disabled={state.isProcessing}
-                />
+
 
                 <TransactionStatus error={state.error} success={state.success} />
 

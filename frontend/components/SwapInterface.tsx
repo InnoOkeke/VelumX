@@ -205,10 +205,13 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
       const network = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
-      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+      const connect = await getStacksConnect() as any;
+
+      if (!transactions || !network || !common || !connect) throw new Error('Stacks libraries not loaded');
 
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minAmountOutMicro = parseUnits(
@@ -218,17 +221,11 @@ export function SwapInterface() {
 
       const isInputStx = state.inputToken.symbol === 'STX';
       const isOutputStx = state.outputToken.symbol === 'STX';
-
-      // For gasless mode, use paymaster contract
-      // For regular mode, use swap contract directly
       const useGasless = state.gaslessMode;
 
-      const contractAddress = useGasless
-        ? config.stacksPaymasterAddress.split('.')[0]
-        : config.stacksSwapContractAddress.split('.')[0];
-      const contractName = useGasless
-        ? config.stacksPaymasterAddress.split('.')[1]
-        : config.stacksSwapContractAddress.split('.')[1];
+      const [contractAddress, contractName] = (useGasless
+        ? config.stacksPaymasterAddress
+        : config.stacksSwapContractAddress).split('.');
 
       let functionName = 'swap';
       let functionArgs = [];
@@ -278,10 +275,10 @@ export function SwapInterface() {
       if (useGasless) {
         // Step 1: Build unsigned sponsored transaction
         const tx = await transactions.makeContractCall({
-          contractAddress: contractAddress,
-          contractName: contractName,
-          functionName: functionName,
-          functionArgs: functionArgs,
+          contractAddress,
+          contractName,
+          functionName,
+          functionArgs,
           senderAddress: stacksAddress,
           network: network.STACKS_TESTNET,
           anchorMode: transactions.AnchorMode.Any,
@@ -339,16 +336,12 @@ export function SwapInterface() {
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
       } else {
-        const network = await getStacksNetwork() as any;
-        const connect = await getStacksConnect() as any;
-        if (!network || !connect) throw new Error('Stacks libraries not loaded');
-
         // Standard flow
         await new Promise<string>((resolve, reject) => {
           connect.openContractCall({
             contractAddress,
             contractName,
-            functionName: functionName,
+            functionName,
             functionArgs,
             network: network.STACKS_TESTNET as any,
             postConditionMode: 0x01 as any,

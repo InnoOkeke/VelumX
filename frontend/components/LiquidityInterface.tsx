@@ -583,21 +583,14 @@ export function LiquidityInterface() {
       const isTokenAStx = state.tokenA.symbol === 'STX';
       const isTokenBStx = state.tokenB.symbol === 'STX';
       const isStxPool = isTokenAStx || isTokenBStx;
-      const useGasless = state.gaslessMode;
 
-      const contractAddress = useGasless
-        ? config.stacksPaymasterAddress.split('.')[0]
-        : config.stacksSwapContractAddress.split('.')[0];
-      const contractName = useGasless
-        ? config.stacksPaymasterAddress.split('.')[1]
-        : config.stacksSwapContractAddress.split('.')[1];
+      const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
-      const gasFee = 10000;
       let functionName = 'add-liquidity';
       let functionArgs = [];
 
       if (isStxPool) {
-        functionName = useGasless ? 'add-liquidity-stx-gasless' : 'add-liquidity-stx';
+        functionName = 'add-liquidity-stx';
         const stxAmount = isTokenAStx ? amountAMicro : amountBMicro;
         const tokenAmount = isTokenAStx ? amountBMicro : amountAMicro;
         const stxMin = isTokenAStx ? minAmountAMicro : minAmountBMicro;
@@ -613,20 +606,6 @@ export function LiquidityInterface() {
           transactions.uintCV(stxMin),
           transactions.uintCV(tokenMin),
         ];
-        if (useGasless) functionArgs.push(transactions.uintCV(gasFee));
-      } else if (useGasless) {
-        functionName = 'add-liquidity-gasless';
-        const tokenAParts = state.tokenA.address.split('.');
-        const tokenBParts = state.tokenB.address.split('.');
-        functionArgs = [
-          transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-          transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          transactions.uintCV(amountAMicro),
-          transactions.uintCV(amountBMicro),
-          transactions.uintCV(minAmountAMicro),
-          transactions.uintCV(minAmountBMicro),
-          transactions.uintCV(gasFee),
-        ];
       } else {
         functionName = 'add-liquidity';
         const tokenAParts = state.tokenA.address.split('.');
@@ -641,102 +620,31 @@ export function LiquidityInterface() {
         ];
       }
 
-      if (useGasless) {
-        const transactions = await getStacksTransactions() as any;
-        const network = await getStacksNetwork() as any;
-        const common = await getStacksCommon() as any;
-        if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+      const connect = await getStacksConnect() as any;
+      if (!connect) throw new Error('Stacks libraries not loaded');
 
-        // Step 1: Build unsigned sponsored transaction
-        const tx = await transactions.makeContractCall({
-          contractAddress: contractAddress,
-          contractName: contractName,
-          functionName: functionName,
-          functionArgs: functionArgs,
-          senderAddress: stacksAddress,
-          network: network.STACKS_TESTNET,
-          anchorMode: transactions.AnchorMode.Any,
+      // Step 2: Handle regular transaction (signed by user, self-broadcast)
+      await new Promise<string>((resolve, reject) => {
+        connect.openContractCall({
+          contractAddress,
+          contractName,
+          functionName,
+          functionArgs,
+          network: network.STACKS_TESTNET as any,
           postConditionMode: 0x01 as any,
-          postConditions: [],
-          sponsored: true,
+          sponsored: false,
+          appDetails: {
+            name: 'VelumX DEX',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
+          onFinish: async (data: any) => {
+            resolve(data.txId);
+          },
+          onCancel: () => {
+            reject(new Error('User cancelled transaction'));
+          },
         } as any);
-
-        const txHex = common.bytesToHex(tx.serialize() as any);
-
-        // Step 2: Request user signature via wallet RPC (without broadcast)
-        const getProvider = () => {
-          if (typeof window === 'undefined') return null;
-          const win = window as any;
-          // Prefer universal injection, then specific ones
-          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
-          return p && typeof p === 'object' ? p : null;
-        };
-
-        const provider = getProvider();
-        if (!provider || typeof provider.request !== 'function') {
-          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
-        }
-
-        const requestParams = {
-          transaction: txHex,
-          broadcast: false,
-          network: 'testnet',
-        };
-
-        const response = await provider.request({
-          method: 'stx_signTransaction',
-          params: requestParams
-        });
-
-        if (!response || !response.result || !response.result.transaction) {
-          throw new Error('Wallet failed to sign the transaction. Please try again.');
-        }
-
-        const signedTxHex = response.result.transaction;
-
-        // Step 3: send to backend relayer
-        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transaction: signedTxHex,
-            userAddress: stacksAddress,
-            estimatedFee: gasFee.toString(),
-          }),
-        });
-
-        const sponsorData = await sponsorResponse.json();
-        if (!sponsorData.success) {
-          throw new Error(sponsorData.message || 'Sponsorship failed');
-        }
-      } else {
-        const network = await getStacksNetwork() as any;
-        const connect = await getStacksConnect() as any;
-        if (!network || !connect) throw new Error('Stacks libraries not loaded');
-
-        // Step 2: Handle regular transaction (signed by user, self-broadcast)
-        await new Promise<string>((resolve, reject) => {
-          connect.openContractCall({
-            contractAddress,
-            contractName,
-            functionName,
-            functionArgs,
-            network: network.STACKS_TESTNET as any,
-            postConditionMode: 0x01 as any,
-            sponsored: false,
-            appDetails: {
-              name: 'VelumX DEX',
-              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-            },
-            onFinish: async (data: any) => {
-              resolve(data.txId);
-            },
-            onCancel: () => {
-              reject(new Error('User cancelled transaction'));
-            },
-          } as any);
-        });
-      }
+      });
 
       setState(prev => ({
         ...prev,

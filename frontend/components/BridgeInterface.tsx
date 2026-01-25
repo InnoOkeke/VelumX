@@ -337,23 +337,27 @@ export function BridgeInterface() {
       const transactions = await getStacksTransactions() as any;
       const network = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
-      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+      const connect = await getStacksConnect() as any;
+
+      if (!transactions || !network || !common || !connect) throw new Error('Stacks libraries not loaded');
 
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);
 
+      const useGasless = state.gaslessMode;
+
       // Determine which contract and function to call
-      const contractAddress = state.gaslessMode
+      const contractAddress = useGasless
         ? config.stacksPaymasterAddress.split('.')[0]
         : config.stacksUsdcxProtocolAddress.split('.')[0];
 
-      const contractName = state.gaslessMode
+      const contractName = useGasless
         ? config.stacksPaymasterAddress.split('.')[1]
         : config.stacksUsdcxProtocolAddress.split('.')[1];
 
-      const functionName = state.gaslessMode ? 'withdraw-gasless' : 'burn';
+      const functionName = useGasless ? 'withdraw-gasless' : 'burn';
 
-      const functionArgs = state.gaslessMode
+      const functionArgs = useGasless
         ? [
           transactions.uintCV(Number(amountInMicroUsdc)),
           transactions.uintCV(Number(parseUnits(state.feeEstimate?.usdcx || '0', 6))),
@@ -365,13 +369,13 @@ export function BridgeInterface() {
           transactions.bufferCV(recipientBytes),
         ];
 
-      if (state.gaslessMode) {
+      if (useGasless) {
         // Step 1: Build unsigned sponsored transaction
         const tx = await transactions.makeContractCall({
-          contractAddress: contractAddress,
-          contractName: contractName,
-          functionName: functionName,
-          functionArgs: functionArgs,
+          contractAddress,
+          contractName,
+          functionName,
+          functionArgs,
           senderAddress: stacksAddress,
           network: network.STACKS_TESTNET,
           anchorMode: transactions.AnchorMode.Any,
@@ -446,16 +450,12 @@ export function BridgeInterface() {
             recipient: ethereumAddress,
             status: 'pending',
             timestamp: Date.now(),
-            isGasless: state.gaslessMode,
+            isGasless: useGasless,
             gasFeeInUsdcx: state.feeEstimate?.usdcx,
           }),
         });
       } else {
         // Standard flow
-        const network = await getStacksNetwork() as any;
-        const connect = await getStacksConnect() as any;
-        if (!network || !connect) throw new Error('Stacks libraries not loaded');
-
         await new Promise<string>((resolve, reject) => {
           connect.openContractCall({
             contractAddress,
