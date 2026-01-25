@@ -70,6 +70,8 @@ export const getStacksTransactions = async (): Promise<any> => {
             hexToCV: getExport(mod, 'hexToCV'),
             cvToJSON: getExport(mod, 'cvToJSON'),
             fetchCallReadOnlyFunction: getExport(mod, 'fetchCallReadOnlyFunction'),
+            makeUnsignedContractCall: getExport(mod, 'makeUnsignedContractCall'),
+            makeSTXTokenTransfer: getExport(mod, 'makeSTXTokenTransfer'),
         };
         return moduleCache.transactions;
     } catch (e) {

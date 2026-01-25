@@ -207,7 +207,7 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, makeContractCall, Cl } = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -300,19 +300,21 @@ export function SwapInterface() {
       }
 
       if (useGasless) {
-        if (!makeContractCall) throw new Error('SDK function makeContractCall not available');
+        if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
+        const publicKey = (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || (balances as any).publicKey || undefined;
 
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
+        const tx = await makeUnsignedContractCall({
           contractAddress,
           contractName,
           functionName,
           functionArgs,
-          senderAddress: stacksAddress,
           network,
+          publicKey, // Optional but recommended
+          senderAddress: stacksAddress,
           anchorMode: AnchorMode?.Any || 0,
           postConditionMode: PostConditionMode?.Allow || 0x01,
-          postConditions: [],
+          postConditions: [], // Explicit empty array
           sponsored: true,
         } as any);
 

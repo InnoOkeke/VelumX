@@ -352,7 +352,7 @@ export function BridgeInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, makeContractCall, Cl } = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -392,10 +392,11 @@ export function BridgeInterface() {
         throw new Error('Fee estimate not available. Cannot proceed with gasless transaction.');
       }
 
+      const feeEstimateUsdcx = state.feeEstimate?.usdcx || '0';
       const functionArgs = useGasless
         ? [
           Cl.uint(amountInMicroUsdc.toString()),
-          Cl.uint(parseUnits(state.feeEstimate?.usdcx || '0', 6).toString()),
+          Cl.uint(parseUnits(feeEstimateUsdcx, 6).toString()),
           Cl.buffer(recipientBytes),
         ]
         : [
@@ -421,16 +422,18 @@ export function BridgeInterface() {
       }
 
       if (useGasless) {
-        if (!makeContractCall) throw new Error('SDK function makeContractCall not available');
+        if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
+        const publicKey = (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
 
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
+        const tx = await makeUnsignedContractCall({
           contractAddress,
           contractName,
           functionName,
           functionArgs,
-          senderAddress: stacksAddress,
           network,
+          publicKey,
+          senderAddress: stacksAddress,
           anchorMode: AnchorMode?.Any || 0,
           postConditionMode: PostConditionMode?.Allow || 0x01,
           postConditions: [],

@@ -28,6 +28,7 @@ export interface WalletState {
   ethereumChainId: number | null;
   ethereumWalletType: EthereumWalletType | null;
   stacksAddress: string | null;
+  stacksPublicKey?: string;
   stacksConnected: boolean;
   stacksWalletType: StacksWalletType | null;
   balances: WalletBalances;
@@ -276,10 +277,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           appDetails: { name: 'VelumX DEX', icon: window.location.origin + '/favicon.ico' },
           onFinish: () => {
             const address = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.address;
+            const publicKey = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey;
             if (address) {
               setState(prev => ({
                 ...prev,
                 stacksAddress: address,
+                stacksPublicKey: publicKey,
                 stacksConnected: true,
                 stacksWalletType: preferredWallet || 'leather',
                 isConnecting: false,
