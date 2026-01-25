@@ -375,13 +375,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           message: 'Verify Account ownership to enable gasless transactions.',
           appDetails: { name: 'VelumX', icon: window.location.origin + '/favicon.ico' },
           onFinish: (data: any) => {
+            console.log('Verify Wallet Response:', data); // Log full data
             const publicKey = data.publicKey;
             if (publicKey) {
               console.log('Recovered Public Key:', publicKey);
               setState(prev => ({ ...prev, stacksPublicKey: publicKey }));
-              // Persist logic handles auto-saving
               resolve(publicKey);
             } else {
+              console.error('Public Key missing in signature response', Object.keys(data));
               resolve(null);
             }
           },
