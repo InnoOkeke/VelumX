@@ -338,13 +338,6 @@ export class TransactionMonitorService {
         const isConfirmed = await this.checkEthereumConfirmation(tx.sourceTxHash);
 
         if (isConfirmed) {
-          // Trigger gas drop for fresh wallets
-          try {
-            await stacksMintService.fundNewAccount(tx.stacksAddress);
-          } catch (e) {
-            logger.warn('Gas drop attempt failed, continuing with deposit', { error: (e as Error).message });
-          }
-
           await this.updateTransaction(tx.id, {
             status: 'attesting',
             currentStep: 'attestation',
