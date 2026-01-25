@@ -335,27 +335,14 @@ export function BridgeInterface() {
 
     try {
       const transactions = await getStacksTransactions() as any;
+      const { AnchorMode, PostConditionMode, uintCV, bufferCV, makeContractCall } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
 
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
 
-      let network;
-      if (networkModule.StacksTestnet) {
-        try {
-          network = new networkModule.StacksTestnet();
-        } catch (e) {
-          network = networkModule.STACKS_TESTNET;
-        }
-      } else if (networkModule.STACKS_TESTNET) {
-        network = networkModule.STACKS_TESTNET;
-      } else {
-        // Last resort fallback for some environments
-        network = new networkModule.StatsChainTestnet ? new networkModule.StatsChainTestnet() : undefined;
-      }
-
-      if (!network) throw new Error('Could not load Stacks network configuration');
+      const network = new networkModule.StacksTestnet();
 
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);
@@ -379,27 +366,27 @@ export function BridgeInterface() {
 
       const functionArgs = useGasless
         ? [
-          transactions.uintCV(amountInMicroUsdc.toString()),
-          transactions.uintCV(parseUnits(state.feeEstimate?.usdcx || '0', 6).toString()),
-          transactions.bufferCV(recipientBytes),
+          uintCV(amountInMicroUsdc.toString()),
+          uintCV(parseUnits(state.feeEstimate?.usdcx || '0', 6).toString()),
+          bufferCV(recipientBytes),
         ]
         : [
-          transactions.uintCV(amountInMicroUsdc.toString()),
-          transactions.uintCV(0), // native-domain: 0 for Ethereum
-          transactions.bufferCV(recipientBytes),
+          uintCV(amountInMicroUsdc.toString()),
+          uintCV(0), // native-domain: 0 for Ethereum
+          bufferCV(recipientBytes),
         ];
 
       if (useGasless) {
         // Step 1: Build unsigned sponsored transaction
-        const tx = await transactions.makeContractCall({
+        const tx = await makeContractCall({
           contractAddress,
           contractName,
           functionName,
           functionArgs,
           senderAddress: stacksAddress,
-          network: network,
-          anchorMode: transactions.AnchorMode.Any,
-          postConditionMode: transactions.PostConditionMode.Allow,
+          network,
+          anchorMode: AnchorMode.Any,
+          postConditionMode: PostConditionMode.Allow,
           postConditions: [],
           sponsored: true,
         } as any);

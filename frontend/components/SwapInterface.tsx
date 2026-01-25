@@ -287,15 +287,15 @@ export function SwapInterface() {
 
       if (useGasless) {
         // Step 1: Build unsigned sponsored transaction
-        const tx = await transactions.makeContractCall({
+        const tx = await makeContractCall({
           contractAddress,
           contractName,
           functionName,
           functionArgs,
           senderAddress: stacksAddress,
-          network: network,
-          anchorMode: transactions.AnchorMode.Any,
-          postConditionMode: transactions.PostConditionMode.Allow,
+          network,
+          anchorMode: AnchorMode.Any,
+          postConditionMode: PostConditionMode.Allow,
           postConditions: [],
           sponsored: true,
         } as any);
@@ -358,7 +358,7 @@ export function SwapInterface() {
             functionName,
             functionArgs,
             network: network as any,
-            postConditionMode: transactions.PostConditionMode.Allow,
+            postConditionMode: PostConditionMode.Allow,
             sponsored: false,
             appDetails: {
               name: 'VelumX DEX',
