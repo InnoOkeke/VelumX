@@ -30,9 +30,25 @@ export const getStacksNetwork = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
         const mod = await import('@stacks/network') as any;
-        // Normalize export structure
+
+        // Helper to normalize network exports (handling Class vs Instance vs Default)
+        const normalize = (className: string, constantName: string) => {
+            const candidate = mod[className] || mod.default?.[className] || mod[constantName] || mod.default?.[constantName];
+
+            // If we found an object instance but need a constructor (for 'new'), wrap it
+            if (candidate && typeof candidate === 'object') {
+                return function () { return candidate; };
+            }
+            return candidate;
+        };
+
         return {
-            StacksTestnet: mod.StacksTestnet || mod.default?.StacksTestnet || mod.default
+            ...mod, // Keep original exports
+            StacksTestnet: normalize('StacksTestnet', 'STACKS_TESTNET'),
+            StacksMainnet: normalize('StacksMainnet', 'STACKS_MAINNET'),
+            StacksMocknet: normalize('StacksMocknet', 'STACKS_MOCKNET'),
+            // Fallback for default export if it's the network instance itself
+            default: mod.default
         };
     } catch (e) {
         console.error('Failed to load @stacks/network', e);
