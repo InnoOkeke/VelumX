@@ -179,11 +179,27 @@ export function BridgeInterface() {
   // Encode Ethereum address to bytes32 for Stacks contract
   const encodeEthereumAddress = (address: string): Uint8Array => {
     const hex = encodeEthereumAddressUtil(address);
+    // Defensive checks: ensure we have a hex string
+    if (!hex || typeof hex !== 'string') {
+      console.error('encodeEthereumAddressUtil returned invalid value', { address, hex });
+      throw new Error('Invalid encoded hex for Ethereum address');
+    }
     // Convert hex string to Uint8Array (remove 0x prefix)
-    const hexWithoutPrefix = hex.slice(2);
+    const hexWithoutPrefix = hex.startsWith('0x') ? hex.slice(2) : hex;
+    if (hexWithoutPrefix.length % 2 !== 0) {
+      console.warn('Unexpected hex length when encoding ethereum address', { address, hex });
+    }
     const bytes = new Uint8Array(hexWithoutPrefix.length / 2);
     for (let i = 0; i < hexWithoutPrefix.length; i += 2) {
-      bytes[i / 2] = parseInt(hexWithoutPrefix.substring(i, i + 2), 16);
+      const byte = parseInt(hexWithoutPrefix.substring(i, i + 2), 16);
+      if (Number.isNaN(byte)) {
+        console.error('Failed to parse hex chunk while encoding ethereum address', { chunk: hexWithoutPrefix.substring(i, i + 2), address, hex });
+        throw new Error('Invalid hex chunk while encoding ethereum address');
+      }
+      bytes[i / 2] = byte;
+    }
+    if (bytes.length !== 32) {
+      console.warn('Encoded ethereum address length is unexpected', { address, bytesLength: bytes.length });
     }
     return bytes;
   };
@@ -391,7 +407,22 @@ export function BridgeInterface() {
           sponsored: true,
         } as any);
 
-        const txHex = common.bytesToHex(tx.serialize() as any);
+        // Defensive validation: ensure tx and serialize are present
+        if (!tx) {
+          console.error('makeContractCall returned falsy tx', { contractAddress, contractName, functionName, functionArgs });
+          throw new Error('Failed to build transaction');
+        }
+        if (typeof (tx as any).serialize !== 'function') {
+          console.error('Transaction object is missing serialize():', tx);
+          throw new Error('Transaction serialization not available');
+        }
+        const serialized = (tx as any).serialize();
+        if (!serialized) {
+          console.error('serialize() returned falsy value', { serialized, tx });
+          throw new Error('Transaction serialization failed');
+        }
+
+        const txHex = common.bytesToHex(serialized as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         const getProvider = () => {

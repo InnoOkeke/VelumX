@@ -292,7 +292,22 @@ export function SwapInterface() {
           sponsored: true,
         } as any);
 
-        const txHex = common.bytesToHex(tx.serialize() as any);
+        // Defensive validation: ensure tx and serialize are present
+        if (!tx) {
+          console.error('makeContractCall returned falsy tx', { contractAddress, contractName, functionName, functionArgs });
+          throw new Error('Failed to build transaction');
+        }
+        if (typeof (tx as any).serialize !== 'function') {
+          console.error('Transaction object is missing serialize():', tx);
+          throw new Error('Transaction serialization not available');
+        }
+        const serialized = (tx as any).serialize();
+        if (!serialized) {
+          console.error('serialize() returned falsy value', { serialized, tx });
+          throw new Error('Transaction serialization failed');
+        }
+
+        const txHex = common.bytesToHex(serialized as any);
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         const getProvider = () => {
