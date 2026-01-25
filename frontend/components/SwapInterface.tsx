@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Buffer } from 'buffer';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
 import { ArrowDownUp, Loader2, Settings, Repeat } from 'lucide-react';
@@ -318,12 +319,12 @@ export function SwapInterface() {
           fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
         };
 
-        // Helper to convert to Buffer if available (Stacks SDK preference)
-        const toBuffer = (input: Uint8Array | string): any => {
+        // Explicit Buffer conversion using imported Buffer
+        const toBuffer = (input: Uint8Array | string): Buffer => {
           if (typeof input === 'string') {
-            return (window as any).Buffer ? (window as any).Buffer.from(input, 'hex') : common.hexToBytes(input);
+            return Buffer.from(input, 'hex');
           }
-          return (window as any).Buffer ? (window as any).Buffer.from(input) : input;
+          return Buffer.from(input);
         };
 
         if (publicKey) {
@@ -338,8 +339,8 @@ export function SwapInterface() {
           throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
         }
 
-        console.log('Stacks Swap Tx Params (Buffer Optimized):', {
-          pkType: txOptions.publicKey?.constructor?.name,
+        console.log('Stacks Swap Tx Params (Buffer Optimized v2):', {
+          pkIsBuffer: Buffer.isBuffer(txOptions.publicKey),
           fee: txOptions.fee,
         });
 
