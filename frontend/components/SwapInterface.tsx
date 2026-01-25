@@ -244,7 +244,7 @@ export function SwapInterface() {
           uintCV(amountInMicro.toString()),
           uintCV(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee));
+        if (useGasless) functionArgs.push(uintCV(gasFee.toString()));
       } else if (isOutputStx) {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         const tokenInParts = state.inputToken.address.split('.');
@@ -253,7 +253,7 @@ export function SwapInterface() {
           uintCV(amountInMicro.toString()),
           uintCV(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee));
+        if (useGasless) functionArgs.push(uintCV(gasFee.toString()));
       } else if (useGasless) {
         functionName = 'swap-gasless';
         const tokenInParts = state.inputToken.address.split('.');
@@ -263,7 +263,7 @@ export function SwapInterface() {
           contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
           uintCV(amountInMicro.toString()),
           uintCV(minAmountOutMicro.toString()),
-          uintCV(gasFee),
+          uintCV(gasFee.toString()),
         ];
       } else {
         functionName = 'swap';

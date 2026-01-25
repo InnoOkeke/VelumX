@@ -372,7 +372,7 @@ export function BridgeInterface() {
         ]
         : [
           uintCV(amountInMicroUsdc.toString()),
-          uintCV(0), // native-domain: 0 for Ethereum
+          uintCV("0"), // native-domain: 0 for Ethereum
           bufferCV(recipientBytes),
         ];
 
