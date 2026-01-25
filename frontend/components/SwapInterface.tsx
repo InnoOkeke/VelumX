@@ -280,7 +280,7 @@ export function SwapInterface() {
           functionName,
           functionArgs,
           senderAddress: stacksAddress,
-          network: network.STACKS_TESTNET,
+          network: new network.StacksTestnet(),
           anchorMode: transactions.AnchorMode.Any,
           postConditionMode: 0x01 as any,
           postConditions: [],
