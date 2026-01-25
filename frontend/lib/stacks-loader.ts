@@ -5,25 +5,24 @@
 
 const getRobustExport = (mod: any, testProp: string) => {
     if (!mod) return null;
-    // If the test property is on the root, it's likely a flattened ESM or CJS module
     if (mod[testProp]) return mod;
-    // Otherwise, check the default export
     if (mod.default && mod.default[testProp]) return mod.default;
-    // Fallback to whatever we have
     return mod.default || mod;
 };
 
 /**
- * Wraps a network candidate to ensure it can be used with the 'new' keyword.
- * If candidate is an object (instance), returns a function that returns that object.
+ * Normalizes a network candidate to ensure it's compatible with the 'new' keyword.
+ * If candidate is an object instance, it wraps it in a class that returns that instance.
  */
-const wrapNetworkConstructor = (candidate: any) => {
+const normalizeNetwork = (candidate: any) => {
     if (!candidate) return null;
     if (typeof candidate === 'object' && typeof candidate !== 'function') {
-        const factory = function () { return candidate; };
-        // Mark as wrapped for debugging
-        (factory as any).isWrappedInstance = true;
-        return factory;
+        // Return a real class so 'new' never fails
+        return class {
+            constructor() {
+                return candidate;
+            }
+        };
     }
     return candidate;
 };
@@ -58,17 +57,16 @@ export const getStacksNetwork = async (): Promise<any> => {
     try {
         const mod = await import('@stacks/network') as any;
 
-        // Multi-path search for network candidates
-        const testnet = mod.StacksTestnet || mod.default?.StacksTestnet || mod.default;
-        const mainnet = mod.StacksMainnet || mod.default?.StacksMainnet || mod.default;
+        // Find candidates using the most robust paths
+        const testnet = mod.StacksTestnet || mod.default?.StacksTestnet || mod.STACKS_TESTNET || mod.default?.STACKS_TESTNET || mod.default;
+        const mainnet = mod.StacksMainnet || mod.default?.StacksMainnet || mod.STACKS_MAINNET || mod.default?.STACKS_MAINNET || mod.default;
 
-        // Base module resolution
-        const base = getRobustExport(mod, 'StacksTestnet') || (mod.default || mod);
+        const base = mod.default || mod;
 
         return {
             ...base,
-            StacksTestnet: wrapNetworkConstructor(testnet),
-            StacksMainnet: wrapNetworkConstructor(mainnet),
+            StacksTestnet: normalizeNetwork(testnet),
+            StacksMainnet: normalizeNetwork(mainnet),
         };
     } catch (e) {
         console.error('Failed to load @stacks/network', e);
