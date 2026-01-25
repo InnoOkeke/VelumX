@@ -3,6 +3,16 @@
  * Centrally manages Stacks libraries to ensure they are only evaluated in the browser.
  */
 
+/**
+ * Internal helper to merge module root and default export safely.
+ * Handles Next.js/Webpack chunk differences where exports might be wrapped in .default.
+ */
+const flattenModule = (mod: any) => {
+    if (!mod) return null;
+    const result = { ...(mod.default || {}), ...mod };
+    return result;
+};
+
 const getRobustExport = (mod: any, testProp: string) => {
     if (!mod) return null;
     if (mod[testProp]) return mod;
@@ -16,8 +26,10 @@ const getRobustExport = (mod: any, testProp: string) => {
  */
 const normalizeNetwork = (candidate: any) => {
     if (!candidate) return null;
-    if (typeof candidate === 'object' && typeof candidate !== 'function') {
-        // Return a real class so 'new' never fails
+    // If it's already a class/function, return as is
+    if (typeof candidate === 'function') return candidate;
+    // If it's an object instance, wrap it in a class to ensure 'new' keyword works
+    if (typeof candidate === 'object') {
         return class {
             constructor() {
                 return candidate;

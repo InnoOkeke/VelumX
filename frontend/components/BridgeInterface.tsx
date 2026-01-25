@@ -407,6 +407,8 @@ export function BridgeInterface() {
       }
 
       if (useGasless) {
+        if (!makeContractCall) throw new Error('SDK function makeContractCall not available');
+
         // Step 1: Build unsigned sponsored transaction
         const tx = await makeContractCall({
           contractAddress,
@@ -436,7 +438,8 @@ export function BridgeInterface() {
           throw new Error('Transaction serialization failed');
         }
 
-        const txHex = common.bytesToHex(serialized as any);
+        const txHex = common?.bytesToHex(serialized as any);
+        if (!txHex) throw new Error('Failed to convert transaction to hex');
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
         const getProvider = () => {
