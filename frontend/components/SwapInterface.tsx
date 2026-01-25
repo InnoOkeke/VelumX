@@ -207,22 +207,14 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
+      const { AnchorMode, PostConditionMode, uintCV, bufferCV, makeContractCall } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
 
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
 
-      let network;
-      if (networkModule.StacksTestnet) {
-        try {
-          network = new networkModule.StacksTestnet();
-        } catch (e) {
-          network = networkModule.STACKS_TESTNET;
-        }
-      } else if (networkModule.STACKS_TESTNET) {
-        network = networkModule.STACKS_TESTNET;
-      }
+      const network = new networkModule.StacksTestnet();
 
       if (!network) throw new Error('Could not load Stacks network configuration');
 
