@@ -426,19 +426,24 @@ export function BridgeInterface() {
         const publicKey = (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
 
         // Step 1: Build unsigned sponsored transaction
-        const tx = await makeUnsignedContractCall({
+        const txOptions: any = {
           contractAddress,
           contractName,
           functionName,
           functionArgs,
           network,
-          publicKey,
           senderAddress: stacksAddress,
           anchorMode: AnchorMode?.Any || 0,
           postConditionMode: PostConditionMode?.Allow || 0x01,
           postConditions: [],
           sponsored: true,
-        } as any);
+        };
+
+        if (publicKey) {
+          txOptions.publicKey = publicKey;
+        }
+
+        const tx = await makeUnsignedContractCall(txOptions);
 
         // Defensive validation: ensure tx and serialize are present
         if (!tx) {
