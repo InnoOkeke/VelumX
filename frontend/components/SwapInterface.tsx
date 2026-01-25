@@ -207,7 +207,7 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, uintCV, bufferCV, makeContractCall } = transactions;
+      const { AnchorMode, PostConditionMode, uintCV, bufferCV, makeContractCall, contractPrincipalCV } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
