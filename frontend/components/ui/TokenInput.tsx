@@ -13,6 +13,8 @@ interface Token {
     name: string;
     address: string;
     decimals: number;
+    logoUrl?: string;
+    assetName?: string;
 }
 
 interface TokenInputProps {

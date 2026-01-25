@@ -9,7 +9,6 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
-import { Buffer } from 'buffer';
 import { sepolia } from 'viem/chains';
 import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
 import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
@@ -355,7 +354,7 @@ export function BridgeInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl } = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -428,6 +427,12 @@ export function BridgeInterface() {
         if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
         const publicKey = stacksPublicKey || (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
 
+        // Create post-conditions
+        const pc = (Pc as any).principal(stacksAddress!)
+          .willSendEq(amountInMicroUsdc)
+          // Fix: pass contract address and asset name separately, do not append suffix
+          .ft(config.stacksUsdcxAddress, 'usdc-token');
+
         // Create transaction options
         const txOptions: any = {
           contractAddress,
@@ -437,31 +442,32 @@ export function BridgeInterface() {
           network,
           senderAddress: stacksAddress,
           anchorMode: AnchorMode?.Any || 0,
-          postConditionMode: PostConditionMode?.Allow || 0x01,
-          postConditions: [],
+          postConditionMode: PostConditionMode?.Deny || 0x02, // Strict mode
+          postConditions: [pc],
           sponsored: true,
           fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
         };
 
-        // Explicit Buffer conversion using imported Buffer
-        const toBuffer = (input: Uint8Array | string): Buffer => {
+        // Explicit Uint8Array conversion (Native Browser Safe)
+        const toUint8Array = (input: Uint8Array | string): Uint8Array => {
           if (typeof input === 'string') {
-            return Buffer.from(input, 'hex');
+            return common.hexToBytes(input);
           }
-          return Buffer.from(input);
+          if (input instanceof Uint8Array) return input;
+          return new Uint8Array(input);
         };
 
-        const recipientBuffer = toBuffer(recipientBytes);
+        const recipientBytesNative = toUint8Array(recipientBytes);
 
-        // Re-create args with Buffer
+        // Re-create args with Uint8Array
         const safeFunctionArgs = [
           Cl.uint(amountInMicroUsdc.toString()),
           Cl.uint(parseUnits(feeEstimateUsdcx, 6).toString()),
-          Cl.buffer(recipientBuffer),
+          Cl.buffer(recipientBytesNative),
         ];
 
         if (publicKey) {
-          txOptions.publicKey = toBuffer(publicKey);
+          txOptions.publicKey = toUint8Array(publicKey);
           txOptions.functionArgs = safeFunctionArgs; // Use safe args
         } else {
           console.error('Gasless Transaction Failed: Missing Public Key', {
@@ -473,9 +479,9 @@ export function BridgeInterface() {
           throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
         }
 
-        console.log('Stacks Bridge Tx Params (Buffer Optimized v2):', {
-          pkIsBuffer: Buffer.isBuffer(txOptions.publicKey),
-          recipientIsBuffer: Buffer.isBuffer(recipientBuffer),
+        console.log('Stacks Bridge Tx Params (Uint8Array Native):', {
+          pkType: txOptions.publicKey?.constructor?.name,
+          recipientType: recipientBytesNative?.constructor?.name,
           fee: txOptions.fee,
         });
 

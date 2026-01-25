@@ -5,7 +5,6 @@
 
 'use client';
 
-import { Buffer } from 'buffer';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
@@ -24,6 +23,7 @@ interface Token {
   address: string;
   decimals: number;
   logoUrl?: string;
+  assetName?: string; // Explicit asset name for post-conditions
 }
 
 interface SwapQuote {
@@ -55,20 +55,25 @@ const DEFAULT_TOKENS: Token[] = [
     name: 'Stacks',
     address: 'STX',
     decimals: 6,
+    assetName: 'stx',
   },
   {
     symbol: 'USDCx',
     name: 'USDC (xReserve)',
     address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
     decimals: 6,
+    assetName: 'usdc-token', // Correct asset name matching BridgeInterface
   },
   {
     symbol: 'VEX',
     name: 'VelumX Token',
     address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1', // Will be filled from config
     decimals: 6,
+    assetName: 'vex', // Assumed asset name for VEX
   },
 ];
+
+
 
 export function SwapInterface() {
   const { stacksAddress, stacksConnected, balances, fetchBalances, stacksPublicKey, recoverPublicKey } = useWallet();
@@ -208,7 +213,7 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl } = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc }: any = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -220,19 +225,27 @@ export function SwapInterface() {
 
       if (!network) throw new Error('Could not load Stacks network configuration');
 
-      const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
+      const amountInMicro = parseUnits(state.inputAmount, state.inputToken!.decimals);
+      // Defensive check for output amount
+      const outAmtProp = state.outputAmount || '0';
       const minAmountOutMicro = parseUnits(
-        (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
-        state.outputToken.decimals
+        (parseFloat(outAmtProp) * (1 - state.slippage / 100)).toFixed(6),
+        state.outputToken!.decimals
       );
 
-      const isInputStx = state.inputToken.symbol === 'STX';
-      const isOutputStx = state.outputToken.symbol === 'STX';
+      const isInputStx = state.inputToken!.symbol === 'STX';
+      const isOutputStx = state.outputToken!.symbol === 'STX';
       const useGasless = state.gaslessMode;
 
       const [contractAddress, contractName] = (useGasless
         ? config.stacksPaymasterAddress
         : config.stacksSwapContractAddress).split('.');
+
+      // Helper to parse token address (format: contractAddress.contractName)
+      const parseTokenAddress = (tokenAddr: string) => {
+        const [addr, name] = tokenAddr.split('.');
+        return { address: addr, name };
+      };
 
       const getCP = (addr: string) => {
         const parts = addr.split('.');
@@ -246,40 +259,35 @@ export function SwapInterface() {
 
       if (isInputStx) {
         functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
-        const tokenOutParts = state.outputToken.address.split('.');
+        // contractAddress is defined above
         functionArgs = [
-          getCP(state.outputToken.address),
+          getCP(state.outputToken!.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
         if (useGasless) functionArgs.push(Cl.uint(gasFee.toString()));
       } else if (isOutputStx) {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
-        const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
-          getCP(state.inputToken.address),
+          getCP(state.inputToken!.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
         if (useGasless) functionArgs.push(Cl.uint(gasFee.toString()));
       } else if (useGasless) {
         functionName = 'swap-gasless';
-        const tokenInParts = state.inputToken.address.split('.');
-        const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          getCP(state.inputToken.address),
-          getCP(state.outputToken.address),
+          getCP(state.inputToken!.address),
+          getCP(state.outputToken!.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
           Cl.uint(gasFee.toString()),
         ];
       } else {
         functionName = 'swap';
-        const tokenInParts = state.inputToken.address.split('.');
-        const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          getCP(state.inputToken.address),
-          getCP(state.outputToken.address),
+          getCP(state.inputToken!.address),
+          getCP(state.outputToken!.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
@@ -296,8 +304,49 @@ export function SwapInterface() {
         ClAvailable: !!Cl
       });
 
-      if (functionArgs.some(arg => !arg)) {
+      if (functionArgs.some((arg: any) => !arg)) {
         throw new Error('Transaction arguments encoding failed');
+      }
+
+      const postConditions = [];
+
+      // Constraint 1: User sends input token
+      if (isInputStx) {
+        postConditions.push(
+          Pc.principal(stacksAddress).willSendEq(amountInMicro).ustx()
+        );
+      } else {
+        // Use explicit asset name if available, otherwise fallback to contract name
+        const { name } = parseTokenAddress(state.inputToken.address);
+        const assetId = state.inputToken.address;
+        const assetName = state.inputToken.assetName || name;
+
+        postConditions.push(
+          Pc.principal(stacksAddress).willSendEq(amountInMicro).ft(assetId, assetName)
+        );
+      }
+
+      // Constraint 2: Contract sends output token (optional but good for safety)
+      // We know the contract address.
+      // Note: Contract principal in post-conditions must use the contract that is SENDING.
+      // If the swap contract holds the tokens, it sends.
+      // If it's a paymaster, maybe it doesn't hold them?
+      // Assuming AMM pool holds funds.
+
+      const poolPrincipal = Pc.principal(`${contractAddress}.${contractName}`);
+
+      if (isOutputStx) {
+        postConditions.push(
+          poolPrincipal.willSendGte(minAmountOutMicro).ustx()
+        );
+      } else {
+        const { name } = parseTokenAddress(state.outputToken.address);
+        const assetId = state.outputToken.address;
+        const assetName = state.outputToken.assetName || name;
+
+        postConditions.push(
+          poolPrincipal.willSendGte(minAmountOutMicro).ft(assetId, assetName)
+        );
       }
 
       if (useGasless) {
@@ -313,22 +362,23 @@ export function SwapInterface() {
           network,
           senderAddress: stacksAddress,
           anchorMode: AnchorMode?.Any || 0,
-          postConditionMode: PostConditionMode?.Allow || 0x01,
-          postConditions: [], // Explicit empty array
+          postConditionMode: PostConditionMode?.Deny || 0x02, // Strict mode
+          postConditions, // Use generated post-conditions
           sponsored: true,
           fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
         };
 
-        // Explicit Buffer conversion using imported Buffer
-        const toBuffer = (input: Uint8Array | string): Buffer => {
+        // Explicit Uint8Array conversion (Native Browser Safe)
+        const toUint8Array = (input: Uint8Array | string): Uint8Array => {
           if (typeof input === 'string') {
-            return Buffer.from(input, 'hex');
+            return common.hexToBytes(input);
           }
-          return Buffer.from(input);
+          if (input instanceof Uint8Array) return input;
+          return new Uint8Array(input);
         };
 
         if (publicKey) {
-          txOptions.publicKey = toBuffer(publicKey);
+          txOptions.publicKey = toUint8Array(publicKey);
         } else {
           console.error('Gasless Swap Failed: Missing Public Key', {
             stacksAddress,
@@ -339,8 +389,8 @@ export function SwapInterface() {
           throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
         }
 
-        console.log('Stacks Swap Tx Params (Buffer Optimized v2):', {
-          pkIsBuffer: Buffer.isBuffer(txOptions.publicKey),
+        console.log('Stacks Swap Tx Params (Uint8Array Native):', {
+          pkType: txOptions.publicKey?.constructor?.name,
           fee: txOptions.fee,
         });
 
@@ -429,8 +479,8 @@ export function SwapInterface() {
           functionArgs,
           network: 'testnet',
           anchorMode: 'any',
-          postConditionMode: 'allow',
-          postConditions: [],
+          postConditionMode: 'deny',
+          postConditions: postConditions, // Pass the same safety constraints
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
@@ -494,7 +544,7 @@ export function SwapInterface() {
 
         <SettingsPanel
           slippage={state.slippage}
-          setSlippage={(val) => setState(prev => ({ ...prev, slippage: val }))}
+          setSlippage={(val: number) => setState(prev => ({ ...prev, slippage: val }))}
           isOpen={state.showSettings}
         />
 
@@ -518,7 +568,7 @@ export function SwapInterface() {
           <TokenInput
             label="Sell"
             amount={state.inputAmount}
-            setAmount={(val) => setState(prev => ({ ...prev, inputAmount: val, error: null }))}
+            setAmount={(val: string) => setState(prev => ({ ...prev, inputAmount: val, error: null }))}
             token={state.inputToken}
             setToken={(t) => setState(prev => ({ ...prev, inputToken: t }))}
             tokens={tokens}
@@ -567,7 +617,7 @@ export function SwapInterface() {
 
           <GaslessToggle
             enabled={state.gaslessMode}
-            setEnabled={(val) => setState(prev => ({ ...prev, gaslessMode: val }))}
+            setEnabled={(val: boolean) => setState(prev => ({ ...prev, gaslessMode: val }))}
             disabled={state.isProcessing}
           />
 

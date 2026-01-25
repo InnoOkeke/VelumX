@@ -74,6 +74,9 @@ export const getStacksTransactions = async (): Promise<any> => {
             fetchCallReadOnlyFunction: getExport(mod, 'fetchCallReadOnlyFunction'),
             makeUnsignedContractCall: getExport(mod, 'makeUnsignedContractCall'),
             makeSTXTokenTransfer: getExport(mod, 'makeSTXTokenTransfer'),
+            Pc: getExport(mod, 'Pc'),
+            FungibleConditionCode: getExport(mod, 'FungibleConditionCode'),
+            NonFungibleConditionCode: getExport(mod, 'NonFungibleConditionCode'),
         };
         return moduleCache.transactions;
     } catch (e) {
