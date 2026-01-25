@@ -315,6 +315,7 @@ export function SwapInterface() {
           postConditionMode: PostConditionMode?.Allow || 0x01,
           postConditions: [], // Explicit empty array
           sponsored: true,
+          fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
         };
 
         if (publicKey) {
