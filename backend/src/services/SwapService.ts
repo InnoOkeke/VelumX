@@ -6,6 +6,7 @@
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 import { fetchCallReadOnlyFunction, cvToJSON, principalCV, uintCV } from '@stacks/transactions';
+import { createNetwork } from '@stacks/network';
 
 export interface TokenInfo {
   symbol: string;
@@ -136,6 +137,12 @@ export class SwapService {
         logger.warn('Could not fetch reserves for price impact', { tokenA: tokenInPrincipal, tokenB: tokenOutPrincipal });
       }
 
+      // Configure network
+      const network = createNetwork({
+        network: 'testnet',
+        client: { baseUrl: this.config.stacksRpcUrl },
+      });
+
       // Call quote-swap read-only function
       const result = await fetchCallReadOnlyFunction({
         contractAddress,
@@ -146,7 +153,7 @@ export class SwapService {
           principalCV(tokenOutPrincipal),
           uintCV(inputAmount),
         ],
-        network: 'testnet',
+        network,
         senderAddress: contractAddress,
       });
 

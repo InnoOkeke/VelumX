@@ -13,6 +13,7 @@ import {
   uintCV,
   contractPrincipalCV
 } from '@stacks/transactions';
+import { createNetwork } from '@stacks/network';
 import {
   Token,
   PoolReserves,
@@ -76,7 +77,10 @@ export class LiquidityService {
               principalCV(a),
               principalCV(b),
             ],
-            network: 'testnet',
+            network: createNetwork({
+              network: 'testnet',
+              client: { baseUrl: this.config.stacksRpcUrl },
+            }),
             senderAddress: contractAddress,
           });
 
@@ -127,7 +131,10 @@ export class LiquidityService {
               principalCV(tokenB),
               principalCV(userAddress),
             ],
-            network: 'testnet',
+            network: createNetwork({
+              network: 'testnet',
+              client: { baseUrl: this.config.stacksRpcUrl },
+            }),
             senderAddress: contractAddress,
           });
 
