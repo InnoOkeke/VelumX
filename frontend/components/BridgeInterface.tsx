@@ -341,8 +341,21 @@ export function BridgeInterface() {
 
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
 
-      const StacksTestnet = networkModule.StacksTestnet || networkModule.default?.StacksTestnet;
-      const network = new StacksTestnet();
+      let network;
+      if (networkModule.StacksTestnet) {
+        try {
+          network = new networkModule.StacksTestnet();
+        } catch (e) {
+          network = networkModule.STACKS_TESTNET;
+        }
+      } else if (networkModule.STACKS_TESTNET) {
+        network = networkModule.STACKS_TESTNET;
+      } else {
+        // Last resort fallback for some environments
+        network = new networkModule.StatsChainTestnet ? new networkModule.StatsChainTestnet() : undefined;
+      }
+
+      if (!network) throw new Error('Could not load Stacks network configuration');
 
       const amountInMicroUsdc = parseUnits(state.amount, 6);
       const recipientBytes = encodeEthereumAddress(ethereumAddress);

@@ -213,8 +213,18 @@ export function SwapInterface() {
 
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
 
-      const StacksTestnet = networkModule.StacksTestnet || networkModule.default?.StacksTestnet;
-      const network = new StacksTestnet();
+      let network;
+      if (networkModule.StacksTestnet) {
+        try {
+          network = new networkModule.StacksTestnet();
+        } catch (e) {
+          network = networkModule.STACKS_TESTNET;
+        }
+      } else if (networkModule.STACKS_TESTNET) {
+        network = networkModule.STACKS_TESTNET;
+      }
+
+      if (!network) throw new Error('Could not load Stacks network configuration');
 
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
       const minAmountOutMicro = parseUnits(
