@@ -369,17 +369,23 @@ export function BridgeInterface() {
         ? common.hexToBytes(ethereumAddress.substring(2))
         : common.hexToBytes(ethereumAddress);
 
+      if (!recipientBytes || recipientBytes.length === 0) {
+        throw new Error('Failed to encode recipient address');
+      }
+
       const useGasless = state.gaslessMode;
 
       // Determine which contract and function to call
-      const contractAddress = useGasless
-        ? config.stacksPaymasterAddress.split('.')[0]
-        : config.stacksUsdcxProtocolAddress.split('.')[0];
+      const contractParts = (useGasless
+        ? config.stacksPaymasterAddress
+        : config.stacksUsdcxProtocolAddress).split('.');
 
-      const contractName = useGasless
-        ? config.stacksPaymasterAddress.split('.')[1]
-        : config.stacksUsdcxProtocolAddress.split('.')[1];
+      if (contractParts.length !== 2) {
+        throw new Error('Invalid bridge contract configuration');
+      }
 
+      const contractAddress = contractParts[0];
+      const contractName = contractParts[1];
       const functionName = useGasless ? 'withdraw-gasless' : 'burn';
 
       if (useGasless && !state.feeEstimate) {
@@ -403,6 +409,7 @@ export function BridgeInterface() {
         contractName,
         functionName,
         functionArgsLength: functionArgs.length,
+        recipientBytesLen: recipientBytes.length,
         network: !!network,
         AnchorMode: !!AnchorMode,
         PostConditionMode: !!PostConditionMode,
@@ -518,51 +525,52 @@ export function BridgeInterface() {
           }),
         });
       } else {
-        // Standard flow
-        await new Promise<string>((resolve, reject) => {
-          connect.openContractCall({
-            contractAddress,
-            contractName,
-            functionName,
-            functionArgs,
-            network: network as any,
-            anchorMode: AnchorMode?.Any || 0,
-            postConditionMode: PostConditionMode?.Allow || 0x01,
-            postConditions: [],
-            sponsored: false,
-            appDetails: {
-              name: 'VelumX Bridge',
-              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-            },
-            onFinish: async (data: any) => {
-              const finalTxId = data.txId;
+        // Standard flow using modern request API
+        const connect = await getStacksConnect() as any;
+        if (!connect || !connect.request) throw new Error('Stacks request API not available');
 
-              // Submit to monitoring service
-              await fetch(`${config.backendUrl}/api/transactions/monitor`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  id: finalTxId,
-                  type: 'withdrawal',
-                  sourceTxHash: finalTxId,
-                  sourceChain: 'stacks',
-                  destinationChain: 'ethereum',
-                  amount: state.amount,
-                  sender: stacksAddress,
-                  recipient: ethereumAddress,
-                  status: 'pending',
-                  timestamp: Date.now(),
-                  isGasless: false,
-                }),
-              });
-
-              resolve(finalTxId);
-            },
-            onCancel: () => {
-              reject(new Error('User cancelled transaction'));
-            },
-          });
+        console.log('Stacks Bridge Standard Tx Params (request API):', {
+          contract: `${contractAddress}.${contractName}`,
+          functionName,
+          functionArgsLength: functionArgs.length,
+          network: 'testnet'
         });
+
+        const response = await connect.request('stx_callContract', {
+          contract: `${contractAddress}.${contractName}`,
+          functionName,
+          functionArgs,
+          network: 'testnet',
+          anchorMode: 'any',
+          postConditionMode: 'allow',
+          postConditions: [],
+          appDetails: {
+            name: 'VelumX Bridge',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
+        });
+
+        const finalTxId = response?.result?.txid;
+        if (finalTxId) {
+          // Submit to monitoring service
+          await fetch(`${config.backendUrl}/api/transactions/monitor`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: finalTxId,
+              type: 'withdrawal',
+              sourceTxHash: finalTxId,
+              sourceChain: 'stacks',
+              destinationChain: 'ethereum',
+              amount: state.amount,
+              sender: stacksAddress,
+              recipient: ethereumAddress,
+              status: 'pending',
+              timestamp: Date.now(),
+              isGasless: false,
+            }),
+          });
+        }
       }
 
       setState(prev => ({

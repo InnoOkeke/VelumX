@@ -8,7 +8,6 @@ import React from 'react';
 import { Settings, Plus, Loader2, Droplets } from 'lucide-react';
 import { TokenInput } from './TokenInput';
 import { SettingsPanel } from './SettingsPanel';
-import { GaslessToggle } from './GaslessToggle';
 import { TransactionStatus } from './TransactionStatus';
 
 interface AddLiquidityFormProps {

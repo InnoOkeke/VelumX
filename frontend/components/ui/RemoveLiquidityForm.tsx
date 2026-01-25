@@ -7,7 +7,6 @@
 import React from 'react';
 import { Settings, Minus, Loader2, ArrowLeft } from 'lucide-react';
 import { SettingsPanel } from './SettingsPanel';
-import { GaslessToggle } from './GaslessToggle';
 import { TransactionStatus } from './TransactionStatus';
 
 interface RemoveLiquidityFormProps {
@@ -125,12 +124,6 @@ export function RemoveLiquidityForm({
             )}
 
             <div className="mt-8">
-                <GaslessToggle
-                    enabled={state.gaslessMode}
-                    setEnabled={(val) => setState((prev: any) => ({ ...prev, gaslessMode: val }))}
-                    disabled={state.isProcessing}
-                />
-
                 <TransactionStatus error={state.error} success={state.success} />
 
                 <button

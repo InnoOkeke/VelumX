@@ -1,8 +1,3 @@
-/**
- * Mint VEX Tokens (Backend Script)
- * Usage: node mint-vex.js <recipient_address> [amount]
- */
-
 require('dotenv').config();
 const { generateWallet } = require('@stacks/wallet-sdk');
 const {
@@ -11,101 +6,94 @@ const {
     PostConditionMode,
     uintCV,
     principalCV,
-    TransactionVersion,
+    getAddressFromPrivateKey,
 } = require('@stacks/transactions');
 
-// Manual Network Config
-const NETWORK = {
-    version: 128,
-    chainId: 2147483648,
-    coreApiUrl: 'https://api.testnet.hiro.so',
-    broadcastApiUrl: 'https://api.testnet.hiro.so/v2/transactions',
-};
+// Polyfill fetch if needed (Node 18+ has it, but just in case)
+const fetchFn = global.fetch || require('node-fetch');
 
-const SEED_PHRASE = process.env.RELAYER_SEED_PHRASE;
+const { STACKS_TESTNET } = require('@stacks/network');
 
-if (!SEED_PHRASE) {
-    console.error('❌ Error: RELAYER_SEED_PHRASE environment variable not set');
-    process.exit(1);
-}
+// Network Config
+const NETWORK = STACKS_TESTNET;
+// NETWORK.coreApiUrl is already set in the constant usually, but let's override if needed or trust it.
+// Actually STACKS_TESTNET is usually an object. Let's see if we need to modify it.
+// The script sets coreApiUrl manually.
 
-// Manual Broadcast Function
+
+
 async function broadcast(tx) {
     const serialized = tx.serialize();
-    const response = await fetch('https://api.testnet.hiro.so/v2/transactions', {
+    const body = typeof serialized === 'string' ? Buffer.from(serialized, 'hex') : serialized;
+
+    const response = await fetchFn('https://api.testnet.hiro.so/v2/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream' },
-        body: serialized
+        body: body
     });
     const result = await response.text();
     return { status: response.status, ok: response.ok, result };
 }
 
 async function mintTokens() {
-    const args = process.argv.slice(2);
-    const recipient = args[0];
-    const amountConfig = args[1] ? parseInt(args[1]) : 1000; // Default 1000 VEX
-
-    if (!recipient) {
-        console.error('❌ Usage: node mint-vex.js <recipient_address> [amount]');
-        process.exit(1);
-    }
-
-    // Generate wallet from seed
-    const wallet = await generateWallet({ secretKey: SEED_PHRASE, password: '' });
-    const account = wallet.accounts[0];
-    let privateKey = account.stxPrivateKey;
-    if (privateKey.length === 64) privateKey += '01';
-
-    const { getAddressFromPrivateKey } = require('@stacks/transactions');
-    const deployerAddress = getAddressFromPrivateKey(privateKey, TransactionVersion.Testnet);
-
-    // Fetch Nonce manually
-    const nonceRes = await fetch(`https://api.testnet.hiro.so/extended/v1/address/${deployerAddress}/nonces`);
-    const nonceData = await nonceRes.json();
-    console.log(`Nonce: ${nonceData.possible_next_nonce}`);
-
-    const contractAddressString = process.env.STACKS_VEX_ADDRESS;
-    const targetContract = contractAddressString || `${deployerAddress}.velumx-token`;
-
-    const amountMicro = amountConfig * 1000000; // 6 decimals
-
-    console.log(`🚀 Minting ${amountConfig} VEX to ${recipient}...`);
-    console.log(`Using Sender: ${deployerAddress}`);
-    console.log(`Contract: ${targetContract}`);
-
-    const txOptions = {
-        contractAddress: targetContract.split('.')[0],
-        contractName: targetContract.split('.')[1],
-        functionName: 'mint',
-        functionArgs: [
-            uintCV(amountMicro),
-            principalCV(recipient),
-        ],
-        senderKey: privateKey,
-        validateWithAbi: false, // SKIP VALIDATION
-        network: NETWORK,
-        anchorMode: AnchorMode.Any,
-        postConditionMode: PostConditionMode.Allow,
-        fee: 50000n, // MANUAL FEE
-        nonce: BigInt(nonceData.possible_next_nonce), // MANUAL NONCE
-    };
-
     try {
+        console.log('Script started');
+        const args = process.argv.slice(2);
+        const recipient = args[0];
+        const amountConfig = args[1] ? parseInt(args[1]) : 1000;
+
+        if (!recipient) {
+            console.error('Usage: node mint-vex.js <recipient>');
+            process.exit(1);
+        }
+
+        const deployerAddress = process.env.RELAYER_STACKS_ADDRESS;
+        if (!deployerAddress) throw new Error('RELAYER_STACKS_ADDRESS missing');
+
+        console.log('Deployer:', deployerAddress);
+
+        // Fetch Nonce
+        const nonceRes = await fetchFn(`https://api.testnet.hiro.so/extended/v1/address/${deployerAddress}/nonces`);
+        if (!nonceRes.ok) throw new Error('Failed to fetch nonce');
+        const nonceData = await nonceRes.json();
+        const nonce = BigInt(nonceData.possible_next_nonce);
+        console.log('Nonce:', nonce);
+
+        const amountMicro = amountConfig * 1000000;
+
+        // Private Key
+        let privateKey = process.env.RELAYER_PRIVATE_KEY;
+        if (!privateKey) throw new Error('RELAYER_PRIVATE_KEY missing');
+        if (privateKey.length === 64) privateKey += '01';
+
+        const txOptions = {
+            contractAddress: process.env.STACKS_VEX_ADDRESS.split('.')[0],
+            contractName: process.env.STACKS_VEX_ADDRESS.split('.')[1],
+            functionName: 'mint',
+            functionArgs: [uintCV(amountMicro), principalCV(recipient)],
+            senderKey: privateKey,
+            validateWithAbi: false,
+            network: NETWORK,
+            anchorMode: AnchorMode.Any,
+            postConditionMode: PostConditionMode.Allow,
+            fee: 50000n,
+            nonce: nonce,
+        };
+
+
         const transaction = await makeContractCall(txOptions);
-        // Use manual broadcast
         const broadcastResponse = await broadcast(transaction);
 
         if (!broadcastResponse.ok) {
-            console.error('❌ Broadcast failed:', broadcastResponse.result);
+            console.error('Broadcast failed:', broadcastResponse.result);
         } else {
             const txid = broadcastResponse.result.replace(/"/g, '');
-            console.log('✅ Mint transaction broadcasted!');
-            console.log('Tx ID:', txid);
-            console.log(`Explorer: https://explorer.hiro.so/txid/${txid}?chain=testnet`);
+            console.log('Success TX:', txid);
+            console.log(`https://explorer.hiro.so/txid/${txid}?chain=testnet`);
         }
-    } catch (error) {
-        console.error('❌ Error:', error.message);
+
+    } catch (e) {
+        console.error('CRASH:', e);
     }
 }
 

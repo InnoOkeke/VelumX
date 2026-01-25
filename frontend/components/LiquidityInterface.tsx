@@ -60,7 +60,6 @@ interface LiquidityState {
   amountA: string;
   amountB: string;
   lpTokenAmount: string;
-  gaslessMode: boolean;
   isProcessing: boolean;
   error: string | null;
   success: string | null;
@@ -131,7 +130,6 @@ export function LiquidityInterface() {
     amountA: '',
     amountB: '',
     lpTokenAmount: '',
-    gaslessMode: true,
     isProcessing: false,
     error: null,
     success: null,
@@ -433,8 +431,9 @@ export function LiquidityInterface() {
 
     try {
       const transactions = await getStacksTransactions() as any;
+      const networkModule = await getStacksNetwork() as any;
       const { Cl } = transactions;
-      if (!transactions || !Cl) return;
+      if (!transactions || !Cl || !networkModule) return;
 
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
@@ -449,10 +448,11 @@ export function LiquidityInterface() {
           Cl.principal(a),
           Cl.principal(b),
         ],
-        network: 'testnet',
+        network: new networkModule.StacksTestnet(),
         senderAddress: stacksAddress,
       });
 
+      if (!poolResult) throw new Error('Failed to fetch pool reserves');
       const poolJson = transactions.cvToJSON(poolResult);
 
       if (poolJson.success && poolJson.value) {
@@ -474,10 +474,11 @@ export function LiquidityInterface() {
             Cl.principal(b),
             Cl.principal(stacksAddress),
           ],
-          network: 'testnet',
+          network: new networkModule.StacksTestnet(),
           senderAddress: stacksAddress,
         });
 
+        if (!lpResult) throw new Error('Failed to fetch LP balance');
         const lpJson = transactions.cvToJSON(lpResult);
         const userLpBalanceRaw = lpJson.success && lpJson.value ? Number(lpJson.value.value) : 0;
         const userLpBalance = (userLpBalanceRaw / Math.pow(10, 6)).toFixed(6);
@@ -519,7 +520,8 @@ export function LiquidityInterface() {
 
     try {
       const transactions = await getStacksTransactions() as any;
-      if (!transactions) return;
+      const networkModule = await getStacksNetwork() as any;
+      if (!transactions || !networkModule) return;
 
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
@@ -532,10 +534,11 @@ export function LiquidityInterface() {
           transactions.Cl.principal(state.tokenA.address),
           transactions.Cl.principal(state.tokenB.address),
         ],
-        network: 'testnet',
+        network: new networkModule.StacksTestnet(),
         senderAddress: stacksAddress || contractAddress,
       });
 
+      if (!poolResult) throw new Error('Failed to calculate optimal amount');
       const poolJson = transactions.cvToJSON(poolResult);
 
       if (poolJson.success && poolJson.value) {
@@ -638,31 +641,27 @@ export function LiquidityInterface() {
       }
 
       const connect = await getStacksConnect() as any;
-      if (!connect) throw new Error('Stacks libraries not loaded');
+      if (!connect || !connect.request) throw new Error('Stacks request API not available');
 
-      // Step 2: Handle regular transaction (signed by user, self-broadcast)
-      await new Promise<string>((resolve, reject) => {
-        connect.openContractCall({
-          contractAddress,
-          contractName,
-          functionName,
-          functionArgs,
-          network: new networkModule.StacksTestnet() as any,
-          anchorMode: AnchorMode?.Any || 0,
-          postConditionMode: PostConditionMode?.Allow || 0x01,
-          postConditions: [],
-          sponsored: false,
-          appDetails: {
-            name: 'VelumX DEX',
-            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-          },
-          onFinish: async (data: any) => {
-            resolve(data.txId);
-          },
-          onCancel: () => {
-            reject(new Error('User cancelled transaction'));
-          },
-        } as any);
+      console.log('Stacks Add Liquidity Standard Tx Params (request API):', {
+        contract: `${contractAddress}.${contractName}`,
+        functionName,
+        functionArgsLength: functionArgs.length,
+        network: 'testnet'
+      });
+
+      await connect.request('stx_callContract', {
+        contract: `${contractAddress}.${contractName}`,
+        functionName,
+        functionArgs,
+        network: 'testnet',
+        anchorMode: 'any',
+        postConditionMode: 'allow',
+        postConditions: [],
+        appDetails: {
+          name: 'VelumX DEX',
+          icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+        },
       });
 
       setState(prev => ({
@@ -697,20 +696,23 @@ export function LiquidityInterface() {
       const { a, b, isReversed } = sortTokens(state.tokenA.address, state.tokenB.address);
 
       const transactions = await getStacksTransactions() as any;
-      if (!transactions) return;
+      const networkModule = await getStacksNetwork() as any;
+      if (!transactions || !networkModule) return;
 
+      const { Cl } = transactions;
       const poolResult = await transactions.fetchCallReadOnlyFunction({
         contractAddress,
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          transactions.principalCV(a),
-          transactions.principalCV(b),
+          Cl.principal(a),
+          Cl.principal(b),
         ],
-        network: 'testnet',
+        network: new networkModule.StacksTestnet(),
         senderAddress: stacksAddress,
       });
 
+      if (!poolResult) throw new Error('Failed to calculate remove amounts');
       const poolJson = transactions.cvToJSON(poolResult);
 
       if (poolJson.success && poolJson.value) {
@@ -771,16 +773,9 @@ export function LiquidityInterface() {
       const isTokenAStx = state.tokenA.symbol === 'STX';
       const isTokenBStx = state.tokenB.symbol === 'STX';
       const isStxPool = isTokenAStx || isTokenBStx;
-      const gaslessMode = state.gaslessMode;
 
-      const contractAddress = gaslessMode
-        ? config.stacksPaymasterAddress.split('.')[0]
-        : config.stacksSwapContractAddress.split('.')[0];
-      const contractName = gaslessMode
-        ? config.stacksPaymasterAddress.split('.')[1]
-        : config.stacksSwapContractAddress.split('.')[1];
-
-      const gasFee = gaslessMode ? 10000 : 0;
+      const contractAddress = config.stacksSwapContractAddress.split('.')[0];
+      const contractName = config.stacksSwapContractAddress.split('.')[1];
 
       let functionArgs = [];
 
@@ -797,31 +792,19 @@ export function LiquidityInterface() {
           Cl.uint(minStx.toString()),
           Cl.uint(minToken.toString()),
         ];
-        if (gaslessMode) functionArgs.push(Cl.uint(gasFee.toString()));
       } else {
         const tokenAParts = state.tokenA.address.split('.');
         const tokenBParts = state.tokenB.address.split('.');
-        functionArgs = gaslessMode
-          ? [
-            Cl.contractPrincipal(tokenAParts[0], tokenAParts[1]),
-            Cl.contractPrincipal(tokenBParts[0], tokenBParts[1]),
-            Cl.uint(lpTokenAmountMicro.toString()),
-            Cl.uint(minAmountAMicro.toString()),
-            Cl.uint(minAmountBMicro.toString()),
-            Cl.uint(gasFee.toString()),
-          ]
-          : [
-            Cl.contractPrincipal(tokenAParts[0], tokenAParts[1]),
-            Cl.contractPrincipal(tokenBParts[0], tokenBParts[1]),
-            Cl.uint(lpTokenAmountMicro.toString()),
-            Cl.uint(minAmountAMicro.toString()),
-            Cl.uint(minAmountBMicro.toString()),
-          ];
+        functionArgs = [
+          Cl.contractPrincipal(tokenAParts[0], tokenAParts[1]),
+          Cl.contractPrincipal(tokenBParts[0], tokenBParts[1]),
+          Cl.uint(lpTokenAmountMicro.toString()),
+          Cl.uint(minAmountAMicro.toString()),
+          Cl.uint(minAmountBMicro.toString()),
+        ];
       }
 
-      const functionName = isStxPool
-        ? (gaslessMode ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-stx')
-        : (gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity');
+      const functionName = isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity';
 
       console.log('Stacks Remove Liquidity Tx Params (Modern Cl):', {
         contractAddress,
@@ -832,115 +815,36 @@ export function LiquidityInterface() {
         AnchorMode: !!AnchorMode,
         PostConditionMode: !!PostConditionMode,
         ClAvailable: !!Cl,
-        gaslessMode
       });
 
       if (functionArgs.some(arg => !arg)) {
         throw new Error('Transaction arguments encoding failed');
       }
 
-      if (gaslessMode) {
-        if (!makeContractCall) throw new Error('SDK function makeContractCall not available');
+      // Standard flow using modern request API
+      const connect = await getStacksConnect() as any;
+      if (!connect || !connect.request) throw new Error('Stacks request API not available');
 
-        // Step 1: Build unsigned sponsored transaction
-        const tx = await makeContractCall({
-          contractAddress: contractAddress,
-          contractName: contractName,
-          functionName,
-          functionArgs: functionArgs,
-          senderAddress: stacksAddress,
-          network: new networkModule.StacksTestnet() as any,
-          anchorMode: AnchorMode?.Any || 0,
-          postConditionMode: PostConditionMode?.Allow || 0x01,
-          postConditions: [],
-          sponsored: true,
-        } as any);
+      console.log('Stacks Remove Liquidity Standard Tx Params (request API):', {
+        contract: `${contractAddress}.${contractName}`,
+        functionName,
+        functionArgsLength: functionArgs.length,
+        network: 'testnet'
+      });
 
-        const txHex = common.bytesToHex(tx.serialize() as any);
-
-        // Step 2: Request user signature via wallet RPC (without broadcast)
-        const getProvider = () => {
-          if (typeof window === 'undefined') return null;
-          const win = window as any;
-          // Prefer universal injection, then specific ones
-          const p = win.stx?.request ? win.stx : (win.StacksProvider || win.LeatherProvider || win.XverseProvider);
-          return p && typeof p === 'object' ? p : null;
-        };
-
-        const provider = getProvider();
-        if (!provider || typeof provider.request !== 'function') {
-          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
-        }
-
-        const requestParams = {
-          transaction: txHex,
-          broadcast: false,
-          network: 'testnet',
-        };
-
-        const response = await provider.request({
-          method: 'stx_signTransaction',
-          params: requestParams
-        });
-
-        if (!response || !response.result || !response.result.transaction) {
-          throw new Error('Wallet failed to sign the transaction. Please try again.');
-        }
-
-        const signedTxHex = response.result.transaction;
-
-        // Step 3: Send to backend relayer
-        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transaction: signedTxHex,
-            userAddress: stacksAddress,
-            estimatedFee: gasFee.toString(),
-          }),
-        });
-        const sponsorData = await sponsorResponse.json();
-        if (!sponsorData.success) {
-          throw new Error(sponsorData.message || 'Sponsorship failed');
-        }
-      } else {
-        // Standard flow
-        const network = new networkModule.StacksTestnet();
-        const connect = await getStacksConnect() as any;
-        if (!network || !connect) throw new Error('Stacks libraries not loaded');
-
-        console.log('Stacks Remove Liquidity Standard Tx Params:', {
-          contractAddress,
-          contractName,
-          functionName,
-          functionArgsLength: functionArgs.length,
-          network: !!network
-        });
-
-        await new Promise<string>((resolve, reject) => {
-          connect.openContractCall({
-            contractAddress,
-            contractName,
-            functionName,
-            functionArgs,
-            network: network as any,
-            anchorMode: AnchorMode?.Any || 0,
-            postConditionMode: PostConditionMode?.Allow || 0x01,
-            postConditions: [],
-            sponsored: false,
-            appDetails: {
-              name: 'VelumX DEX',
-              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-            },
-            onFinish: async (data: any) => {
-              resolve(data.txId);
-            },
-            onCancel: () => {
-              reject(new Error('User cancelled transaction'));
-            },
-          } as any);
-        });
-      }
+      await connect.request('stx_callContract', {
+        contract: `${contractAddress}.${contractName}`,
+        functionName,
+        functionArgs,
+        network: 'testnet',
+        anchorMode: 'any',
+        postConditionMode: 'allow',
+        postConditions: [],
+        appDetails: {
+          name: 'VelumX DEX',
+          icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+        },
+      });
 
       setState(prev => ({
         ...prev,

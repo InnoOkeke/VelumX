@@ -233,6 +233,12 @@ export function SwapInterface() {
         ? config.stacksPaymasterAddress
         : config.stacksSwapContractAddress).split('.');
 
+      const getCP = (addr: string) => {
+        const parts = addr.split('.');
+        if (parts.length !== 2) throw new Error(`Invalid contract principal: ${addr}`);
+        return Cl.contractPrincipal(parts[0], parts[1]);
+      };
+
       let functionName = 'swap';
       let functionArgs = [];
       const gasFee = 10000;
@@ -241,7 +247,7 @@ export function SwapInterface() {
         functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          Cl.contractPrincipal(tokenOutParts[0], tokenOutParts[1]),
+          getCP(state.outputToken.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
@@ -250,7 +256,7 @@ export function SwapInterface() {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
-          Cl.contractPrincipal(tokenInParts[0], tokenInParts[1]),
+          getCP(state.inputToken.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
@@ -260,8 +266,8 @@ export function SwapInterface() {
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          Cl.contractPrincipal(tokenInParts[0], tokenInParts[1]),
-          Cl.contractPrincipal(tokenOutParts[0], tokenOutParts[1]),
+          getCP(state.inputToken.address),
+          getCP(state.outputToken.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
           Cl.uint(gasFee.toString()),
@@ -271,8 +277,8 @@ export function SwapInterface() {
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          Cl.contractPrincipal(tokenInParts[0], tokenInParts[1]),
-          Cl.contractPrincipal(tokenOutParts[0], tokenOutParts[1]),
+          getCP(state.inputToken.address),
+          getCP(state.outputToken.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
@@ -376,29 +382,29 @@ export function SwapInterface() {
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
       } else {
-        // Standard flow
-        await new Promise<string>((resolve, reject) => {
-          connect.openContractCall({
-            contractAddress,
-            contractName,
-            functionName,
-            functionArgs,
-            network: network as any,
-            anchorMode: AnchorMode?.Any || 0,
-            postConditionMode: PostConditionMode?.Allow || 0x01,
-            postConditions: [],
-            sponsored: false,
-            appDetails: {
-              name: 'VelumX DEX',
-              icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
-            },
-            onFinish: async (data: any) => {
-              resolve(data.txId);
-            },
-            onCancel: () => {
-              reject(new Error('User cancelled transaction'));
-            },
-          } as any);
+        // Standard flow using modern request API
+        const connect = await getStacksConnect() as any;
+        if (!connect || !connect.request) throw new Error('Stacks request API not available');
+
+        console.log('Stacks Swap Standard Tx Params (request API):', {
+          contract: `${contractAddress}.${contractName}`,
+          functionName,
+          functionArgsLength: functionArgs.length,
+          network: 'testnet'
+        });
+
+        await connect.request('stx_callContract', {
+          contract: `${contractAddress}.${contractName}`,
+          functionName,
+          functionArgs,
+          network: 'testnet',
+          anchorMode: 'any',
+          postConditionMode: 'allow',
+          postConditions: [],
+          appDetails: {
+            name: 'VelumX DEX',
+            icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
+          },
         });
       }
 
