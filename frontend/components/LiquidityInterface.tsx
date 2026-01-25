@@ -166,7 +166,7 @@ export function LiquidityInterface() {
     if (config.stacksVexAddress) {
       setTokens(prev => {
         if (!prev || !Array.isArray(prev)) return prev || [];
-        return prev.map(t =>
+        return prev?.map(t =>
           t.symbol === 'VEX' ? { ...t, address: config.stacksVexAddress } : t
         );
       });
@@ -220,7 +220,7 @@ export function LiquidityInterface() {
       const data = await response.json();
 
       if (data.success && data.data && Array.isArray(data.data)) {
-        const pools: Pool[] = data.data.map((pool: any) => ({
+        const pools: Pool[] = data.data?.map((pool: any) => ({
           id: pool.id,
           tokenA: {
             symbol: pool.tokenA.symbol,
@@ -280,7 +280,7 @@ export function LiquidityInterface() {
   const fetchPoolAnalytics = async (pools: Pool[]) => {
     try {
       if (!pools || !Array.isArray(pools)) return;
-      const analyticsPromises = pools.map(async (pool) => {
+      const analyticsPromises = pools?.map(async (pool) => {
         try {
           const response = await fetch(`${config.backendUrl}/api/liquidity/analytics/${pool.id}`, {
             method: 'GET',

@@ -632,12 +632,6 @@ export function BridgeInterface() {
         }}>
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>To</span>
-            {state.direction === 'eth-to-stacks' && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-green-500/30 bg-green-500/10 text-[10px] font-bold text-green-600 dark:text-green-400">
-                <Zap className="w-3 h-3" />
-                <span>GAS DROP ACTIVE</span>
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-4">
             <div className="flex-1 text-4xl font-mono min-w-0" style={{ color: 'var(--text-secondary)' }}>
