@@ -207,12 +207,13 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, uintCV, bufferCV, makeContractCall, contractPrincipalCV } = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, Cl } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
 
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
+      if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
 
       const network = new networkModule.StacksTestnet();
 
@@ -240,51 +241,52 @@ export function SwapInterface() {
         functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          uintCV(amountInMicro.toString()),
-          uintCV(minAmountOutMicro.toString()),
+          Cl.contractPrincipal(tokenOutParts[0], tokenOutParts[1]),
+          Cl.uint(amountInMicro.toString()),
+          Cl.uint(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee.toString()));
+        if (useGasless) functionArgs.push(Cl.uint(gasFee.toString()));
       } else if (isOutputStx) {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         const tokenInParts = state.inputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          uintCV(amountInMicro.toString()),
-          uintCV(minAmountOutMicro.toString()),
+          Cl.contractPrincipal(tokenInParts[0], tokenInParts[1]),
+          Cl.uint(amountInMicro.toString()),
+          Cl.uint(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(uintCV(gasFee.toString()));
+        if (useGasless) functionArgs.push(Cl.uint(gasFee.toString()));
       } else if (useGasless) {
         functionName = 'swap-gasless';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          uintCV(amountInMicro.toString()),
-          uintCV(minAmountOutMicro.toString()),
-          uintCV(gasFee.toString()),
+          Cl.contractPrincipal(tokenInParts[0], tokenInParts[1]),
+          Cl.contractPrincipal(tokenOutParts[0], tokenOutParts[1]),
+          Cl.uint(amountInMicro.toString()),
+          Cl.uint(minAmountOutMicro.toString()),
+          Cl.uint(gasFee.toString()),
         ];
       } else {
         functionName = 'swap';
         const tokenInParts = state.inputToken.address.split('.');
         const tokenOutParts = state.outputToken.address.split('.');
         functionArgs = [
-          contractPrincipalCV(tokenInParts[0], tokenInParts[1]),
-          contractPrincipalCV(tokenOutParts[0], tokenOutParts[1]),
-          uintCV(amountInMicro.toString()),
-          uintCV(minAmountOutMicro.toString()),
+          Cl.contractPrincipal(tokenInParts[0], tokenInParts[1]),
+          Cl.contractPrincipal(tokenOutParts[0], tokenOutParts[1]),
+          Cl.uint(amountInMicro.toString()),
+          Cl.uint(minAmountOutMicro.toString()),
         ];
       }
 
-      console.log('Stacks Swap Tx Params:', {
+      console.log('Stacks Swap Tx Params (Modern Cl):', {
         contractAddress,
         contractName,
         functionName,
         functionArgsLength: functionArgs.length,
         network: !!network,
         AnchorMode: !!AnchorMode,
-        PostConditionMode: !!PostConditionMode
+        PostConditionMode: !!PostConditionMode,
+        ClAvailable: !!Cl
       });
 
       if (functionArgs.some(arg => !arg)) {

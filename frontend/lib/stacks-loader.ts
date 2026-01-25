@@ -3,18 +3,9 @@
  * Centrally manages Stacks libraries to ensure they are only evaluated in the browser.
  */
 
-/**
- * Internal helper to merge module root and default export safely.
- * Handles Next.js/Webpack chunk differences where exports might be wrapped in .default.
- */
-const flattenModule = (mod: any) => {
-    if (!mod) return null;
-    const result = { ...(mod.default || {}), ...mod };
-    return result;
-};
-
 const getRobustExport = (mod: any, testProp: string) => {
     if (!mod) return null;
+    // Checks for a test property on mod, mod.default, or fallback.
     if (mod[testProp]) return mod;
     if (mod.default && mod.default[testProp]) return mod.default;
     return mod.default || mod;
@@ -26,9 +17,9 @@ const getRobustExport = (mod: any, testProp: string) => {
  */
 const normalizeNetwork = (candidate: any) => {
     if (!candidate) return null;
-    // If it's already a class/function, return as is
+    // If it's already a class/function, return as is.
     if (typeof candidate === 'function') return candidate;
-    // If it's an object instance, wrap it in a class to ensure 'new' keyword works
+    // If it's an object instance, wrap it in a class to ensure 'new' keyword works.
     if (typeof candidate === 'object') {
         return class {
             constructor() {
@@ -56,7 +47,8 @@ export const getStacksTransactions = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
     try {
         const mod = await import('@stacks/transactions') as any;
-        return getRobustExport(mod, 'uintCV');
+        // Check for 'Cl' (modern) or 'uintCV' (legacy)
+        return getRobustExport(mod, 'Cl') || getRobustExport(mod, 'uintCV');
     } catch (e) {
         console.error('Failed to load @stacks/transactions', e);
         return null;

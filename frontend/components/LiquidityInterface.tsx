@@ -433,7 +433,8 @@ export function LiquidityInterface() {
 
     try {
       const transactions = await getStacksTransactions() as any;
-      if (!transactions) return;
+      const { Cl } = transactions;
+      if (!transactions || !Cl) return;
 
       const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
 
@@ -445,8 +446,8 @@ export function LiquidityInterface() {
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          transactions.principalCV(a),
-          transactions.principalCV(b),
+          Cl.principal(a),
+          Cl.principal(b),
         ],
         network: 'testnet',
         senderAddress: stacksAddress,
@@ -469,9 +470,9 @@ export function LiquidityInterface() {
           contractName,
           functionName: 'get-lp-balance',
           functionArgs: [
-            transactions.principalCV(a),
-            transactions.principalCV(b),
-            transactions.principalCV(stacksAddress),
+            Cl.principal(a),
+            Cl.principal(b),
+            Cl.principal(stacksAddress),
           ],
           network: 'testnet',
           senderAddress: stacksAddress,
@@ -528,8 +529,8 @@ export function LiquidityInterface() {
         contractName,
         functionName: 'get-pool-reserves',
         functionArgs: [
-          transactions.principalCV(state.tokenA.address),
-          transactions.principalCV(state.tokenB.address),
+          transactions.Cl.principal(state.tokenA.address),
+          transactions.Cl.principal(state.tokenB.address),
         ],
         network: 'testnet',
         senderAddress: stacksAddress || contractAddress,
@@ -569,9 +570,10 @@ export function LiquidityInterface() {
 
     try {
       const transactions = await getStacksTransactions() as any;
-      const network = await getStacksNetwork() as any;
+      const { Cl, AnchorMode, PostConditionMode, makeContractCall } = transactions;
+      const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
-      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+      if (!transactions || !networkModule || !common || !Cl) throw new Error('Stacks libraries not loaded');
 
       const amountAMicro = parseUnits(state.amountA, state.tokenA.decimals);
       const amountBMicro = parseUnits(state.amountB, state.tokenB.decimals);
@@ -600,24 +602,39 @@ export function LiquidityInterface() {
         const tokenParts = tokenToken.address.split('.');
 
         functionArgs = [
-          transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
-          transactions.uintCV(stxAmount),
-          transactions.uintCV(tokenAmount),
-          transactions.uintCV(stxMin),
-          transactions.uintCV(tokenMin),
+          Cl.contractPrincipal(tokenParts[0], tokenParts[1]),
+          Cl.uint(stxAmount.toString()),
+          Cl.uint(tokenAmount.toString()),
+          Cl.uint(stxMin.toString()),
+          Cl.uint(tokenMin.toString()),
         ];
       } else {
         functionName = 'add-liquidity';
         const tokenAParts = state.tokenA.address.split('.');
         const tokenBParts = state.tokenB.address.split('.');
         functionArgs = [
-          transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-          transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-          transactions.uintCV(amountAMicro),
-          transactions.uintCV(amountBMicro),
-          transactions.uintCV(minAmountAMicro),
-          transactions.uintCV(minAmountBMicro),
+          Cl.contractPrincipal(tokenAParts[0], tokenAParts[1]),
+          Cl.contractPrincipal(tokenBParts[0], tokenBParts[1]),
+          Cl.uint(amountAMicro.toString()),
+          Cl.uint(amountBMicro.toString()),
+          Cl.uint(minAmountAMicro.toString()),
+          Cl.uint(minAmountBMicro.toString()),
         ];
+      }
+
+      console.log('Stacks Add Liquidity Tx Params (Modern Cl):', {
+        contractAddress,
+        contractName,
+        functionName,
+        functionArgsLength: functionArgs.length,
+        network: !!networkModule,
+        AnchorMode: !!AnchorMode,
+        PostConditionMode: !!PostConditionMode,
+        ClAvailable: !!Cl
+      });
+
+      if (functionArgs.some(arg => !arg)) {
+        throw new Error('Transaction arguments encoding failed');
       }
 
       const connect = await getStacksConnect() as any;
@@ -630,8 +647,10 @@ export function LiquidityInterface() {
           contractName,
           functionName,
           functionArgs,
-          network: network.STACKS_TESTNET as any,
-          postConditionMode: 0x01 as any,
+          network: new networkModule.StacksTestnet() as any,
+          anchorMode: AnchorMode?.Any || 0,
+          postConditionMode: PostConditionMode?.Allow || 0x01,
+          postConditions: [],
           sponsored: false,
           appDetails: {
             name: 'VelumX DEX',
@@ -739,9 +758,10 @@ export function LiquidityInterface() {
 
     try {
       const transactions = await getStacksTransactions() as any;
-      const network = await getStacksNetwork() as any;
+      const { Cl, AnchorMode, PostConditionMode, makeContractCall } = transactions;
+      const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
-      if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+      if (!transactions || !networkModule || !common || !Cl) throw new Error('Stacks libraries not loaded');
 
       const lpTokenAmountMicro = parseUnits(state.lpTokenAmount, 6);
       const slippageFactor = 1 - (state.slippage / 100);
@@ -772,49 +792,62 @@ export function LiquidityInterface() {
         const minToken = isTokenAStx ? minAmountBMicro : minAmountAMicro;
 
         functionArgs = [
-          transactions.contractPrincipalCV(tokenParts[0], tokenParts[1]),
-          transactions.uintCV(lpTokenAmountMicro),
-          transactions.uintCV(minStx),
-          transactions.uintCV(minToken),
+          Cl.contractPrincipal(tokenParts[0], tokenParts[1]),
+          Cl.uint(lpTokenAmountMicro.toString()),
+          Cl.uint(minStx.toString()),
+          Cl.uint(minToken.toString()),
         ];
-        if (gaslessMode) functionArgs.push(transactions.uintCV(gasFee));
+        if (gaslessMode) functionArgs.push(Cl.uint(gasFee.toString()));
       } else {
         const tokenAParts = state.tokenA.address.split('.');
         const tokenBParts = state.tokenB.address.split('.');
         functionArgs = gaslessMode
           ? [
-            transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-            transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            transactions.uintCV(lpTokenAmountMicro),
-            transactions.uintCV(minAmountAMicro),
-            transactions.uintCV(minAmountBMicro),
-            transactions.uintCV(gasFee),
+            Cl.contractPrincipal(tokenAParts[0], tokenAParts[1]),
+            Cl.contractPrincipal(tokenBParts[0], tokenBParts[1]),
+            Cl.uint(lpTokenAmountMicro.toString()),
+            Cl.uint(minAmountAMicro.toString()),
+            Cl.uint(minAmountBMicro.toString()),
+            Cl.uint(gasFee.toString()),
           ]
           : [
-            transactions.contractPrincipalCV(tokenAParts[0], tokenAParts[1]),
-            transactions.contractPrincipalCV(tokenBParts[0], tokenBParts[1]),
-            transactions.uintCV(lpTokenAmountMicro),
-            transactions.uintCV(minAmountAMicro),
-            transactions.uintCV(minAmountBMicro),
+            Cl.contractPrincipal(tokenAParts[0], tokenAParts[1]),
+            Cl.contractPrincipal(tokenBParts[0], tokenBParts[1]),
+            Cl.uint(lpTokenAmountMicro.toString()),
+            Cl.uint(minAmountAMicro.toString()),
+            Cl.uint(minAmountBMicro.toString()),
           ];
       }
 
+      console.log('Stacks Remove Liquidity Tx Params (Modern Cl):', {
+        contractAddress,
+        contractName,
+        functionName: isStxPool ? (gaslessMode ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-stx') : (gaslessMode ? 'remove-liquidity-gasless' : 'remove-liquidity'),
+        functionArgsLength: functionArgs.length,
+        network: !!networkModule,
+        AnchorMode: !!AnchorMode,
+        PostConditionMode: !!PostConditionMode,
+        ClAvailable: !!Cl,
+        gaslessMode
+      });
+
+      if (functionArgs.some(arg => !arg)) {
+        throw new Error('Transaction arguments encoding failed');
+      }
+
       if (gaslessMode) {
-        const transactions = await getStacksTransactions() as any;
-        const network = await getStacksNetwork() as any;
-        const common = await getStacksCommon() as any;
-        if (!transactions || !network || !common) throw new Error('Stacks libraries not loaded');
+        if (!makeContractCall) throw new Error('SDK function makeContractCall not available');
 
         // Step 1: Build unsigned sponsored transaction
-        const tx = await transactions.makeContractCall({
+        const tx = await makeContractCall({
           contractAddress: contractAddress,
           contractName: contractName,
           functionName: isStxPool ? 'remove-liquidity-stx-gasless' : 'remove-liquidity-gasless',
           functionArgs: functionArgs,
           senderAddress: stacksAddress,
-          network: network.STACKS_TESTNET,
-          anchorMode: transactions.AnchorMode.Any,
-          postConditionMode: 0x01 as any,
+          network: new networkModule.StacksTestnet() as any,
+          anchorMode: AnchorMode?.Any || 0,
+          postConditionMode: PostConditionMode?.Allow || 0x01,
           postConditions: [],
           sponsored: true,
         } as any);
@@ -868,9 +901,17 @@ export function LiquidityInterface() {
         }
       } else {
         // Standard flow
-        const network = await getStacksNetwork() as any;
+        const network = new networkModule.StacksTestnet();
         const connect = await getStacksConnect() as any;
         if (!network || !connect) throw new Error('Stacks libraries not loaded');
+
+        console.log('Stacks Remove Liquidity Standard Tx Params:', {
+          contractAddress,
+          contractName,
+          functionName,
+          functionArgsLength: functionArgs.length,
+          network: !!network
+        });
 
         await new Promise<string>((resolve, reject) => {
           connect.openContractCall({
@@ -878,8 +919,10 @@ export function LiquidityInterface() {
             contractName,
             functionName: isStxPool ? 'remove-liquidity-stx' : 'remove-liquidity',
             functionArgs,
-            network: network.STACKS_TESTNET as any,
-            postConditionMode: 0x01 as any,
+            network: network as any,
+            anchorMode: AnchorMode?.Any || 0,
+            postConditionMode: PostConditionMode?.Allow || 0x01,
+            postConditions: [],
             sponsored: false,
             appDetails: {
               name: 'VelumX DEX',
@@ -891,7 +934,7 @@ export function LiquidityInterface() {
             onCancel: () => {
               reject(new Error('User cancelled transaction'));
             },
-          });
+          } as any);
         });
       }
 

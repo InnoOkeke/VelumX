@@ -350,18 +350,24 @@ export function BridgeInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, uintCV, bufferCV, makeContractCall } = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, Cl } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
 
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
+      if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
 
       const network = new networkModule.StacksTestnet();
 
+      if (!network) throw new Error('Could not load Stacks network configuration');
+
       const amountInMicroUsdc = parseUnits(state.amount, 6);
-      const recipientBytes = encodeEthereumAddress(ethereumAddress);
+      const recipientBytes = ethereumAddress.startsWith('0x')
+        ? common.hexToBytes(ethereumAddress.substring(2))
+        : common.hexToBytes(ethereumAddress);
 
       const useGasless = state.gaslessMode;
 
@@ -382,24 +388,25 @@ export function BridgeInterface() {
 
       const functionArgs = useGasless
         ? [
-          uintCV(amountInMicroUsdc.toString()),
-          uintCV(parseUnits(state.feeEstimate?.usdcx || '0', 6).toString()),
-          bufferCV(recipientBytes),
+          Cl.uint(amountInMicroUsdc.toString()),
+          Cl.uint(parseUnits(state.feeEstimate?.usdcx || '0', 6).toString()),
+          Cl.buffer(recipientBytes),
         ]
         : [
-          uintCV(amountInMicroUsdc.toString()),
-          uintCV("0"), // native-domain: 0 for Ethereum
-          bufferCV(recipientBytes),
+          Cl.uint(amountInMicroUsdc.toString()),
+          Cl.uint("0"), // native-domain: 0 for Ethereum
+          Cl.buffer(recipientBytes),
         ];
 
-      console.log('Stacks Bridge Tx Params:', {
+      console.log('Stacks Bridge Tx Params (Modern Cl):', {
         contractAddress,
         contractName,
         functionName,
         functionArgsLength: functionArgs.length,
         network: !!network,
         AnchorMode: !!AnchorMode,
-        PostConditionMode: !!PostConditionMode
+        PostConditionMode: !!PostConditionMode,
+        ClAvailable: !!Cl
       });
 
       if (functionArgs.some(arg => !arg)) {
