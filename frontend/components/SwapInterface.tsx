@@ -318,17 +318,16 @@ export function SwapInterface() {
           fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
         };
 
-        if (publicKey) {
-          txOptions.publicKey = publicKey;
-          // Robust conversion: Stacks SDK v7 may require Uint8Array for publicKey.
-          // Since we bypass fee estimation with fee:0, this should now be safe.
-          if (typeof txOptions.publicKey === 'string' && common?.hexToBytes) {
-            try {
-              txOptions.publicKey = common.hexToBytes(txOptions.publicKey);
-            } catch (e) {
-              console.error('Failed to convert publicKey to bytes', e);
-            }
+        // Helper to convert to Buffer if available (Stacks SDK preference)
+        const toBuffer = (input: Uint8Array | string): any => {
+          if (typeof input === 'string') {
+            return (window as any).Buffer ? (window as any).Buffer.from(input, 'hex') : common.hexToBytes(input);
           }
+          return (window as any).Buffer ? (window as any).Buffer.from(input) : input;
+        };
+
+        if (publicKey) {
+          txOptions.publicKey = toBuffer(publicKey);
         } else {
           console.error('Gasless Swap Failed: Missing Public Key', {
             stacksAddress,
@@ -338,6 +337,11 @@ export function SwapInterface() {
           });
           throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
         }
+
+        console.log('Stacks Swap Tx Params (Buffer Optimized):', {
+          pkType: txOptions.publicKey?.constructor?.name,
+          fee: txOptions.fee,
+        });
 
         const tx = await makeUnsignedContractCall(txOptions);
 
