@@ -378,7 +378,9 @@ export function SwapInterface() {
         };
 
         if (publicKey) {
-          txOptions.publicKey = toUint8Array(publicKey);
+          // Fix: Pass publicKey as hex string. The SDK handles string->bytes conversion internally 
+          // and this avoids 'Uint8Array expected' errors due to polyfill mismatches.
+          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : common.bytesToHex(publicKey);
         } else {
           console.error('Gasless Swap Failed: Missing Public Key', {
             stacksAddress,

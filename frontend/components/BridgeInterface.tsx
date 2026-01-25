@@ -467,7 +467,9 @@ export function BridgeInterface() {
         ];
 
         if (publicKey) {
-          txOptions.publicKey = toUint8Array(publicKey);
+          // Fix: Pass publicKey as hex string. The SDK handles string->bytes conversion internally 
+          // and this avoids 'Uint8Array expected' errors due to polyfill mismatches.
+          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : common.bytesToHex(publicKey);
           txOptions.functionArgs = safeFunctionArgs; // Use safe args
         } else {
           console.error('Gasless Transaction Failed: Missing Public Key', {
