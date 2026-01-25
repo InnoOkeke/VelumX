@@ -407,7 +407,8 @@ export function SwapInterface() {
           throw new Error('Transaction serialization failed');
         }
 
-        const txHex = common?.bytesToHex(serialized as any);
+        // Use Buffer for hex conversion to avoid SDK's strict Uint8Array checks
+        const txHex = Buffer.from(serialized).toString('hex');
         if (!txHex) throw new Error('Failed to convert transaction to hex');
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
