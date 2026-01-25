@@ -102,7 +102,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
       if (data.success && data.data) {
         const analyticsData: PoolAnalytics = {
           ...data.data,
-          historicalData: data.data.historicalData?.map((point: any) => ({
+          historicalData: (data.data.historicalData || []).map((point: any) => ({
             ...point,
             timestamp: new Date(point.timestamp),
           })) || [],
@@ -146,7 +146,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
   const getChartData = () => {
     if (!analytics?.historicalData) return [];
 
-    return analytics.historicalData.map(point => ({
+    return (analytics.historicalData || []).map(point => ({
       timestamp: point.timestamp.toLocaleDateString(),
       value: selectedChart === 'tvl' ? point.tvl :
         selectedChart === 'volume' ? point.volume :
@@ -169,7 +169,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
     if (!analytics?.liquidityDepth) return 0;
 
     // Simple price impact calculation based on liquidity depth
-    const totalLiquidity = analytics.liquidityDepth.bids.reduce((sum, level) => sum + level.liquidity, 0);
+    const totalLiquidity = (analytics.liquidityDepth.bids || []).reduce((sum, level) => sum + level.liquidity, 0);
     if (totalLiquidity === 0) return 0;
 
     const impactPercentage = (tradeSize / totalLiquidity) * 100;
@@ -300,8 +300,8 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                           key={key}
                           onClick={() => setSelectedChart(key as any)}
                           className={`px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1 ${selectedChart === key
-                              ? 'bg-purple-600 text-white'
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                            ? 'bg-purple-600 text-white'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                             }`}
                           style={selectedChart !== key ? { color: 'var(--text-secondary)' } : {}}
                         >
@@ -323,8 +323,8 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                           key={key}
                           onClick={() => setSelectedTimeframe(key as any)}
                           className={`px-3 py-2 text-sm font-semibold transition-all ${selectedTimeframe === key
-                              ? 'bg-purple-600 text-white'
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                            ? 'bg-purple-600 text-white'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                             }`}
                           style={selectedTimeframe !== key ? { color: 'var(--text-secondary)' } : {}}
                         >
@@ -356,8 +356,8 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                                 minHeight: '4px',
                               }}
                               title={`${point.timestamp}: ${selectedChart === 'tvl' || selectedChart === 'volume' || selectedChart === 'fees'
-                                  ? formatCurrency(point.value)
-                                  : formatNumber(point.value)
+                                ? formatCurrency(point.value)
+                                : formatNumber(point.value)
                                 }`}
                             />
                           </div>
@@ -427,10 +427,10 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                             {formatCurrency(amount)} trade
                           </span>
                           <span className={`font-semibold ${calculatePriceImpact(amount) > 5
-                              ? 'text-red-600 dark:text-red-400'
-                              : calculatePriceImpact(amount) > 1
-                                ? 'text-yellow-600 dark:text-yellow-400'
-                                : 'text-green-600 dark:text-green-400'
+                            ? 'text-red-600 dark:text-red-400'
+                            : calculatePriceImpact(amount) > 1
+                              ? 'text-yellow-600 dark:text-yellow-400'
+                              : 'text-green-600 dark:text-green-400'
                             }`}>
                             {formatPercentage(calculatePriceImpact(amount))}
                           </span>
@@ -466,8 +466,8 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                       24h Price Change
                     </p>
                     <p className={`text-lg font-bold ${analytics.priceChange24h >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-600 dark:text-red-400'
                       }`}>
                       {analytics.priceChange24h >= 0 ? '+' : ''}{formatPercentage(analytics.priceChange24h)}
                     </p>

@@ -81,7 +81,7 @@ export function TransactionHistory() {
 
       // Remove duplicates based on transaction ID
       const uniqueTxs = Array.from(
-        new Map(allTransactions.map(tx => [tx.id, tx])).values()
+        new Map((allTransactions || []).map(tx => [tx.id, tx])).values()
       );
 
       setTransactions(uniqueTxs);
@@ -269,7 +269,7 @@ export function TransactionHistory() {
         {/* Transaction List */}
         {sortedTransactions.length > 0 && (
           <div className="space-y-3">
-            {sortedTransactions.map((tx) => (
+            {(sortedTransactions || []).map((tx) => (
               <div
                 key={tx.id}
                 onClick={() => setSelectedTx(tx.id)}

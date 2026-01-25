@@ -275,7 +275,7 @@ export function PoolBrowser() {
                 </button>
               </div>
             ) : (
-              filteredPools.map(pool => (
+              (filteredPools || []).map(pool => (
                 <div
                   key={pool.id}
                   className="rounded-2xl p-6 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 cursor-pointer"

@@ -424,8 +424,8 @@ export function PositionDashboard() {
               )}
             </div>
             <p className={`text-3xl font-bold mb-1 ${state.portfolio.totalReturns >= 0
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-red-600 dark:text-red-400'
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-600 dark:text-red-400'
               }`}>
               {formatCurrency(state.portfolio.totalReturns)}
             </p>
@@ -468,8 +468,8 @@ export function PositionDashboard() {
               <Activity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <p className={`text-3xl font-bold mb-1 ${state.portfolio.totalImpermanentLoss <= 0
-                ? 'text-orange-600 dark:text-orange-400'
-                : 'text-green-600 dark:text-green-400'
+              ? 'text-orange-600 dark:text-orange-400'
+              : 'text-green-600 dark:text-green-400'
               }`}>
               {formatCurrency(Math.abs(state.portfolio.totalImpermanentLoss))}
             </p>
@@ -511,7 +511,7 @@ export function PositionDashboard() {
           </div>
         ) : (
           <div className="space-y-4">
-            {state.positions.map((position) => {
+            {(state.positions || []).map((position) => {
               const isExpanded = state.expandedPositions.has(position.poolId);
               const returnPercentage = calculateReturnPercentage(position);
               const [tokenASymbol, tokenBSymbol] = position.poolId.split('-');
@@ -569,8 +569,8 @@ export function PositionDashboard() {
                             Returns
                           </p>
                           <p className={`font-bold ${returnPercentage >= 0
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-600 dark:text-red-400'
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
                             }`}>
                             {formatPercentage(returnPercentage)}
                           </p>
@@ -662,8 +662,8 @@ export function PositionDashboard() {
                           <div className="flex items-center justify-between text-sm">
                             <span style={{ color: 'var(--text-secondary)' }}>Impermanent Loss:</span>
                             <span className={`font-semibold ${position.impermanentLoss <= 0
-                                ? 'text-orange-600 dark:text-orange-400'
-                                : 'text-green-600 dark:text-green-400'
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : 'text-green-600 dark:text-green-400'
                               }`}>
                               {position.impermanentLoss <= 0 ? '' : '+'}{formatCurrency(position.impermanentLoss)}
                             </span>
@@ -728,7 +728,7 @@ export function PositionDashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {state.history.map((tx) => {
+              {(state.history || []).map((tx) => {
                 const [tokenASymbol, tokenBSymbol] = tx.poolId.split('-');
                 const isAdd = tx.action === 'add';
 
@@ -744,8 +744,8 @@ export function PositionDashboard() {
                       <div className="flex items-center gap-4">
                         {/* Action Icon */}
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isAdd
-                            ? 'bg-green-100 dark:bg-green-900/30'
-                            : 'bg-red-100 dark:bg-red-900/30'
+                          ? 'bg-green-100 dark:bg-green-900/30'
+                          : 'bg-red-100 dark:bg-red-900/30'
                           }`}>
                           {isAdd ? (
                             <ArrowUpRight className="w-5 h-5 text-green-600 dark:text-green-400" />
