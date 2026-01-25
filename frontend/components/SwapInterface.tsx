@@ -70,7 +70,7 @@ const DEFAULT_TOKENS: Token[] = [
 ];
 
 export function SwapInterface() {
-  const { stacksAddress, stacksConnected, balances, fetchBalances } = useWallet();
+  const { stacksAddress, stacksConnected, balances, fetchBalances, stacksPublicKey, recoverPublicKey } = useWallet();
   const config = useConfig();
 
   const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
@@ -570,6 +570,13 @@ export function SwapInterface() {
               </>
             ) : !stacksConnected ? (
               'Connect Wallet'
+            ) : state.gaslessMode && !stacksPublicKey ? (
+              <span onClick={async (e) => {
+                e.preventDefault();
+                await recoverPublicKey();
+              }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
+                Verify Wallet (Enable Gasless)
+              </span>
             ) : (
               <>
                 <ArrowDownUp className="w-5 h-5" />

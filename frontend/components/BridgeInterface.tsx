@@ -40,6 +40,8 @@ export function BridgeInterface() {
     fetchBalances,
     isFetchingBalances,
     switchEthereumNetwork,
+    stacksPublicKey,
+    recoverPublicKey,
   } = useWallet();
 
   const config = useConfig();
@@ -762,7 +764,21 @@ export function BridgeInterface() {
                 />
               </button>
             </div>
-            {state.gaslessMode && state.feeEstimate && (
+            {state.gaslessMode && !stacksPublicKey && (
+              <div className="mt-2 mb-2 p-3 bg-red-500/10 rounded-lg flex flex-col gap-2">
+                <p className="text-xs text-red-600 dark:text-red-400">Gasless transactions require verification.</p>
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    await recoverPublicKey();
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors w-full"
+                >
+                  Verify Wallet & Enable Gasless
+                </button>
+              </div>
+            )}
+            {state.gaslessMode && state.feeEstimate && stacksPublicKey && (
               <div className="mt-4 pt-4 text-sm" style={{
                 borderTop: `1px solid var(--border-color)`,
                 color: 'var(--text-primary)'

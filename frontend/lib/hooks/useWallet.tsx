@@ -45,6 +45,7 @@ interface WalletContextType extends WalletState {
   fetchBalances: () => Promise<void>;
   getAvailableWallets: () => { ethereum: EthereumWalletType[], stacks: StacksWalletType[] };
   switchEthereumNetwork: () => Promise<boolean>;
+  recoverPublicKey: () => Promise<string | null>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -359,6 +360,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [state.ethereumAddress, state.stacksAddress, fetchEthereumBalances, fetchStacksBalances]);
 
+  const recoverPublicKey = useCallback(async () => {
+    if (!state.stacksAddress) throw new Error('Stacks wallet not connected');
+
+    try {
+      const connectLib = await getStacksConnect();
+      if (!connectLib) throw new Error('Stacks library not available');
+
+      const showSignMessage = connectLib.showSignMessage || connectLib.openSignatureRequestPopup;
+      if (!showSignMessage) throw new Error('Sign message function not available');
+
+      return new Promise<string | null>((resolve, reject) => {
+        showSignMessage({
+          message: 'Verify Account ownership to enable gasless transactions.',
+          appDetails: { name: 'VelumX', icon: window.location.origin + '/favicon.ico' },
+          onFinish: (data: any) => {
+            const publicKey = data.publicKey;
+            if (publicKey) {
+              console.log('Recovered Public Key:', publicKey);
+              setState(prev => ({ ...prev, stacksPublicKey: publicKey }));
+              // Persist logic handles auto-saving
+              resolve(publicKey);
+            } else {
+              resolve(null);
+            }
+          },
+          onCancel: () => resolve(null),
+        });
+      });
+    } catch (e) {
+      console.error('Failed to recover public key:', e);
+      return null;
+    }
+  }, [state.stacksAddress]);
+
   const value: WalletContextType = {
     ...state,
     connectEthereum,
@@ -371,7 +406,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ethereum: detectEthereumWallets(),
       stacks: ['xverse', 'leather', 'hiro'] as StacksWalletType[]
     }),
-    switchEthereumNetwork
+    switchEthereumNetwork,
+    recoverPublicKey
   };
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

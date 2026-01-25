@@ -43,6 +43,8 @@ export const getStacksConnect = async (): Promise<any> => {
             request: getExport(mod, 'request'),
             showConnect: getExport(mod, 'showConnect'),
             openContractCall: getExport(mod, 'openContractCall'),
+            showSignMessage: getExport(mod, 'showSignMessage'),
+            openSignatureRequestPopup: getExport(mod, 'openSignatureRequestPopup'), // Alias/Fallback
         };
         return moduleCache.connect;
     } catch (e) {
