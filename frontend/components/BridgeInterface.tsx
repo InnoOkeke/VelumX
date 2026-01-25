@@ -444,6 +444,15 @@ export function BridgeInterface() {
 
         if (publicKey) {
           txOptions.publicKey = publicKey;
+          // Robust conversion: Stacks SDK v7 may require Uint8Array for publicKey locally.
+          // Since we bypass fee estimation with fee:0, this should now be safe.
+          if (typeof txOptions.publicKey === 'string' && common?.hexToBytes) {
+            try {
+              txOptions.publicKey = common.hexToBytes(txOptions.publicKey);
+            } catch (e) {
+              console.error('Failed to convert publicKey to bytes', e);
+            }
+          }
         } else {
           console.error('Gasless Transaction Failed: Missing Public Key', {
             stacksAddress,
