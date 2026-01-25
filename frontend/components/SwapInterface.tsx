@@ -319,6 +319,14 @@ export function SwapInterface() {
 
         if (publicKey) {
           txOptions.publicKey = publicKey;
+          // Robust conversion: Stacks SDK v7 may require Uint8Array for publicKey
+          if (typeof txOptions.publicKey === 'string' && common?.hexToBytes) {
+            try {
+              txOptions.publicKey = common.hexToBytes(txOptions.publicKey);
+            } catch (e) {
+              console.error('Failed to convert publicKey to bytes', e);
+            }
+          }
         } else {
           console.error('Gasless Swap Failed: Missing Public Key', {
             stacksAddress,
