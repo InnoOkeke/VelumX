@@ -441,7 +441,11 @@ export function SwapInterface() {
           });
         } catch (error: any) {
           // Failover for Legacy Leather signature
-          if (error?.code === -32601 || error?.message?.includes('is not supported')) {
+          // We must check both top-level code/message and nested JSON-RPC error object
+          const code = error?.code || error?.error?.code;
+          const message = error?.message || error?.error?.message;
+
+          if (code === -32601 || message?.includes('is not supported')) {
             console.warn('Standard RPC request failed, trying legacy Leather signature...');
             response = await provider.request('stx_signTransaction', requestParams);
           } else {

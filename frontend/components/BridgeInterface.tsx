@@ -540,8 +540,12 @@ export function BridgeInterface() {
           });
         } catch (error: any) {
           // Failover for Legacy Leather Provider which expects request('method', params)
-          // Error code -32601 or message "is not supported" usually indicates method name was an object
-          if (error?.code === -32601 || error?.message?.includes('is not supported')) {
+          // Error code -32601 usually indicates method name was an object (interpreted as "[object Object]")
+          // We must check both top-level code/message and nested JSON-RPC error object
+          const code = error?.code || error?.error?.code;
+          const message = error?.message || error?.error?.message;
+
+          if (code === -32601 || message?.includes('is not supported')) {
             console.warn('Standard RPC request failed, trying legacy Leather signature...');
             response = await provider.request('stx_signTransaction', requestParams);
           } else {
