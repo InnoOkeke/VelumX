@@ -78,7 +78,6 @@ VelumX uses a **Paymaster smart contract** that:
 - Attestation handling
 - Transaction history
 - Explorer links
-RELAYER_PRIVATE_KEY=00f64ff818f481b7fcc4d72fc1df37a02b6af4fb81deafc30e6d5d057bcf
 ---
 
 ## 🏗️ Architecture

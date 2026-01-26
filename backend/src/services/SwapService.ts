@@ -99,6 +99,11 @@ export class SwapService {
     });
 
     try {
+      // Validate configuration
+      if (!this.config.stacksRpcUrl) {
+        throw new Error('STACKS_RPC_URL is not defined in configuration');
+      }
+
       // Parse contract address
       const parts = this.config.stacksSwapContractAddress.split('.');
       const contractAddress = parts[0];
@@ -143,19 +148,44 @@ export class SwapService {
         client: { baseUrl: this.config.stacksRpcUrl },
       });
 
-      // Call quote-swap read-only function
-      const result = await fetchCallReadOnlyFunction({
+      logger.debug('Calling quote-swap with params', {
         contractAddress,
         contractName,
         functionName: 'quote-swap',
-        functionArgs: [
-          principalCV(tokenInPrincipal),
-          principalCV(tokenOutPrincipal),
-          uintCV(inputAmount),
-        ],
-        network,
-        senderAddress: contractAddress,
+        tokenIn: tokenInPrincipal,
+        tokenOut: tokenOutPrincipal,
+        inputAmount: inputAmount.toString(),
+        networkUrl: this.config.stacksRpcUrl
       });
+
+      // Call quote-swap read-only function
+      let result;
+      try {
+        result = await fetchCallReadOnlyFunction({
+          contractAddress,
+          contractName,
+          functionName: 'quote-swap',
+          functionArgs: [
+            principalCV(tokenInPrincipal),
+            principalCV(tokenOutPrincipal),
+            uintCV(inputAmount),
+          ],
+          network,
+          senderAddress: contractAddress,
+        });
+      } catch (callError) {
+        logger.error('Stacks read-only call failed', {
+          error: callError,
+          params: {
+            contractAddress,
+            contractName,
+            tokenIn: tokenInPrincipal,
+            tokenOut: tokenOutPrincipal,
+            inputAmount: inputAmount.toString()
+          }
+        });
+        throw new Error(`Contract call failed: ${callError instanceof Error ? callError.message : 'Unknown error'}`);
+      }
 
       // Parse result
       const resultJson = cvToJSON(result);

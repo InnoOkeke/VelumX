@@ -9,10 +9,10 @@ import { poolDiscoveryService } from '../services/PoolDiscoveryService';
 import { positionTrackingService } from '../services/PositionTrackingService';
 import { swapLiquidityIntegrationService, TransactionEventType } from '../services/SwapLiquidityIntegrationService';
 import { logger } from '../utils/logger';
-import { 
-  AddLiquidityParams, 
-  RemoveLiquidityParams, 
-  OptimalAmountParams 
+import {
+  AddLiquidityParams,
+  RemoveLiquidityParams,
+  OptimalAmountParams
 } from '../types/liquidity';
 import {
   validateAddLiquidity,
@@ -65,7 +65,7 @@ router.get('/pools', validatePagination, async (req: Request, res: Response) => 
     });
 
     let pools;
-    
+
     if (search) {
       // Use search functionality from PoolDiscoveryService
       pools = await poolDiscoveryService.searchPools(search as string);
@@ -79,7 +79,7 @@ router.get('/pools', validatePagination, async (req: Request, res: Response) => 
     const limitNum = parseInt(limit as string);
     const startIndex = (pageNum - 1) * limitNum;
     const endIndex = startIndex + limitNum;
-    
+
     const paginatedPools = pools.slice(startIndex, endIndex);
 
     // Convert bigint values to strings for JSON serialization
@@ -127,7 +127,7 @@ router.get('/pools/:poolId', validatePoolId, async (req: Request, res: Response)
 
     // Parse pool ID to get token symbols
     const [tokenASymbol, tokenBSymbol] = poolId.split('-');
-    
+
     if (!tokenASymbol || !tokenBSymbol) {
       return res.status(400).json({
         success: false,
@@ -386,7 +386,7 @@ router.get('/positions/:address/:poolId', validateUserAddress, validatePoolId, a
 
     // Parse pool ID to get token addresses
     const [tokenA, tokenB] = poolId.split('-');
-    
+
     if (!tokenA || !tokenB) {
       return res.status(400).json({
         success: false,
@@ -413,14 +413,57 @@ router.get('/positions/:address/:poolId', validateUserAddress, validatePoolId, a
       },
     });
   } catch (error) {
-    logger.error('Failed to fetch user position details', { 
-      address: req.params.address, 
-      poolId: req.params.poolId, 
-      error 
+    logger.error('Failed to fetch user position details', {
+      address: req.params.address,
+      poolId: req.params.poolId,
+      error
     });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch user position details',
+    });
+  }
+});
+
+/**
+ * GET /api/liquidity/analytics/:poolId
+ * Get analytics data for a specific pool
+ * Fixes 404 error in frontend
+ */
+router.get('/analytics/:poolId', validatePoolId, async (req: Request, res: Response) => {
+  try {
+    const poolId = Array.isArray(req.params.poolId) ? req.params.poolId[0] : req.params.poolId;
+    const { timeframe = '24h' } = req.query;
+
+    logger.info('Fetching pool analytics', { poolId, timeframe });
+
+    // Mock analytics data
+    // In a real implementation, this would come from an indexing service or database
+    const mockAnalytics = {
+      poolId,
+      tvl: 1250000 + Math.random() * 50000,
+      volume24h: 45000 + Math.random() * 5000,
+      fees24h: 135 + Math.random() * 15,
+      apr: 12.5 + Math.random() * 2,
+      priceHistory: Array.from({ length: 24 }, (_, i) => ({
+        timestamp: new Date(Date.now() - (23 - i) * 3600000).toISOString(),
+        price: 1.0 + (Math.random() * 0.1 - 0.05),
+      })),
+      volumeHistory: Array.from({ length: 7 }, (_, i) => ({
+        timestamp: new Date(Date.now() - (6 - i) * 86400000).toISOString(),
+        volume: 40000 + Math.random() * 10000,
+      })),
+    };
+
+    res.json({
+      success: true,
+      data: mockAnalytics,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch pool analytics', { poolId: req.params.poolId, error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch pool analytics',
     });
   }
 });
@@ -763,7 +806,7 @@ router.post('/validate', async (req: Request, res: Response) => {
 
     if (operation === 'add') {
       const { amountADesired, amountBDesired } = req.body;
-      
+
       if (!amountADesired || !amountBDesired) {
         return res.status(400).json({
           success: false,
@@ -784,7 +827,7 @@ router.post('/validate', async (req: Request, res: Response) => {
       validation = await liquidityService.validateLiquidityOperation(params);
     } else if (operation === 'remove') {
       const { liquidity } = req.body;
-      
+
       if (!liquidity) {
         return res.status(400).json({
           success: false,
@@ -849,7 +892,7 @@ router.get('/recommendations/:userAddress', validateUserAddress, async (req: Req
     logger.info('Fetching pool recommendations', { userAddress, riskTolerance });
 
     const { liquiditySuggestionsService } = await import('../services/LiquiditySuggestionsService');
-    
+
     const recommendations = await liquiditySuggestionsService.getOptimalPoolRecommendations(
       userAddress,
       {
@@ -897,7 +940,7 @@ router.get('/risk/:poolId', validatePoolId, async (req: Request, res: Response) 
     logger.info('Fetching pool risk assessment', { poolId });
 
     const { liquiditySuggestionsService } = await import('../services/LiquiditySuggestionsService');
-    
+
     const riskAssessment = await liquiditySuggestionsService.assessPoolRisk(poolId);
 
     res.json({
@@ -925,7 +968,7 @@ router.get('/rebalancing/:userAddress', validateUserAddress, async (req: Request
     logger.info('Fetching rebalancing suggestions', { userAddress });
 
     const { liquiditySuggestionsService } = await import('../services/LiquiditySuggestionsService');
-    
+
     const suggestions = await liquiditySuggestionsService.getRebalancingSuggestions(userAddress);
 
     // Serialize bigint values
@@ -965,7 +1008,7 @@ router.get('/fees/history/:userAddress', validateUserAddress, async (req: Reques
     logger.info('Fetching fee history', { userAddress, timeframe });
 
     const { feeCalculatorService } = await import('../services/FeeCalculatorService');
-    
+
     const history = await feeCalculatorService.getFeeHistory(userAddress, timeframe as any);
 
     res.json({
@@ -994,7 +1037,7 @@ router.get('/fees/projection/:poolId', validatePoolId, async (req: Request, res:
     logger.info('Fetching fee projection', { poolId, amount, timeframe });
 
     const { feeCalculatorService } = await import('../services/FeeCalculatorService');
-    
+
     const projection = await feeCalculatorService.projectFeeEarnings(
       poolId,
       parseFloat(amount as string),
@@ -1027,7 +1070,7 @@ router.get('/fees/tax-report/:userAddress', validateUserAddress, async (req: Req
     logger.info('Generating tax report', { userAddress, year });
 
     const { feeCalculatorService } = await import('../services/FeeCalculatorService');
-    
+
     const taxReport = await feeCalculatorService.generateFeeReport(
       userAddress,
       parseInt(year as string)
