@@ -531,10 +531,23 @@ export function BridgeInterface() {
           network: 'testnet',
         };
 
-        const response = await provider.request({
-          method: 'stx_signTransaction',
-          params: requestParams
-        });
+        let response;
+        try {
+          // Try standard EIP-1193 style request first
+          response = await provider.request({
+            method: 'stx_signTransaction',
+            params: requestParams
+          });
+        } catch (error: any) {
+          // Failover for Legacy Leather Provider which expects request('method', params)
+          // Error code -32601 or message "is not supported" usually indicates method name was an object
+          if (error?.code === -32601 || error?.message?.includes('is not supported')) {
+            console.warn('Standard RPC request failed, trying legacy Leather signature...');
+            response = await provider.request('stx_signTransaction', requestParams);
+          } else {
+            throw error;
+          }
+        }
 
         if (!response || !response.result || !response.result.transaction) {
           throw new Error('Wallet failed to sign the transaction. Please try again.');
