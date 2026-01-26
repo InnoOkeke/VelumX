@@ -26,6 +26,9 @@ export class PaymasterService {
   private readonly RATES_CACHE_DURATION = 300000; // 5 minutes
   private cachedRelayerKey: string | null = null;
   private relayerNonce: bigint | null = null;
+  private static lastSponsorshipTime = 0;
+  private static isCircuitBroken = false;
+  private static circuitBreakEndTime = 0;
 
   /**
    * Fetches current exchange rates (STX/USD, USDC/USD)
@@ -150,6 +153,26 @@ export class PaymasterService {
           this.cachedRelayerKey = this.config.relayerPrivateKey;
         }
       }
+
+      // Check circuit breaker
+      if (PaymasterService.isCircuitBroken) {
+        if (Date.now() < PaymasterService.circuitBreakEndTime) {
+          const waitTime = Math.ceil((PaymasterService.circuitBreakEndTime - Date.now()) / 1000);
+          throw new Error(`Relayer mempool congested. Please wait ${waitTime}s before retrying.`);
+        }
+        PaymasterService.isCircuitBroken = false;
+      }
+
+      // Mandatory throttling: min 5s between sponsorships to prevent mempool bursts
+      const now = Date.now();
+      const timeSinceLast = now - PaymasterService.lastSponsorshipTime;
+      const MIN_DELAY = 5000;
+      if (timeSinceLast < MIN_DELAY) {
+        const wait = MIN_DELAY - timeSinceLast;
+        logger.info(`Applying mandatory throttling, waiting ${wait}ms`);
+        await new Promise(resolve => setTimeout(resolve, wait));
+      }
+      PaymasterService.lastSponsorshipTime = Date.now();
 
       // Check relayer balance before sponsoring
       await this.checkRelayerBalance();
@@ -305,6 +328,13 @@ export class PaymasterService {
         const errorMsg = broadcastResponse ?
           `Broadcast failed: ${broadcastResponse.error}. Reason: ${broadcastResponse.reason || 'unknown'}` :
           `Broadcast failed after ${MAX_BROADCAST_RETRIES} attempts.`;
+
+        // If we hit TooMuchChaining after all retries, break the circuit
+        if (errorMsg.includes('TooMuchChaining')) {
+          logger.error('TooMuchChaining persistent, breaking circuit for 60s');
+          PaymasterService.isCircuitBroken = true;
+          PaymasterService.circuitBreakEndTime = Date.now() + 60000;
+        }
 
         logger.error('Final broadcast failure', {
           error: errorMsg,
