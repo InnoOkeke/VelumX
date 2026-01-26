@@ -154,17 +154,24 @@ export class PaymasterService {
       // Check relayer balance before sponsoring
       await this.checkRelayerBalance();
 
-      // Check mempool congestion for the relayer
-      const mempoolDepth = await this.getMempoolDepth(this.config.relayerStacksAddress);
-      const MEMPOOL_THRESHOLD = 20; // Stacks node limit usually around 25 per account
+      // Check mempool congestion for the relayer with deterministic polling
+      const MEMPOOL_THRESHOLD = 15; // Tighter safety limit for Hiro Testnet (usually 25)
+      const MAX_WAIT_MS = 30000;    // Max 30 seconds wait
+      const POLL_INTERVAL = 5000;   // Check every 5s
+      let waited = 0;
 
-      if (mempoolDepth >= MEMPOOL_THRESHOLD) {
-        logger.warn('Relayer mempool congested, applying backoff', {
+      while (waited < MAX_WAIT_MS) {
+        const mempoolDepth = await this.getMempoolDepth(this.config.relayerStacksAddress);
+        if (mempoolDepth < MEMPOOL_THRESHOLD) break;
+
+        logger.warn('Relayer mempool congested, waiting...', {
           depth: mempoolDepth,
-          threshold: MEMPOOL_THRESHOLD
+          threshold: MEMPOOL_THRESHOLD,
+          waited: `${waited / 1000}s`
         });
-        // Wait a few seconds to let some transactions clear
-        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        waited += POLL_INTERVAL;
       }
 
       // Validate user has sufficient USDCx balance
