@@ -14,7 +14,7 @@ import {
   AnchorMode,
   PostConditionMode,
 } from '@stacks/transactions';
-import { StacksTestnet } from '@stacks/network';
+import { STACKS_TESTNET, createNetwork } from '@stacks/network';
 
 export class PaymasterService {
   private config = getConfig();
@@ -156,7 +156,11 @@ export class PaymasterService {
       }
 
       // Configure network object with our RPC URL
-      const network = new StacksTestnet({ url: this.config.stacksRpcUrl });
+      // Configure network object with our RPC URL
+      const network = createNetwork({
+        network: STACKS_TESTNET,
+        client: { baseUrl: this.config.stacksRpcUrl },
+      });
 
       logger.debug('Sponsoring transaction with network', {
         rpcUrl: this.config.stacksRpcUrl,
@@ -183,7 +187,7 @@ export class PaymasterService {
       });
 
       // Broadcast the sponsored transaction
-      const broadcastResponse = await broadcastTransaction(sponsoredTx, network);
+      const broadcastResponse = await broadcastTransaction({ transaction: sponsoredTx, network });
 
       if ('error' in broadcastResponse) {
         logger.error('Failed to broadcast sponsored transaction', {
