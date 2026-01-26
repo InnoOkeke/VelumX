@@ -6,19 +6,21 @@ export type TransactionStatus = 'pending' | 'confirming' | 'attesting' | 'mintin
 export type BridgeStep = 'approval' | 'deposit' | 'burn' | 'attestation' | 'mint' | 'withdrawal';
 export interface BridgeTransaction {
     id: string;
-    type: 'deposit' | 'withdrawal';
+    type: 'deposit' | 'withdrawal' | 'swap' | 'add-liquidity' | 'remove-liquidity';
     amount: string;
     sourceChain: 'ethereum' | 'stacks';
     destinationChain: 'ethereum' | 'stacks';
     status: TransactionStatus;
-    currentStep: BridgeStep;
+    currentStep: BridgeStep | 'swap' | 'liquidity';
     sourceTxHash: string;
     destinationTxHash?: string;
     messageHash?: string;
     attestation?: string;
     attestationFetchedAt?: number;
-    ethereumAddress: string;
+    ethereumAddress?: string;
     stacksAddress: string;
+    inputToken?: string;
+    outputToken?: string;
     createdAt: number;
     updatedAt: number;
     completedAt?: number;
@@ -131,6 +133,7 @@ export interface BackendConfig {
     stacksVexAddress: string;
     circleApiKey?: string;
     relayerPrivateKey: string;
+    relayerSeedPhrase?: string;
     relayerStacksAddress: string;
     minStxBalance: bigint;
     attestationPollInterval: number;

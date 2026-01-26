@@ -26,7 +26,7 @@ export interface BridgeTransaction {
   id: string;
 
   // Transaction type
-  type: 'deposit' | 'withdrawal';
+  type: 'deposit' | 'withdrawal' | 'swap' | 'add-liquidity' | 'remove-liquidity';
 
   // Amount in smallest unit (micro USDC/USDCx)
   amount: string;
@@ -37,7 +37,7 @@ export interface BridgeTransaction {
 
   // Status tracking
   status: TransactionStatus;
-  currentStep: BridgeStep;
+  currentStep: BridgeStep | 'swap' | 'liquidity';
 
   // Transaction hashes
   sourceTxHash: string;
@@ -49,8 +49,12 @@ export interface BridgeTransaction {
   attestationFetchedAt?: number;
 
   // User addresses
-  ethereumAddress: string;
+  ethereumAddress?: string; // Optional for pure Stacks transactions
   stacksAddress: string;
+
+  // Token info for swaps/liquidity
+  inputToken?: string;
+  outputToken?: string;
 
   // Timestamps
   createdAt: number;
