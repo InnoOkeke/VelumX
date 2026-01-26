@@ -8,10 +8,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { Buffer } from 'buffer';
-import { ArrowDownUp, Loader2, Settings, Repeat } from 'lucide-react';
+import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
+import { encodeStacksAddress, bytesToHex } from '../lib/utils/address-encoding';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -374,7 +374,7 @@ export function SwapInterface() {
         if (publicKey) {
           // Fix: Pass publicKey as hex string. The SDK handles string->bytes conversion internally 
           // and this avoids 'Uint8Array expected' errors due to polyfill mismatches.
-          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : common.bytesToHex(publicKey);
+          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : bytesToHex(publicKey);
         } else {
           console.error('Gasless Swap Failed: Missing Public Key', {
             stacksAddress,
@@ -408,7 +408,7 @@ export function SwapInterface() {
         }
 
         // Use Buffer for hex conversion to avoid SDK's strict Uint8Array checks
-        const txHex = Buffer.from(serialized).toString('hex');
+        const txHex = bytesToHex(serialized);
         if (!txHex) throw new Error('Failed to convert transaction to hex');
 
         // Step 2: Request user signature via wallet RPC (without broadcast)

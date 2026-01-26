@@ -11,8 +11,8 @@ import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { Buffer } from 'buffer';
 import { sepolia } from 'viem/chains';
-import { ArrowDownUp, Loader2, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
-import { encodeStacksAddress as encodeStacksAddressUtil, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
+import { Shield, ArrowRight, Loader2, Unplug, RefreshCw, ArrowDownUp, Zap, AlertCircle, CheckCircle } from 'lucide-react';
+import { encodeStacksAddress, bytesToHex, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
@@ -258,7 +258,7 @@ export function BridgeInterface() {
       }
 
       // Step 3: Deposit to xReserve (Stacks official bridge)
-      const recipientBytes32 = await encodeStacksAddressUtil(stacksAddress);
+      const recipientBytes32 = await encodeStacksAddress(stacksAddress);
 
       const depositHash = await walletClient.writeContract({
         address: config.ethereumXReserveAddress as `0x${string}`,
@@ -471,7 +471,7 @@ export function BridgeInterface() {
         if (publicKey) {
           // Fix: Pass publicKey as hex string. The SDK handles string->bytes conversion internally 
           // and this avoids 'Uint8Array expected' errors due to polyfill mismatches.
-          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : common.bytesToHex(publicKey);
+          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : bytesToHex(publicKey);
           txOptions.functionArgs = safeFunctionArgs; // Use safe args
         } else {
           console.error('Gasless Transaction Failed: Missing Public Key', {
@@ -507,7 +507,7 @@ export function BridgeInterface() {
         }
 
         // Use Buffer for hex conversion to avoid SDK's strict Uint8Array checks (dual package hazard)
-        const txHex = Buffer.from(serialized).toString('hex');
+        const txHex = bytesToHex(serialized);
         if (!txHex) throw new Error('Failed to convert transaction to hex');
 
         // Step 2: Request user signature via wallet RPC (without broadcast)

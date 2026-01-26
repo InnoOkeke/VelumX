@@ -134,7 +134,11 @@ function hexToBytes(hex: string): Uint8Array {
 /**
  * Converts Uint8Array to hex string
  */
-function bytesToHex(bytes: Uint8Array): string {
+/**
+ * Converts Uint8Array to hex string
+ * Safe for use with potentially polyfilled Uint8Arrays
+ */
+export function bytesToHex(bytes: Uint8Array): string {
   if (!bytes) return '';
   return Array.from(bytes || [])
     .map(b => b.toString(16).padStart(2, '0'))
