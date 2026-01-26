@@ -643,13 +643,6 @@ export function LiquidityInterface() {
       const connect = await getStacksConnect() as any;
       if (!connect || !connect.request) throw new Error('Stacks request API not available');
 
-      console.log('Stacks Add Liquidity Standard Tx Params (request API):', {
-        contract: `${contractAddress}.${contractName}`,
-        functionName,
-        functionArgsLength: functionArgs.length,
-        network: 'testnet'
-      });
-
       await connect.request('stx_callContract', {
         contract: `${contractAddress}.${contractName}`,
         functionName,
@@ -663,6 +656,34 @@ export function LiquidityInterface() {
           icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
         },
       });
+
+      // Record transaction in history
+      try {
+        await fetch(`${config.backendUrl}/api/transactions/monitor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `add-liq-${Date.now()}`,
+            type: 'add-liquidity',
+            sourceTxHash: 'pending',
+            sourceChain: 'stacks',
+            destinationChain: 'stacks',
+            amount: state.amountA,
+            stacksAddress: stacksAddress,
+            inputToken: state.tokenA?.symbol,
+            outputToken: state.tokenB?.symbol,
+            status: 'complete',
+            currentStep: 'liquidity',
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            retryCount: 0,
+            isGasless: false,
+          }),
+        });
+      } catch (monitorError) {
+        console.error('Failed to report transaction to monitor:', monitorError);
+      }
 
       setState(prev => ({
         ...prev,
@@ -845,6 +866,33 @@ export function LiquidityInterface() {
           icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
         },
       });
+
+      // Record transaction in history
+      try {
+        await fetch(`${config.backendUrl}/api/transactions/monitor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `rem-liq-${Date.now()}`,
+            type: 'remove-liquidity',
+            sourceTxHash: 'pending',
+            sourceChain: 'stacks',
+            destinationChain: 'stacks',
+            amount: state.lpTokenAmount,
+            stacksAddress: stacksAddress,
+            inputToken: 'LP',
+            status: 'complete',
+            currentStep: 'liquidity',
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            retryCount: 0,
+            isGasless: false,
+          }),
+        });
+      } catch (monitorError) {
+        console.error('Failed to report transaction to monitor:', monitorError);
+      }
 
       setState(prev => ({
         ...prev,

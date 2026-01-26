@@ -397,17 +397,18 @@ export class PoolAnalyticsService {
 
       try {
         // In production, query for swap events in this specific pool
-        // For now, estimate based on pool size and activity
-        const poolSize = Number(pool.totalSupply);
+        // For now, estimate based on pool size and activity in a deterministic way
         const reserveA = Number(pool.reserveA);
         const reserveB = Number(pool.reserveB);
+        const totalSupply = Number(pool.totalSupply);
 
-        // Estimate volume based on pool liquidity and typical turnover rates
-        // Larger pools typically have 1-10% daily turnover
-        const estimatedTurnoverRate = Math.min(0.1, Math.max(0.001, poolSize / 10000000)); // 0.1% to 10%
-        const estimatedVolume = (reserveA + reserveB) * estimatedTurnoverRate;
+        // Deterministic volume estimation based on total supply/liquidity
+        // Higher liquidity pools usually have higher volume
+        const baseVolume = (reserveA + reserveB) * 0.02; // Estimate 2% daily turnover
+        const hashId = poolId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const variance = (hashId % 20) / 100 + 0.9; // 0.9 to 1.1 based on pool ID
 
-        return estimatedVolume;
+        return baseVolume * variance;
       } catch (error) {
         logger.error('Failed to query blockchain events for volume', { poolId, error });
         return 0;
@@ -426,10 +427,8 @@ export class PoolAnalyticsService {
       // In production, this would query swap events for the last 7 days
       const volume24h = await this.calculateVolume24h(poolId);
 
-      // Estimate 7-day volume based on daily volume with some variation
-      // Typically 6-8x daily volume depending on market conditions
-      const weeklyMultiplier = 6.5 + Math.random(); // 6.5x to 7.5x
-      return volume24h * weeklyMultiplier;
+      // Deterministic 7-day estimation (6.8x daily volume)
+      return volume24h * 6.8;
     } catch (error) {
       logger.error('Failed to calculate 7d volume', { poolId, error });
       return 0;
@@ -490,31 +489,13 @@ export class PoolAnalyticsService {
    */
   private async calculatePriceChange24h(poolId: string): Promise<number> {
     try {
-      // In production, this would compare current price to price 24h ago
-      // by querying historical pool snapshots from database
-
       const pool = await poolDiscoveryService.getPoolById(poolId);
       if (!pool) return 0;
 
-      // Get current price ratio
-      const currentRatio = Number(pool.reserveB) / Number(pool.reserveA);
-
-      // In production, query database for price 24h ago:
-      // SELECT reserve_a, reserve_b FROM pool_snapshots 
-      // WHERE pool_id = ? AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 DAY)
-      // ORDER BY timestamp ASC LIMIT 1
-
-      // For now, estimate based on volume and market conditions
-      // Higher volume pools tend to have more price movement
-      const volume24h = await this.calculateVolume24h(poolId);
-      const tvl = await this.calculateTVL(pool);
-
-      // Calculate volatility based on volume/TVL ratio
-      const volumeToTVLRatio = tvl > 0 ? volume24h / tvl : 0;
-      const estimatedVolatility = Math.min(0.2, volumeToTVLRatio * 10); // Cap at 20%
-
-      // Generate realistic price change based on volatility
-      const priceChange = (Math.random() - 0.5) * 2 * estimatedVolatility * 100;
+      // Deterministic price change based on pool ID hash
+      // In production, would use historical data
+      const hashId = poolId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const priceChange = ((hashId % 100) - 50) / 10; // -5% to +5%
 
       return priceChange;
     } catch (error) {

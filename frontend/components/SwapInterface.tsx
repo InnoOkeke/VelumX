@@ -245,6 +245,8 @@ export function SwapInterface() {
 
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
+    let sponsorData: any = null;
+
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
@@ -578,7 +580,7 @@ export function SwapInterface() {
           }),
         });
 
-        const sponsorData = await sponsorResponse.json();
+        sponsorData = await sponsorResponse.json();
         if (!sponsorData.success) {
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
@@ -607,6 +609,35 @@ export function SwapInterface() {
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
         });
+      }
+
+      // Record transaction in history
+      try {
+        await fetch(`${config.backendUrl}/api/transactions/monitor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `swap-${Date.now()}`,
+            type: 'swap',
+            sourceTxHash: (sponsorData as any)?.txid || 'pending',
+            sourceChain: 'stacks',
+            destinationChain: 'stacks',
+            amount: state.inputAmount,
+            stacksAddress: stacksAddress,
+            inputToken: state.inputToken?.symbol,
+            outputToken: state.outputToken?.symbol,
+            status: 'complete', // Swaps are considered complete once submitted as they are single-chain
+            currentStep: 'swap',
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            retryCount: 0,
+            isGasless: state.gaslessMode,
+          }),
+        });
+      } catch (monitorError) {
+        console.error('Failed to report transaction to monitor:', monitorError);
+        // Don't fail the UI if monitoring reporting fails
       }
 
       setState(prev => ({

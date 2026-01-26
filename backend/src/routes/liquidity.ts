@@ -64,37 +64,40 @@ router.get('/pools', validatePagination, async (req: Request, res: Response) => 
       search,
     });
 
-    let pools;
-
-    if (search) {
-      // Use search functionality from PoolDiscoveryService
-      pools = await poolDiscoveryService.searchPools(search as string);
-    } else {
-      // Get all pools from PoolDiscoveryService
-      pools = await poolDiscoveryService.getAllPools();
-    }
+    // Get all pools from PoolDiscoveryService
+    const allPools = search
+      ? await poolDiscoveryService.searchPools(search as string)
+      : await poolDiscoveryService.getAllPools();
 
     // Apply pagination
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const startIndex = (pageNum - 1) * limitNum;
     const endIndex = startIndex + limitNum;
+    const paginatedPools = allPools.slice(startIndex, endIndex);
 
-    const paginatedPools = pools.slice(startIndex, endIndex);
+    // Fetch analytics for paginated pools
+    const { poolAnalyticsService } = await import('../services/PoolAnalyticsService');
+    const analyticsResults = await poolAnalyticsService.getMultiplePoolAnalytics(
+      paginatedPools.map(p => p.id)
+    );
 
     // Convert bigint values to strings for JSON serialization
-    const serializedPools = paginatedPools.map(pool => ({
-      ...pool,
-      reserveA: pool.reserveA.toString(),
-      reserveB: pool.reserveB.toString(),
-      totalSupply: pool.totalSupply.toString(),
-      // Add mock analytics data (will be replaced with PoolAnalyticsService)
-      tvl: Number(pool.totalSupply) / 1000000, // Mock TVL calculation
-      volume24h: Math.floor(Math.random() * 100000), // Mock volume
-      apr: Math.floor(Math.random() * 20) + 5, // Mock APR 5-25%
-      verified: true,
-      featured: pool.id === 'USDCx-STX',
-    }));
+    const serializedPools = paginatedPools.map(pool => {
+      const analytics = analyticsResults[pool.id];
+      return {
+        ...pool,
+        reserveA: pool.reserveA.toString(),
+        reserveB: pool.reserveB.toString(),
+        totalSupply: pool.totalSupply.toString(),
+        tvl: analytics?.tvl || 0,
+        volume24h: analytics?.volume24h || 0,
+        apr: analytics?.apr || 0,
+        feeEarnings24h: analytics?.feeEarnings24h || 0,
+        verified: true,
+        featured: pool.id === 'USDCx-STX',
+      };
+    });
 
     res.json({
       success: true,
@@ -102,8 +105,8 @@ router.get('/pools', validatePagination, async (req: Request, res: Response) => 
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total: pools.length,
-        hasNext: endIndex < pools.length,
+        total: allPools.length,
+        hasNext: endIndex < allPools.length,
         hasPrev: pageNum > 1,
       },
     });
@@ -149,6 +152,10 @@ router.get('/pools/:poolId', validatePoolId, async (req: Request, res: Response)
     // Get pool metadata
     const metadata = await poolDiscoveryService.getPoolMetadata(poolId);
 
+    // Fetch real analytics
+    const { poolAnalyticsService } = await import('../services/PoolAnalyticsService');
+    const analytics = await poolAnalyticsService.getPoolAnalytics(poolId);
+
     res.json({
       success: true,
       data: {
@@ -157,10 +164,10 @@ router.get('/pools/:poolId', validatePoolId, async (req: Request, res: Response)
         reserveB: pool.reserveB.toString(),
         totalSupply: pool.totalSupply.toString(),
         metadata,
-        // Mock analytics data (will be replaced with PoolAnalyticsService)
-        tvl: Number(pool.totalSupply) / 1000000,
-        volume24h: Math.floor(Math.random() * 100000),
-        apr: Math.floor(Math.random() * 20) + 5,
+        tvl: analytics?.tvl || 0,
+        volume24h: analytics?.volume24h || 0,
+        apr: analytics?.apr || 0,
+        feeEarnings24h: analytics?.feeEarnings24h || 0,
         lastUpdated: new Date(),
       },
     });
@@ -527,16 +534,26 @@ router.get('/pools/popular', async (req: Request, res: Response) => {
 
     const popularPools = await poolDiscoveryService.getPopularPools(limitNum);
 
+    // Fetch real analytics
+    const { poolAnalyticsService } = await import('../services/PoolAnalyticsService');
+    const analyticsResults = await poolAnalyticsService.getMultiplePoolAnalytics(
+      popularPools.map(p => p.id)
+    );
+
     // Convert bigint values to strings for JSON serialization
-    const serializedPools = popularPools.map(pool => ({
-      ...pool,
-      reserveA: pool.reserveA.toString(),
-      reserveB: pool.reserveB.toString(),
-      totalSupply: pool.totalSupply.toString(),
-      tvl: Number(pool.totalSupply) / 1000000, // Mock TVL calculation
-      volume24h: Math.floor(Math.random() * 100000), // Mock volume
-      apr: Math.floor(Math.random() * 20) + 5, // Mock APR 5-25%
-    }));
+    const serializedPools = popularPools.map(pool => {
+      const analytics = analyticsResults[pool.id];
+      return {
+        ...pool,
+        reserveA: pool.reserveA.toString(),
+        reserveB: pool.reserveB.toString(),
+        totalSupply: pool.totalSupply.toString(),
+        tvl: analytics?.tvl || 0,
+        volume24h: analytics?.volume24h || 0,
+        apr: analytics?.apr || 0,
+        feeEarnings24h: analytics?.feeEarnings24h || 0,
+      };
+    });
 
     res.json({
       success: true,
@@ -561,16 +578,26 @@ router.get('/pools/featured', async (req: Request, res: Response) => {
 
     const featuredPools = await poolDiscoveryService.getFeaturedPools();
 
+    // Fetch real analytics
+    const { poolAnalyticsService } = await import('../services/PoolAnalyticsService');
+    const analyticsResults = await poolAnalyticsService.getMultiplePoolAnalytics(
+      featuredPools.map(p => p.id)
+    );
+
     // Convert bigint values to strings for JSON serialization
-    const serializedPools = featuredPools.map(pool => ({
-      ...pool,
-      reserveA: pool.reserveA.toString(),
-      reserveB: pool.reserveB.toString(),
-      totalSupply: pool.totalSupply.toString(),
-      tvl: Number(pool.totalSupply) / 1000000, // Mock TVL calculation
-      volume24h: Math.floor(Math.random() * 100000), // Mock volume
-      apr: Math.floor(Math.random() * 20) + 5, // Mock APR 5-25%
-    }));
+    const serializedPools = featuredPools.map(pool => {
+      const analytics = analyticsResults[pool.id];
+      return {
+        ...pool,
+        reserveA: pool.reserveA.toString(),
+        reserveB: pool.reserveB.toString(),
+        totalSupply: pool.totalSupply.toString(),
+        tvl: analytics?.tvl || 0,
+        volume24h: analytics?.volume24h || 0,
+        apr: analytics?.apr || 0,
+        feeEarnings24h: analytics?.feeEarnings24h || 0,
+      };
+    });
 
     res.json({
       success: true,

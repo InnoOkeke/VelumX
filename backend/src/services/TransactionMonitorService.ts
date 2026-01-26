@@ -112,7 +112,8 @@ export class TransactionMonitorService {
     const transactions: BridgeTransaction[] = [];
 
     for (const tx of this.queue.values()) {
-      if (tx.ethereumAddress.toLowerCase() === address.toLowerCase() ||
+      const ethAddr = tx.ethereumAddress?.toLowerCase();
+      if ((ethAddr && ethAddr === address.toLowerCase()) ||
         tx.stacksAddress === address) {
         transactions.push(tx);
       }
@@ -174,10 +175,16 @@ export class TransactionMonitorService {
     });
 
     for (const tx of pendingTransactions) {
+      // Skip processing for non-bridge transactions (swaps, liquidity)
+      // These are usually marked as complete by the interface or are handled elsewhere
+      if (tx.type === 'swap' || tx.type === 'add-liquidity' || tx.type === 'remove-liquidity') {
+        continue;
+      }
+
       try {
         if (tx.type === 'deposit') {
           await this.processDeposit(tx);
-        } else {
+        } else if (tx.type === 'withdrawal') {
           await this.processWithdrawal(tx);
         }
       } catch (error) {

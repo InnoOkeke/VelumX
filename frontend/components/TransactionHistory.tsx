@@ -23,7 +23,7 @@ import {
 // Define BridgeTransaction type locally
 interface BridgeTransaction {
   id: string;
-  type: 'deposit' | 'withdrawal';
+  type: 'deposit' | 'withdrawal' | 'swap' | 'add-liquidity' | 'remove-liquidity';
   sourceTxHash: string;
   destinationTxHash?: string;
   sourceChain: string;
@@ -33,9 +33,11 @@ interface BridgeTransaction {
   recipient: string;
   status: string;
   timestamp: number;
+  inputToken?: string;
+  outputToken?: string;
 }
 
-type FilterType = 'all' | 'deposit' | 'withdrawal';
+type FilterType = 'all' | 'deposit' | 'withdrawal' | 'swap' | 'liquidity';
 type SortType = 'newest' | 'oldest' | 'amount';
 
 export function TransactionHistory() {
@@ -109,6 +111,7 @@ export function TransactionHistory() {
   // Filter transactions
   const filteredTransactions = transactions.filter(tx => {
     if (filter === 'all') return true;
+    if (filter === 'liquidity') return tx.type === 'add-liquidity' || tx.type === 'remove-liquidity';
     return tx.type === filter;
   });
 
@@ -204,7 +207,7 @@ export function TransactionHistory() {
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Filter:</span>
           </div>
           <div className="flex gap-2">
-            {(['all', 'deposit', 'withdrawal'] as FilterType[]).map((f) => (
+            {(['all', 'deposit', 'withdrawal', 'swap', 'liquidity'] as FilterType[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -289,10 +292,16 @@ export function TransactionHistory() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          {tx.type === 'deposit' ? 'Bridge In' : 'Bridge Out'}
+                          {tx.type === 'deposit' ? 'Bridge In' :
+                            tx.type === 'withdrawal' ? 'Bridge Out' :
+                              tx.type === 'swap' ? 'Swap' :
+                                tx.type === 'add-liquidity' ? 'Add Liquidity' : 'Remove Liquidity'}
                         </span>
                         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          {tx.type === 'deposit' ? 'ETH → STX' : 'STX → ETH'}
+                          {tx.type === 'deposit' ? 'ETH → STX' :
+                            tx.type === 'withdrawal' ? 'STX → ETH' :
+                              tx.type === 'swap' ? `${tx.inputToken} → ${tx.outputToken}` :
+                                tx.type === 'add-liquidity' ? `${tx.inputToken}/${tx.outputToken}` : 'LP Token'}
                         </span>
                       </div>
                       <div className="text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
@@ -314,7 +323,10 @@ export function TransactionHistory() {
                   {/* Right Side */}
                   <div className="text-right">
                     <div className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                      {tx.amount} {tx.type === 'deposit' ? 'USDC' : 'USDCx'}
+                      {tx.amount} {tx.type === 'deposit' ? 'USDC' :
+                        tx.type === 'withdrawal' ? 'USDCx' :
+                          tx.type === 'swap' ? tx.inputToken :
+                            tx.type === 'add-liquidity' ? tx.inputToken : 'LP'}
                     </div>
                     <div className={`text-sm font-semibold capitalize ${getStatusColor(tx.status)}`}>
                       {tx.status.replace('_', ' ')}
