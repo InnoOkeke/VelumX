@@ -377,7 +377,7 @@ export function BridgeInterface() {
         },
         client: {
           baseUrl: 'https://stacks-node-api.testnet.stacks.co',
-          fetch: fetch, // Required for network requests
+          fetch: (url: any, init: any) => fetch(url, init), // Fix: Wrap in arrow function to preserve window context
         },
         // Legacy properties might be needed by some SDK parts, keeping safe
         isMainnet: () => false,
