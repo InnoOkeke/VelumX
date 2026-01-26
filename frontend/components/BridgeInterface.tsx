@@ -471,8 +471,11 @@ export function BridgeInterface() {
         const publicKey = stacksPublicKey || (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
 
         // Create post-conditions
+        const feeMicro = parseUnits(feeEstimateUsdcx, 6);
+        const totalUsdcx = amountInMicroUsdc + feeMicro;
+
         const pc = (Pc as any).principal(stacksAddress!)
-          .willSendEq(amountInMicroUsdc)
+          .willSendEq(totalUsdcx)
           // Fix: pass contract address and asset name separately, do not append suffix
           .ft(config.stacksUsdcxAddress, 'usdc-token');
 

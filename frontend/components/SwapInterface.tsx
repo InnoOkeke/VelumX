@@ -45,6 +45,7 @@ interface SwapState {
   error: string | null;
   success: string | null;
   quote: SwapQuote | null;
+  gasFeeUsdcx: string;
   slippage: number;
   showSettings: boolean;
 }
@@ -92,6 +93,7 @@ export function SwapInterface() {
     error: null,
     success: null,
     quote: null,
+    gasFeeUsdcx: '1.0', // Default fallback
     slippage: 0.5,
     showSettings: false,
   });
@@ -181,6 +183,38 @@ export function SwapInterface() {
       }));
     }
   };
+
+  // Fetch fee estimate for gasless mode
+  const fetchFeeEstimate = useCallback(async () => {
+    if (!state.gaslessMode) return;
+
+    try {
+      const response = await fetch(`${config.backendUrl}/api/paymaster/estimate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estimatedGasInStx: '100000', // Base gas estimate for swaps
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setState(prev => ({
+          ...prev,
+          gasFeeUsdcx: (Number(data.data.gasInUsdcx) / 1_000_000).toString(),
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch fee estimate:', error);
+    }
+  }, [state.gaslessMode, config.backendUrl]);
+
+  // Fetch fee estimate when gasless mode enabled
+  useEffect(() => {
+    if (state.gaslessMode) {
+      fetchFeeEstimate();
+    }
+  }, [state.gaslessMode, fetchFeeEstimate]);
 
   const switchTokens = () => {
     setState(prev => ({
@@ -298,7 +332,7 @@ export function SwapInterface() {
 
       let functionName = 'swap';
       let functionArgs = [];
-      const gasFee = 10000;
+      const gasFeeMicro = parseUnits(state.gasFeeUsdcx || '1.0', 6);
 
       if (isInputStx) {
         functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
@@ -308,7 +342,7 @@ export function SwapInterface() {
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(Cl.uint(gasFee.toString()));
+        if (useGasless) functionArgs.push(Cl.uint(gasFeeMicro.toString()));
       } else if (isOutputStx) {
         functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
         functionArgs = [
@@ -316,7 +350,7 @@ export function SwapInterface() {
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
         ];
-        if (useGasless) functionArgs.push(Cl.uint(gasFee.toString()));
+        if (useGasless) functionArgs.push(Cl.uint(gasFeeMicro.toString()));
       } else if (useGasless) {
         functionName = 'swap-gasless';
         functionArgs = [
@@ -324,7 +358,7 @@ export function SwapInterface() {
           getCP(state.outputToken!.address),
           Cl.uint(amountInMicro.toString()),
           Cl.uint(minAmountOutMicro.toString()),
-          Cl.uint(gasFee.toString()),
+          Cl.uint(gasFeeMicro.toString()),
         ];
       } else {
         functionName = 'swap';
@@ -367,6 +401,28 @@ export function SwapInterface() {
         postConditions.push(
           Pc.principal(stacksAddress).willSendEq(amountInMicro).ft(assetId, assetName)
         );
+      }
+
+      // Constraint 3: User sends USDCx fee if gasless
+      if (useGasless) {
+        const usdcxAddress = config.stacksUsdcxAddress;
+        const usdcxAssetName = 'usdc-token';
+
+        // If input token is also USDCx, we must COMBINE the post-conditions because 
+        // willSendEq/willSendGte are aggregate limits per token per address.
+        if (state.inputToken!.address === usdcxAddress) {
+          // Remove the previous USDCx post-condition and add a combined one
+          postConditions.pop();
+          const totalUsdcx = amountInMicro + gasFeeMicro;
+          postConditions.push(
+            Pc.principal(stacksAddress).willSendEq(totalUsdcx).ft(usdcxAddress, usdcxAssetName)
+          );
+        } else {
+          // Add a separate post-condition for the fee
+          postConditions.push(
+            Pc.principal(stacksAddress).willSendEq(gasFeeMicro).ft(usdcxAddress, usdcxAssetName)
+          );
+        }
       }
 
       // Constraint 2: Contract sends output token (optional but good for safety)
@@ -518,7 +574,7 @@ export function SwapInterface() {
           body: JSON.stringify({
             transaction: signedTxHex,
             userAddress: stacksAddress,
-            estimatedFee: gasFee.toString(),
+            estimatedFee: gasFeeMicro.toString(),
           }),
         });
 
