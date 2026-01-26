@@ -154,6 +154,19 @@ export class PaymasterService {
       // Check relayer balance before sponsoring
       await this.checkRelayerBalance();
 
+      // Check mempool congestion for the relayer
+      const mempoolDepth = await this.getMempoolDepth(this.config.relayerStacksAddress);
+      const MEMPOOL_THRESHOLD = 20; // Stacks node limit usually around 25 per account
+
+      if (mempoolDepth >= MEMPOOL_THRESHOLD) {
+        logger.warn('Relayer mempool congested, applying backoff', {
+          depth: mempoolDepth,
+          threshold: MEMPOOL_THRESHOLD
+        });
+        // Wait a few seconds to let some transactions clear
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+
       // Validate user has sufficient USDCx balance
       const hasSufficientBalance = await this.validateUserBalance(
         userAddress,
@@ -258,7 +271,15 @@ export class PaymasterService {
 
           // Wait before retry if it's a transient node error
           if (attempt < MAX_BROADCAST_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+            let delay = 2000 * attempt;
+
+            // Special handling for TooMuchChaining - back off more aggressively
+            if (broadcastResponse.reason === 'TooMuchChaining' || (broadcastResponse.error && broadcastResponse.error.includes('TooMuchChaining'))) {
+              logger.warn('TooMuchChaining detected, increasing retry delay');
+              delay = 10000 * attempt; // 10s, 20s, 30s...
+            }
+
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
         } catch (broadError) {
           lastBroadcastError = broadError;
@@ -398,6 +419,22 @@ export class PaymasterService {
         throw error;
       }
     }, 300); // 5 minute cache
+  }
+
+  /**
+   * Gets the number of pending transactions in the mempool for an address
+   */
+  async getMempoolDepth(address: string): Promise<number> {
+    try {
+      const response = await fetchWithRetry(
+        `${this.config.stacksRpcUrl}/extended/v1/address/${address}/mempool?limit=1`
+      );
+      const data: any = await response.json();
+      return data.total || 0;
+    } catch (error) {
+      logger.error('Failed to fetch mempool depth', { address, error });
+      return 0; // Fallback to 0 so we don't block
+    }
   }
 
   /**
