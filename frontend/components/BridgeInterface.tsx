@@ -364,6 +364,10 @@ export function BridgeInterface() {
       if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
 
       const network = new networkModule.StacksTestnet();
+      // Explicitly force testnet version (128) to avoid "Could not parse 8 as TransactionVersion"
+      // This handles cases where different SDK versions default differently
+      network.version = 128; // TransactionVersion.Testnet (0x80)
+      network.chainId = 2147483648; // ChainID.Testnet (0x80000000)
 
       if (!network) throw new Error('Could not load Stacks network configuration');
 
