@@ -439,6 +439,13 @@ export function SwapInterface() {
           console.error('makeContractCall returned falsy tx', { contractAddress, contractName, functionName, functionArgs });
           throw new Error('Failed to build transaction');
         }
+
+        // Force correct transaction version for Testnet (128 / 0x80)
+        if ('version' in tx) {
+          (tx as any).version = 128; // Force Testnet
+          if ((tx as any).chainId) (tx as any).chainId = 0x80000000;
+        }
+
         if (typeof (tx as any).serialize !== 'function') {
           console.error('Transaction object is missing serialize():', tx);
           throw new Error('Transaction serialization not available');
