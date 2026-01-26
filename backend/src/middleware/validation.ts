@@ -250,12 +250,17 @@ export function validatePoolId(req: Request, res: Response, next: NextFunction):
   const [tokenA, tokenB] = tokens;
   const errors: ValidationError[] = [];
 
-  if (!isValidStacksAddress(tokenA)) {
-    errors.push({ field: 'tokenA', message: 'Invalid token A address in pool ID', value: tokenA });
+  // Check if it's a valid address OR a valid symbol (alphanumeric)
+  const isValidIdentifier = (id: string) => {
+    return isValidStacksAddress(id) || /^[a-zA-Z0-9]+$/.test(id);
+  };
+
+  if (!isValidIdentifier(tokenA)) {
+    errors.push({ field: 'tokenA', message: 'Invalid token A identifier in pool ID', value: tokenA });
   }
 
-  if (!isValidStacksAddress(tokenB)) {
-    errors.push({ field: 'tokenB', message: 'Invalid token B address in pool ID', value: tokenB });
+  if (!isValidIdentifier(tokenB)) {
+    errors.push({ field: 'tokenB', message: 'Invalid token B identifier in pool ID', value: tokenB });
   }
 
   if (errors.length > 0) {

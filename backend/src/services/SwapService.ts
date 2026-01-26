@@ -109,16 +109,26 @@ export class SwapService {
       const contractAddress = parts[0];
       const contractName = parts[1] || 'swap-contract';
 
+      // Resolve token addresses if symbols are provided
+      const supportedTokens = await this.getSupportedTokens();
+      const resolveAddress = (input: string) => {
+        const token = supportedTokens.find(t => t.symbol === input);
+        return token ? token.address : input;
+      };
+
+      const tokenInResolved = resolveAddress(inputToken);
+      const tokenOutResolved = resolveAddress(outputToken);
+
       // Parse token addresses - handle both contract.name and naked principals (like STX or user addr)
-      const tokenInParts = inputToken.split('.');
+      const tokenInParts = tokenInResolved.split('.');
       const tokenInPrincipalInput = tokenInParts.length === 2
         ? `${tokenInParts[0]}.${tokenInParts[1]}`
-        : inputToken;
+        : tokenInResolved;
 
-      const tokenOutParts = outputToken.split('.');
+      const tokenOutParts = tokenOutResolved.split('.');
       const tokenOutPrincipalInput = tokenOutParts.length === 2
         ? `${tokenOutParts[0]}.${tokenOutParts[1]}`
-        : outputToken;
+        : tokenOutResolved;
 
       // STX is represented by the sentinel principal in our contract
       const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';

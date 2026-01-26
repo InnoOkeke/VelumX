@@ -221,8 +221,13 @@ export class PaymasterService {
 
       const data: any = await response.json();
 
-      // Find USDCx token balance
-      const usdcxToken = data.fungible_tokens?.[this.config.stacksUsdcxAddress];
+      // Find USDCx token balance - Stacks API keys are "principal::asset_name"
+      // We look for a key that starts with our contract address
+      const usdcxKey = Object.keys(data.fungible_tokens || {}).find(
+        key => key.startsWith(`${this.config.stacksUsdcxAddress}::`) || key === this.config.stacksUsdcxAddress
+      );
+
+      const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
       const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
 
       const hasSufficientBalance = userBalance >= requiredFee;
