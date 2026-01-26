@@ -5,6 +5,7 @@
 
 import { getExtendedConfig } from '../config';
 import { logger } from '../utils/logger';
+import { fetchWithRetry } from '../utils/fetch';
 import { getCache, CACHE_KEYS, CACHE_TTL, withCache } from '../cache/redis';
 import {
   fetchCallReadOnlyFunction,
@@ -472,17 +473,9 @@ export class LiquidityService {
     amountB: bigint
   ): Promise<ValidationResult> {
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`
       );
-
-      if (!response.ok) {
-        return {
-          valid: false,
-          error: 'Failed to fetch user balance',
-          suggestions: ['Check your wallet connection'],
-        };
-      }
 
       const data: any = await response.json();
 

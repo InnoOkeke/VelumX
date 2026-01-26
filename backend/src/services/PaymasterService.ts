@@ -16,6 +16,8 @@ import {
 } from '@stacks/transactions';
 import { STACKS_TESTNET, createNetwork } from '@stacks/network';
 import { generateWallet } from '@stacks/wallet-sdk';
+import { fetchWithRetry } from '../utils/fetch';
+import { withCache, CACHE_KEYS } from '../cache/redis';
 
 export class PaymasterService {
   private config = getConfig();
@@ -240,90 +242,93 @@ export class PaymasterService {
     userAddress: string,
     requiredFee: bigint
   ): Promise<boolean> {
-    logger.debug('Validating user USDCx balance', {
-      userAddress,
-      requiredFee: requiredFee.toString(),
-    });
+    const cacheKey = `user:balance:${userAddress}`;
 
-    try {
-      // Query USDCx contract for user's balance
-      const response = await fetch(
-        `${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch balance: ${response.status}`);
-      }
-
-      const data: any = await response.json();
-
-      // Find USDCx token balance - Stacks API keys are "principal::asset_name"
-      // We look for a key that starts with our contract address
-      const usdcxKey = Object.keys(data.fungible_tokens || {}).find(
-        key => key.startsWith(`${this.config.stacksUsdcxAddress}::`) || key === this.config.stacksUsdcxAddress
-      );
-
-      const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
-      const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
-
-      const hasSufficientBalance = userBalance >= requiredFee;
-
-      logger.info('User balance validation result', {
+    return withCache(cacheKey, async () => {
+      logger.debug('Validating user USDCx balance', {
         userAddress,
-        userBalance: userBalance.toString(),
         requiredFee: requiredFee.toString(),
-        hasSufficientBalance,
       });
 
-      return hasSufficientBalance;
-    } catch (error) {
-      logger.error('Failed to validate user balance', {
-        userAddress,
-        error: (error as Error).message,
-      });
-      return false;
-    }
+      try {
+        // Query USDCx contract for user's balance
+        const response = await fetchWithRetry(
+          `${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`
+        );
+
+        const data: any = await response.json();
+
+        // Find USDCx token balance - Stacks API keys are "principal::asset_name"
+        // We look for a key that starts with our contract address
+        const usdcxKey = Object.keys(data.fungible_tokens || {}).find(
+          key => key.startsWith(`${this.config.stacksUsdcxAddress}::`) || key === this.config.stacksUsdcxAddress
+        );
+
+        const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
+        const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
+
+        const hasSufficientBalance = userBalance >= requiredFee;
+
+        logger.info('User balance validation result', {
+          userAddress,
+          userBalance: userBalance.toString(),
+          requiredFee: requiredFee.toString(),
+          hasSufficientBalance,
+        });
+
+        return hasSufficientBalance;
+      } catch (error) {
+        logger.error('Failed to validate user balance', {
+          userAddress,
+          error: (error as Error).message,
+        });
+        return false;
+      }
+    }, 30); // 30 second cache for user balance
   }
 
   /**
    * Checks relayer's STX balance and alerts if below threshold
    */
   async checkRelayerBalance(): Promise<void> {
-    try {
-      // Query Stacks API for relayer's STX balance
-      const response = await fetch(
-        `${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/balances`
-      );
+    const cacheKey = `relayer:balance:${this.config.relayerStacksAddress}`;
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch relayer balance: ${response.status}`);
-      }
+    // We cache the relayer balance check for 5 minutes since it's a large balance
+    await withCache(cacheKey, async () => {
+      try {
+        // Query Stacks API for relayer's STX balance
+        const response = await fetchWithRetry(
+          `${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/balances`
+        );
 
-      const data: any = await response.json();
-      const relayerBalance = BigInt(data.stx.balance);
-      const threshold = this.config.minStxBalance;
+        const data: any = await response.json();
+        const relayerBalance = BigInt(data.stx.balance);
+        const threshold = this.config.minStxBalance;
 
-      logRelayerBalance(relayerBalance, threshold);
+        logRelayerBalance(relayerBalance, threshold);
 
-      if (relayerBalance < threshold) {
-        logger.error('Relayer STX balance below threshold!', {
+        if (relayerBalance < threshold) {
+          logger.error('Relayer STX balance below threshold!', {
+            balance: relayerBalance.toString(),
+            threshold: threshold.toString(),
+            relayerAddress: this.config.relayerStacksAddress,
+          });
+
+          // Alert: Relayer needs funding
+          throw new Error('Relayer balance too low to sponsor transactions');
+        }
+
+        logger.debug('Relayer balance check passed', {
           balance: relayerBalance.toString(),
           threshold: threshold.toString(),
-          relayerAddress: this.config.relayerStacksAddress,
         });
 
-        // Alert: Relayer needs funding
-        throw new Error('Relayer balance too low to sponsor transactions');
+        return true; // Needed for withCache
+      } catch (error) {
+        logger.error('Failed to check relayer balance', { error });
+        throw error;
       }
-
-      logger.debug('Relayer balance check passed', {
-        balance: relayerBalance.toString(),
-        threshold: threshold.toString(),
-      });
-    } catch (error) {
-      logger.error('Failed to check relayer balance', { error });
-      throw error;
-    }
+    }, 300); // 5 minute cache
   }
 
   /**
@@ -332,15 +337,12 @@ export class PaymasterService {
    */
   private async fetchStxPrice(): Promise<number> {
     try {
-      // Using CoinGecko API as an example
-      // In production, you might want to use multiple sources and average them
-      const response = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd'
+      // Using CoinGecko API
+      const response = await fetchWithRetry(
+        'https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd',
+        {},
+        { maxRetries: 2, timeout: 5000 }
       );
-
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.status}`);
-      }
 
       const data: any = await response.json();
       const stxPrice = data.blockstack?.usd;
