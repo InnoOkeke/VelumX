@@ -177,7 +177,8 @@ export class TransactionMonitorService {
     for (const tx of pendingTransactions) {
       // Skip processing for non-bridge transactions (swaps, liquidity)
       // These are usually marked as complete by the interface or are handled elsewhere
-      if (tx.type === 'swap' || tx.type === 'add-liquidity' || tx.type === 'remove-liquidity') {
+      const txType = tx.type as string;
+      if (txType === 'swap' || txType === 'add-liquidity' || txType === 'remove-liquidity') {
         continue;
       }
 
