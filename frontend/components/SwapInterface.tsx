@@ -222,24 +222,26 @@ export function SwapInterface() {
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
       if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
 
-      // Use a plain object for network to ensure no Class/Defaults interfere with our explicit configuration
-      // We strictly enforce 128 (Testnet) and proper Chain ID
+      // Verified StacksNetwork interface from @stacks/network v7.3.1
+      // We strictly enforce transactionVersion: 128 (Testnet)
       const network = {
-        version: 128, // TransactionVersion.Testnet (0x80)
-        chainId: 2147483648, // ChainID.Testnet (0x80000000)
-        bnsLookupUrl: 'https://stacks-node-api.testnet.stacks.co',
-        broadcastEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/transactions',
-        transferFeeEstimateEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/fees/transfer',
-        accountEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/accounts',
-        contractAbiEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/contracts/interface',
-        readOnlyFunctionCallEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/contracts/call-read',
+        chainId: 2147483648, // 0x80000000
+        transactionVersion: 128, // 0x80 (Testnet)
+        peerNetworkId: 2147483648, // 0x80000000
+        magicBytes: 'T2', // Testnet magic bytes
+        bootAddress: 'ST3NBRSFKX0GM5NPS696X053153116C97F09804', // Default testnet boot address
+        addressVersion: {
+          singleSig: 26, // 'P'
+          multiSig: 21,  // 'M'
+        },
+        client: {
+          baseUrl: 'https://stacks-node-api.testnet.stacks.co',
+          fetch: fetch, // Required for network requests
+        },
+        // Legacy properties might be needed by some SDK parts, keeping safe
         isMainnet: () => false,
-        getTransferFeeEstimateApiUrl: () => 'https://stacks-node-api.testnet.stacks.co/v2/fees/transfer',
-        getBroadcastApiUrl: () => 'https://stacks-node-api.testnet.stacks.co/v2/transactions',
-        getAccountApiUrl: (address: string) => `https://stacks-node-api.testnet.stacks.co/v2/accounts/${address}`,
-        getAbiApiUrl: (addr: string, name: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/interface/${addr}/${name}`,
-        getReadOnlyFunctionCallApiUrl: (addr: string, name: string, fn: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/call-read/${addr}/${name}/${fn}`,
-        fetchFn: fetch, // VALIDATION: Required by SDK to perform network requests
+        version: 128, // Fallback if some code checks .version instead of .transactionVersion
+        bnsLookupUrl: 'https://stacks-node-api.testnet.stacks.co',
       };
 
       console.log('Network Config Enforced:', {
