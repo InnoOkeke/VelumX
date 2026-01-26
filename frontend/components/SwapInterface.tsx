@@ -238,7 +238,8 @@ export function SwapInterface() {
         getBroadcastApiUrl: () => 'https://stacks-node-api.testnet.stacks.co/v2/transactions',
         getAccountApiUrl: (address: string) => `https://stacks-node-api.testnet.stacks.co/v2/accounts/${address}`,
         getAbiApiUrl: (addr: string, name: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/interface/${addr}/${name}`,
-        getReadOnlyFunctionCallApiUrl: (addr: string, name: string, fn: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/call-read/${addr}/${name}/${fn}`
+        getReadOnlyFunctionCallApiUrl: (addr: string, name: string, fn: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/call-read/${addr}/${name}/${fn}`,
+        fetchFn: fetch, // VALIDATION: Required by SDK to perform network requests
       };
 
       console.log('Network Config Enforced:', {
