@@ -222,12 +222,29 @@ export function SwapInterface() {
       if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
       if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
 
-      const network = new networkModule.StacksTestnet();
-      // Explicitly force testnet version (128) to avoid "Could not parse 8 as TransactionVersion"
-      network.version = 128; // TransactionVersion.Testnet (0x80)
-      network.chainId = 2147483648; // ChainID.Testnet (0x80000000)
+      // Use a plain object for network to ensure no Class/Defaults interfere with our explicit configuration
+      // We strictly enforce 128 (Testnet) and proper Chain ID
+      const network = {
+        version: 128, // TransactionVersion.Testnet (0x80)
+        chainId: 2147483648, // ChainID.Testnet (0x80000000)
+        bnsLookupUrl: 'https://stacks-node-api.testnet.stacks.co',
+        broadcastEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/transactions',
+        transferFeeEstimateEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/fees/transfer',
+        accountEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/accounts',
+        contractAbiEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/contracts/interface',
+        readOnlyFunctionCallEndpoint: 'https://stacks-node-api.testnet.stacks.co/v2/contracts/call-read',
+        isMainnet: () => false,
+        getTransferFeeEstimateApiUrl: () => 'https://stacks-node-api.testnet.stacks.co/v2/fees/transfer',
+        getBroadcastApiUrl: () => 'https://stacks-node-api.testnet.stacks.co/v2/transactions',
+        getAccountApiUrl: (address: string) => `https://stacks-node-api.testnet.stacks.co/v2/accounts/${address}`,
+        getAbiApiUrl: (addr: string, name: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/interface/${addr}/${name}`,
+        getReadOnlyFunctionCallApiUrl: (addr: string, name: string, fn: string) => `https://stacks-node-api.testnet.stacks.co/v2/contracts/call-read/${addr}/${name}/${fn}`
+      };
 
-      if (!network) throw new Error('Could not load Stacks network configuration');
+      console.log('Network Config Enforced:', {
+        version: network.version,
+        baseVersion: networkModule.StacksTestnet ? new networkModule.StacksTestnet().version : 'N/A'
+      });
 
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken!.decimals);
       // Defensive check for output amount
