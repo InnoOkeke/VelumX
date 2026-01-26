@@ -144,7 +144,7 @@ router.post('/sponsor', strictLimiter, async (req: Request, res: Response) => {
 
     res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to sponsor transaction',
+      message: errorMessage || 'Failed to sponsor transaction',
       timestamp: Date.now(),
     });
   }

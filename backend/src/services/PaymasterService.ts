@@ -14,6 +14,7 @@ import {
   AnchorMode,
   PostConditionMode,
 } from '@stacks/transactions';
+import { StacksTestnet } from '@stacks/network';
 
 export class PaymasterService {
   private config = getConfig();
@@ -154,29 +155,43 @@ export class PaymasterService {
         }
       }
 
-      logger.info('Sponsoring transaction', {
-        userAddress,
-        estimatedFee: estimatedFee.toString(),
+      // Configure network object with our RPC URL
+      const network = new StacksTestnet({ url: this.config.stacksRpcUrl });
+
+      logger.debug('Sponsoring transaction with network', {
+        rpcUrl: this.config.stacksRpcUrl,
+        chainId: network.chainId,
+        txVersion: network.transactionVersion
       });
+
+      // Normalize relayer private key (32 bytes required for some SDK operations)
+      const relayerPrivateKey = this.config.relayerPrivateKey.length === 66
+        ? this.config.relayerPrivateKey.substring(0, 64)
+        : this.config.relayerPrivateKey;
 
       // Sponsor the transaction with relayer's private key
       const sponsoredTx = await sponsorTransaction({
         transaction: txObj,
-        sponsorPrivateKey: this.config.relayerPrivateKey,
+        sponsorPrivateKey: relayerPrivateKey,
         fee: 50000n, // 0.05 STX sponsor fee
-        sponsorNonce: undefined, // Will be fetched automatically
-        network: 'testnet',
+        sponsorNonce: undefined, // Will be fetched automatically if network is provided
+        network,
+      });
+
+      logger.debug('Transaction sponsored, broadcasting...', {
+        txid: sponsoredTx.txid()
       });
 
       // Broadcast the sponsored transaction
-      const broadcastResponse = await broadcastTransaction(sponsoredTx as any);
+      const broadcastResponse = await broadcastTransaction(sponsoredTx, network);
 
       if ('error' in broadcastResponse) {
         logger.error('Failed to broadcast sponsored transaction', {
           error: broadcastResponse.error,
           reason: broadcastResponse.reason,
+          txid: sponsoredTx.txid()
         });
-        throw new Error(`Broadcast failed: ${broadcastResponse.error}`);
+        throw new Error(`Broadcast failed: ${broadcastResponse.error}. Reason: ${broadcastResponse.reason || 'unknown'}`);
       }
 
       const txid = broadcastResponse.txid;
