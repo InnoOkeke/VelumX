@@ -54,35 +54,21 @@ export class SwapService {
       return this.cachedTokens;
     }
 
-    logger.info('Fetching supported tokens');
+    const { DEFAULT_TOKENS } = await import('../config/liquidity');
 
-    // For now, return hardcoded list of tokens
-    // In production, this could query available pools from the contract
-    const tokens: TokenInfo[] = [
-      {
-        symbol: 'USDCx',
-        name: 'USDC (xReserve)',
-        address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
-        decimals: 6,
-      },
-      {
-        symbol: 'STX',
-        name: 'Stacks',
-        address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM', // Use sentinel principal
-        decimals: 6,
-      },
-      {
-        symbol: 'VEX',
-        name: 'VelumX Token',
-        address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
-        decimals: 6,
-      },
-    ];
+    logger.info('Fetching supported tokens from configuration');
+
+    const tokens: TokenInfo[] = DEFAULT_TOKENS.map(t => ({
+      symbol: t.symbol,
+      name: t.name,
+      address: t.address,
+      decimals: t.decimals,
+    }));
 
     this.cachedTokens = tokens;
     this.tokensCacheExpiry = Date.now() + this.CACHE_DURATION;
 
-    logger.info(`Loaded ${tokens.length} supported tokens`);
+    logger.info(`Loaded ${tokens.length} supported tokens from config`);
     return tokens;
   }
 
@@ -97,7 +83,7 @@ export class SwapService {
     const cacheKey = `swap:quote:${inputToken}:${outputToken}:${inputAmount.toString()}`;
 
     return withCache(cacheKey, async () => {
-      logger.info('Getting swap quote from our contract', {
+      logger.info('Getting swap quote from contract', {
         inputToken,
         outputToken,
         inputAmount: inputAmount.toString(),
@@ -106,56 +92,32 @@ export class SwapService {
       try {
         // Validate configuration
         if (!this.config.stacksRpcUrl) {
-          throw new Error('STACKS_RPC_URL is not defined in configuration');
+          throw new Error('STACKS_RPC_URL is not defined');
         }
 
         // Parse contract address
         const parts = this.config.stacksSwapContractAddress.split('.');
+        if (parts.length < 2) {
+          throw new Error(`Invalid swap contract address: ${this.config.stacksSwapContractAddress}`);
+        }
         const contractAddress = parts[0];
-        const contractName = parts[1] || 'swap-contract';
+        const contractName = parts[1];
 
         // Resolve token addresses if symbols are provided
         const supportedTokens = await this.getSupportedTokens();
         const resolveAddress = (input: string) => {
-          const token = supportedTokens.find(t => t.symbol === input);
+          const token = supportedTokens.find(t => t.symbol === input || t.address === input);
           return token ? token.address : input;
         };
 
         const tokenInResolved = resolveAddress(inputToken);
         const tokenOutResolved = resolveAddress(outputToken);
 
-        // Parse token addresses - handle both contract.name and naked principals (like STX or user addr)
-        const tokenInParts = tokenInResolved.split('.');
-        const tokenInPrincipalInput = tokenInParts.length === 2
-          ? `${tokenInParts[0]}.${tokenInParts[1]}`
-          : tokenInResolved;
-
-        const tokenOutParts = tokenOutResolved.split('.');
-        const tokenOutPrincipalInput = tokenOutParts.length === 2
-          ? `${tokenOutParts[0]}.${tokenOutParts[1]}`
-          : tokenOutResolved;
-
         // STX is represented by the sentinel principal in our contract
         const STX_SENTINEL = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
 
-        const tokenInPrincipal = tokenInPrincipalInput === 'STX' || tokenInPrincipalInput === 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM' ? STX_SENTINEL : tokenInPrincipalInput;
-        const tokenOutPrincipal = tokenOutPrincipalInput === 'STX' || tokenOutPrincipalInput === 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM' ? STX_SENTINEL : tokenOutPrincipalInput;
-
-        // Get pool reserves for price impact calculation
-        let priceImpact = 0;
-        try {
-          const { reserveA, reserveB } = await this.getReserves(tokenInPrincipal, tokenOutPrincipal);
-          if (reserveA > 0n && reserveB > 0n) {
-            // Simplified price impact for constant product: amountIn / (reserveIn + amountIn)
-            // We need to know which reserve is 'input'
-            // The contract's sort-tokens determines this, but we can just use the one that matches our input
-            // Or more accurately: price impact = (1 - (amountOut / (amountIn * spotPrice)))
-            const spotPrice = Number(reserveB) / Number(reserveA);
-            // We'll calculate this better after getting amountOut
-          }
-        } catch (e) {
-          logger.warn('Could not fetch reserves for price impact', { tokenA: tokenInPrincipal, tokenB: tokenOutPrincipal });
-        }
+        const tokenInPrincipal = tokenInResolved === 'STX' || tokenInResolved === STX_SENTINEL ? STX_SENTINEL : tokenInResolved;
+        const tokenOutPrincipal = tokenOutResolved === 'STX' || tokenOutResolved === STX_SENTINEL ? STX_SENTINEL : tokenOutResolved;
 
         // Configure network
         const network = createNetwork({
@@ -163,14 +125,10 @@ export class SwapService {
           client: { baseUrl: this.config.stacksRpcUrl },
         });
 
-        logger.debug('Calling quote-swap with params', {
-          contractAddress,
-          contractName,
-          functionName: 'quote-swap',
+        logger.debug('Calling quote-swap with resolved principals', {
           tokenIn: tokenInPrincipal,
           tokenOut: tokenOutPrincipal,
-          inputAmount: inputAmount.toString(),
-          networkUrl: this.config.stacksRpcUrl
+          inputAmount: inputAmount.toString()
         });
 
         // Call quote-swap read-only function
@@ -189,40 +147,41 @@ export class SwapService {
             senderAddress: contractAddress,
           });
         } catch (callError) {
-          logger.error('Stacks read-only call failed', {
-            error: callError,
-            params: {
-              contractAddress,
-              contractName,
-              tokenIn: tokenInPrincipal,
-              tokenOut: tokenOutPrincipal,
-              inputAmount: inputAmount.toString()
-            }
+          logger.error('Stacks read-only call failed (quote-swap)', {
+            error: callError instanceof Error ? callError.message : String(callError),
+            tokenIn: tokenInPrincipal,
+            tokenOut: tokenOutPrincipal,
+            rpcUrl: this.config.stacksRpcUrl
           });
-          throw new Error(`Contract call failed: ${callError instanceof Error ? callError.message : 'Unknown error'}`);
+          throw new Error(`RPC communication error: ${callError instanceof Error ? callError.message : 'Node unreachable'}`);
         }
 
         // Parse result
         const resultJson = cvToJSON(result);
 
         if (resultJson.success === false || !resultJson.value) {
-          throw new Error('Pool not found or invalid quote from contract');
+          logger.warn('Contract returned error for quote', { resultJson });
+          throw new Error('Pool not found or swap parameters invalid');
         }
 
         // The contract returns (ok {amount-out: uint, fee: uint})
         const quoteData = resultJson.value.value;
+        if (!quoteData || !quoteData['amount-out'] || !quoteData.fee) {
+          throw new Error('Unexpected quote format from contract');
+        }
+
         const outputAmount = BigInt(quoteData['amount-out'].value);
         const fee = BigInt(quoteData.fee.value);
 
-        // Recalculate price impact properly now that we have outputAmount
+        // Calculate price impact
+        let priceImpact = 0;
         try {
           const { reserveA } = await this.getReserves(tokenInPrincipal, tokenOutPrincipal);
           if (reserveA > 0n) {
-            // Standard CPMM price impact: amountIn / (reserveIn + amountIn)
             priceImpact = (Number(inputAmount) / (Number(reserveA) + Number(inputAmount))) * 100;
           }
         } catch (e) {
-          // Fallback or ignore
+          logger.debug('Could not calculate price impact for quote');
         }
 
         const quote: SwapQuote = {
@@ -233,21 +192,19 @@ export class SwapService {
           priceImpact,
           route: [inputToken, outputToken],
           estimatedFee: fee,
-          validUntil: Date.now() + 60000, // Valid for 1 minute
+          validUntil: Date.now() + 60000,
         };
-
-        logger.info('Swap quote generated from contract', {
-          outputAmount: outputAmount.toString(),
-          priceImpact,
-          fee: fee.toString(),
-        });
 
         return quote;
       } catch (error) {
-        logger.error('Failed to get quote from contract', { error });
-        throw new Error('Failed to get swap quote. Pool may not exist yet.');
+        logger.error('SwapService.getSwapQuote failed', {
+          error: error instanceof Error ? error.message : String(error),
+          inputToken,
+          outputToken
+        });
+        throw error;
       }
-    }, 10); // 10 second cache for quotes
+    }, 30); // 30 second cache
   }
 
   /**

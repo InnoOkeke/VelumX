@@ -114,20 +114,6 @@ export function SwapInterface() {
     }));
   }, [config.stacksVexAddress]);
 
-
-
-  // Fetch quote when input changes
-  useEffect(() => {
-    if (state.inputToken && state.outputToken && state.inputAmount && parseFloat(state.inputAmount) > 0) {
-      const timer = setTimeout(() => {
-        fetchQuote();
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
-      setState(prev => ({ ...prev, outputAmount: '', quote: null }));
-    }
-  }, [state.inputToken, state.outputToken, state.inputAmount]);
-
   const fetchQuote = async () => {
     if (!state.inputToken || !state.outputToken || !state.inputAmount) return;
 
@@ -209,12 +195,22 @@ export function SwapInterface() {
     }
   }, [state.gaslessMode, config.backendUrl]);
 
-  // Fetch fee estimate when gasless mode enabled
+  // Fetch quote and fee estimate when input changes
   useEffect(() => {
-    if (state.gaslessMode) {
-      fetchFeeEstimate();
+    if (state.inputToken && state.outputToken && state.inputAmount && parseFloat(state.inputAmount) > 0) {
+      const timer = setTimeout(() => {
+        fetchQuote();
+        if (state.gaslessMode) {
+          fetchFeeEstimate();
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setState(prev => ({ ...prev, outputAmount: '', quote: null }));
     }
-  }, [state.gaslessMode, fetchFeeEstimate]);
+  }, [state.inputToken, state.outputToken, state.inputAmount, state.gaslessMode, fetchFeeEstimate]);
+
+
 
   const switchTokens = () => {
     setState(prev => ({
@@ -408,7 +404,7 @@ export function SwapInterface() {
       // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {
         const usdcxAddress = config.stacksUsdcxAddress;
-        const usdcxAssetName = 'usdc-token';
+        const usdcxAssetName = 'usdcx';
 
         // If input token is also USDCx, we must COMBINE the post-conditions because 
         // willSendEq/willSendGte are aggregate limits per token per address.
@@ -434,7 +430,8 @@ export function SwapInterface() {
       // If it's a paymaster, maybe it doesn't hold them?
       // Assuming AMM pool holds funds.
 
-      const poolPrincipal = Pc.principal(`${contractAddress}.${contractName}`);
+      // In gasless mode, tokens are sent by the swap contract, not the paymaster.
+      const poolPrincipal = Pc.principal(config.stacksSwapContractAddress);
 
       if (isOutputStx) {
         postConditions.push(

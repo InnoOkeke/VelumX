@@ -188,18 +188,18 @@ export const DEFAULT_TOKENS = [
   {
     symbol: 'USDCx',
     name: 'USDC (xReserve)',
-    address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
+    address: process.env.STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
     decimals: 6,
     verified: true,
   },
   {
     symbol: 'VEX',
     name: 'VelumX Token',
-    address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
+    address: process.env.STACKS_VEX_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
     decimals: 6,
     verified: true,
   },
-] as const;
+];
 
 /**
  * Pool risk assessment criteria

@@ -148,14 +148,14 @@ export function BridgeInterface() {
     }
   };
 
-  // Fetch fee estimate when gasless mode changes
+  // Fetch fee estimate when gasless mode, direction, or connection changes
   useEffect(() => {
-    if (state.gaslessMode && state.direction === 'stacks-to-eth') {
+    if (state.gaslessMode && state.direction === 'stacks-to-eth' && stacksConnected) {
       fetchFeeEstimate();
-    } else {
+    } else if (!state.gaslessMode || state.direction !== 'stacks-to-eth') {
       setState(prev => ({ ...prev, feeEstimate: null }));
     }
-  }, [state.gaslessMode, state.direction]);
+  }, [state.gaslessMode, state.direction, stacksConnected]);
 
   // Auto-enable gasless mode if STX balance is low
   useEffect(() => {
@@ -477,7 +477,7 @@ export function BridgeInterface() {
         const pc = (Pc as any).principal(stacksAddress!)
           .willSendEq(totalUsdcx)
           // Fix: pass contract address and asset name separately, do not append suffix
-          .ft(config.stacksUsdcxAddress, 'usdc-token');
+          .ft(config.stacksUsdcxAddress, 'usdcx');
 
         // Create transaction options
         const txOptions: any = {

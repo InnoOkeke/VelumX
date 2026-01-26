@@ -32,12 +32,17 @@ try {
   process.exit(1);
 }
 
+import { paymasterService } from './services/PaymasterService';
+
 // Initialize services
 async function initializeServices() {
   try {
     // Initialize monitoring service
     monitoringService.initialize();
     logger.info('Monitoring service initialized');
+
+    // Warm up paymaster caches
+    await paymasterService.warmup();
 
     // Initialize transaction monitor
     await transactionMonitorService.initialize();
@@ -108,7 +113,7 @@ const server = app.listen(config.port, async () => {
     port: config.port,
     environment: process.env.NODE_ENV || 'development',
   });
-  
+
   // Initialize services after server starts
   try {
     await initializeServices();
@@ -121,18 +126,18 @@ const server = app.listen(config.port, async () => {
 // Graceful shutdown
 const shutdown = async () => {
   logger.info('Shutdown signal received, closing server gracefully...');
-  
+
   // Stop monitoring service
   monitoringService.shutdown();
-  
+
   // Stop transaction monitor service
   await transactionMonitorService.stopMonitoring();
-  
+
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
   });
-  
+
   // Force shutdown after 10 seconds
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');

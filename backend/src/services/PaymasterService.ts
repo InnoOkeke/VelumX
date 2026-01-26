@@ -23,12 +23,13 @@ export class PaymasterService {
   private config = getConfig();
   private cachedRates: ExchangeRates | null = null;
   private ratesCacheExpiry = 0;
-  private readonly RATES_CACHE_DURATION = 60000; // 1 minute
+  private readonly RATES_CACHE_DURATION = 300000; // 5 minutes
   private cachedRelayerKey: string | null = null;
+  private relayerNonce: bigint | null = null;
 
   /**
    * Fetches current exchange rates (STX/USD, USDC/USD)
-   * Caches rates for 1 minute to reduce API calls
+   * Caches rates for 5 minutes to reduce API calls
    */
   async getExchangeRates(): Promise<ExchangeRates> {
     // Return cached rates if still valid
@@ -175,15 +176,34 @@ export class PaymasterService {
       }
 
       // Configure network object with our RPC URL
-      // Configure network object with our RPC URL
       const network = createNetwork({
         network: STACKS_TESTNET,
         client: { baseUrl: this.config.stacksRpcUrl },
       });
 
-      logger.debug('Sponsoring transaction with network', {
+      // Fetch nonce if not tracked or reset
+      if (this.relayerNonce === null) {
+        logger.info('Fetching fresh relayer nonce from network');
+        try {
+          const response = await fetchWithRetry(
+            `${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/nonces`
+          );
+          const data: any = await response.json();
+          this.relayerNonce = BigInt(data.possible_next_nonce);
+        } catch (nonceError) {
+          logger.error('Failed to fetch relayer nonce', { error: nonceError });
+          // Fallback - will attempt auto-fetch if passed as undefined
+        }
+      }
+
+      const currentNonce = this.relayerNonce;
+      if (this.relayerNonce !== null) {
+        this.relayerNonce++; // Optimistically increment for next call
+      }
+
+      logger.debug('Sponsoring transaction', {
         rpcUrl: this.config.stacksRpcUrl,
-        chainId: network.chainId,
+        nonce: currentNonce?.toString() || 'auto',
         txVersion: network.transactionVersion
       });
 
@@ -197,7 +217,7 @@ export class PaymasterService {
         transaction: txObj,
         sponsorPrivateKey: relayerPrivateKey,
         fee: 50000n, // 0.05 STX sponsor fee
-        sponsorNonce: undefined, // Will be fetched automatically if network is provided
+        sponsorNonce: currentNonce || undefined,
         network,
       });
 
@@ -205,16 +225,65 @@ export class PaymasterService {
         txid: sponsoredTx.txid()
       });
 
-      // Broadcast the sponsored transaction
-      const broadcastResponse = await broadcastTransaction({ transaction: sponsoredTx, network });
+      // Broadcast the sponsored transaction with retries
+      let broadcastResponse: any;
+      let lastBroadcastError: any;
+      const MAX_BROADCAST_RETRIES = 3;
 
-      if ('error' in broadcastResponse) {
-        logger.error('Failed to broadcast sponsored transaction', {
-          error: broadcastResponse.error,
-          reason: broadcastResponse.reason,
+      for (let attempt = 1; attempt <= MAX_BROADCAST_RETRIES; attempt++) {
+        try {
+          logger.debug(`Broadcasting sponsored transaction (attempt ${attempt}/${MAX_BROADCAST_RETRIES})`, {
+            txid: sponsoredTx.txid()
+          });
+
+          broadcastResponse = await broadcastTransaction({ transaction: sponsoredTx, network });
+
+          if (!('error' in broadcastResponse)) {
+            break; // Success
+          }
+
+          lastBroadcastError = broadcastResponse;
+
+          // Specific check for BadNonce - reset our tracker so it refetches
+          if (broadcastResponse.reason === 'BadNonce' || (broadcastResponse.error && broadcastResponse.error.includes('Nonce'))) {
+            logger.warn('BadNonce detected, resetting relayer nonce tracker');
+            this.relayerNonce = null;
+          }
+
+          logger.warn(`Broadcast attempt ${attempt} failed`, {
+            error: broadcastResponse.error,
+            reason: broadcastResponse.reason,
+            txid: sponsoredTx.txid()
+          });
+
+          // Wait before retry if it's a transient node error
+          if (attempt < MAX_BROADCAST_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          }
+        } catch (broadError) {
+          lastBroadcastError = broadError;
+          logger.error(`Broadcast exception (attempt ${attempt})`, {
+            error: broadError instanceof Error ? broadError.message : String(broadError),
+            txid: sponsoredTx.txid()
+          });
+
+          if (attempt < MAX_BROADCAST_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          }
+        }
+      }
+
+      if (!broadcastResponse || 'error' in broadcastResponse) {
+        const errorMsg = broadcastResponse ?
+          `Broadcast failed: ${broadcastResponse.error}. Reason: ${broadcastResponse.reason || 'unknown'}` :
+          `Broadcast failed after ${MAX_BROADCAST_RETRIES} attempts.`;
+
+        logger.error('Final broadcast failure', {
+          error: errorMsg,
+          details: lastBroadcastError,
           txid: sponsoredTx.txid()
         });
-        throw new Error(`Broadcast failed: ${broadcastResponse.error}. Reason: ${broadcastResponse.reason || 'unknown'}`);
+        throw new Error(errorMsg);
       }
 
       const txid = broadcastResponse.txid;
@@ -227,9 +296,9 @@ export class PaymasterService {
 
       return txid;
     } catch (error) {
-      logger.error('Failed to sponsor transaction', {
+      logger.error('PaymasterService.sponsorTransaction failed', {
         userAddress,
-        error: (error as Error).message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -360,6 +429,19 @@ export class PaymasterService {
       // Try alternative API or use fallback
       logger.warn('Using fallback STX price');
       return 0.5; // Conservative fallback
+    }
+  }
+
+  /**
+   * Warm up caches on startup
+   */
+  async warmup(): Promise<void> {
+    logger.info('Warming up PaymasterService caches');
+    try {
+      await this.getExchangeRates();
+      logger.info('PaymasterService cache warmup successful');
+    } catch (error) {
+      logger.warn('PaymasterService cache warmup failed', { error });
     }
   }
 
