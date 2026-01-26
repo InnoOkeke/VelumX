@@ -220,6 +220,7 @@ export interface BackendConfig {
 
   // Relayer configuration
   relayerPrivateKey: string;
+  relayerSeedPhrase?: string;
   relayerStacksAddress: string;
   minStxBalance: bigint;
 

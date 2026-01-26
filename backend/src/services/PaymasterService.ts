@@ -15,12 +15,14 @@ import {
   PostConditionMode,
 } from '@stacks/transactions';
 import { STACKS_TESTNET, createNetwork } from '@stacks/network';
+import { generateWallet } from '@stacks/wallet-sdk';
 
 export class PaymasterService {
   private config = getConfig();
   private cachedRates: ExchangeRates | null = null;
   private ratesCacheExpiry = 0;
   private readonly RATES_CACHE_DURATION = 60000; // 1 minute
+  private cachedRelayerKey: string | null = null;
 
   /**
    * Fetches current exchange rates (STX/USD, USDC/USD)
@@ -131,6 +133,21 @@ export class PaymasterService {
     });
 
     try {
+      // Derive relayer key from seed phrase if not already cached
+      if (!this.cachedRelayerKey) {
+        if (this.config.relayerSeedPhrase) {
+          logger.info('Deriving relayer key from seed phrase');
+          const wallet = await generateWallet({
+            secretKey: this.config.relayerSeedPhrase,
+            password: '', // Standard empty password for Stacks wallets
+          });
+          this.cachedRelayerKey = wallet.accounts[0].stxPrivateKey;
+          logger.info('Relayer key derived successfully');
+        } else {
+          this.cachedRelayerKey = this.config.relayerPrivateKey;
+        }
+      }
+
       // Check relayer balance before sponsoring
       await this.checkRelayerBalance();
 
@@ -169,9 +186,9 @@ export class PaymasterService {
       });
 
       // Normalize relayer private key (32 bytes required for some SDK operations)
-      const relayerPrivateKey = this.config.relayerPrivateKey.length === 66
-        ? this.config.relayerPrivateKey.substring(0, 64)
-        : this.config.relayerPrivateKey;
+      const relayerPrivateKey = this.cachedRelayerKey!.length === 66
+        ? this.cachedRelayerKey!.substring(0, 64)
+        : this.cachedRelayerKey!;
 
       // Sponsor the transaction with relayer's private key
       const sponsoredTx = await sponsorTransaction({

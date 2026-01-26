@@ -22,6 +22,7 @@ const REQUIRED_ENV_VARS = [
   'ETHEREUM_RPC_URL',
   'STACKS_RPC_URL',
   'RELAYER_PRIVATE_KEY',
+  'RELAYER_SEED_PHRASE',
   'RELAYER_STACKS_ADDRESS',
 ] as const;
 
@@ -117,6 +118,7 @@ export function loadConfig(): BackendConfig {
 
     // Relayer configuration
     relayerPrivateKey: process.env.RELAYER_PRIVATE_KEY!,
+    relayerSeedPhrase: process.env.RELAYER_SEED_PHRASE,
     relayerStacksAddress: process.env.RELAYER_STACKS_ADDRESS!,
     minStxBalance: parseBigInt(process.env.MIN_STX_BALANCE, BigInt(1_000_000)), // 1 STX default
 
