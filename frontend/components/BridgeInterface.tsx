@@ -540,30 +540,34 @@ export function BridgeInterface() {
         }
 
         // Force correct transaction version for Testnet (128 / 0x80)
-        // This fixes the "Could not parse 8 as TransactionVersion" error if the network object default was incorrect
-        if ('version' in tx) {
-          console.log('Original Tx Version:', (tx as any).version);
-          (tx as any).version = 128;
-          // Also check chainId just in case
-          if ((tx as any).chainId) {
-            console.log('Original Tx ChainId:', (tx as any).chainId);
-            (tx as any).chainId = 0x80000000;
-          }
+        // Stacks SDK v7 uses 'transactionVersion' for serialization
+        const txAny = tx as any;
+        console.log('Tx Pre-Serialization State:', {
+          currentVersion: txAny.version,
+          currentTxVersion: txAny.transactionVersion,
+          currentChainId: txAny.chainId
+        });
+
+        txAny.transactionVersion = 128; // Standard Testnet version
+        txAny.version = 128;            // Legacy/Alias
+
+        if (txAny.chainId !== undefined) {
+          txAny.chainId = 0x80000000; // Testnet ChainId
         }
 
-        if (typeof (tx as any).serialize !== 'function') {
-          console.error('Transaction object is missing serialize():', tx);
+        if (typeof (tx as any).serializeBytes !== 'function') {
+          console.error('Transaction object is missing serializeBytes():', tx);
           throw new Error('Transaction serialization not available');
         }
-        const serialized = (tx as any).serialize();
+        const serialized = (tx as any).serializeBytes();
         if (!serialized) {
-          console.error('serialize() returned falsy value', { serialized, tx });
+          console.error('serializeBytes() returned falsy value', { serialized, tx });
           throw new Error('Transaction serialization failed');
         }
 
-        // Use Buffer for hex conversion to avoid SDK's strict Uint8Array checks (dual package hazard)
+        // Use our local bytesToHex which handles potentially polyfilled Uint8Arrays safely
         const txHex = bytesToHex(serialized);
-        console.log('Serialized Transaction Hex:', txHex); // DEBUG: check first byte for version
+        console.log('Serialized Transaction Hex:', txHex); // Should now start with '80' for Testnet
         if (!txHex) throw new Error('Failed to convert transaction to hex');
 
         // Step 2: Request user signature via wallet RPC (without broadcast)

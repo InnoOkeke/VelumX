@@ -441,23 +441,26 @@ export function SwapInterface() {
         }
 
         // Force correct transaction version for Testnet (128 / 0x80)
-        if ('version' in tx) {
-          (tx as any).version = 128; // Force Testnet
-          if ((tx as any).chainId) (tx as any).chainId = 0x80000000;
+        // Stacks SDK v7 uses 'transactionVersion' for serialization
+        const txAny = tx as any;
+        txAny.transactionVersion = 128; // Standard Testnet version
+        txAny.version = 128;            // Legacy/Alias
+        if (txAny.chainId !== undefined) {
+          txAny.chainId = 0x80000000; // Testnet ChainId
         }
 
-        if (typeof (tx as any).serialize !== 'function') {
-          console.error('Transaction object is missing serialize():', tx);
+        if (typeof (tx as any).serializeBytes !== 'function') {
+          console.error('Transaction object is missing serializeBytes():', tx);
           throw new Error('Transaction serialization not available');
         }
-        const serialized = (tx as any).serialize();
+        const serialized = (tx as any).serializeBytes();
         if (!serialized) {
-          console.error('serialize() returned falsy value', { serialized, tx });
+          console.error('serializeBytes() returned falsy value', { serialized, tx });
           throw new Error('Transaction serialization failed');
         }
 
-        // Use Buffer for hex conversion to avoid SDK's strict Uint8Array checks
         const txHex = bytesToHex(serialized);
+        console.log('Serialized Transaction Hex:', txHex);
         if (!txHex) throw new Error('Failed to convert transaction to hex');
 
         // Step 2: Request user signature via wallet RPC (without broadcast)
