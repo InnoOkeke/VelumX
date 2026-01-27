@@ -9,59 +9,41 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const NUM_RELAYERS = 5;
 
+import * as fs from 'fs';
+
+// ... (existing imports)
+
 async function main() {
     const seed = process.env.RELAYER_SEED_PHRASE;
+    // ... (logic)
 
-    if (!seed) {
-        console.error('Error: RELAYER_SEED_PHRASE not found in .env');
-        process.exit(1);
-    }
+    let output = '';
+    const log = (msg: string) => { console.log(msg); output += msg + '\n'; };
 
-    console.log('Deriving relayer addresses from seed...');
-    console.log('Seed found (starts with):', seed.substring(0, 10) + '...');
+    log('Deriving relayer addresses from seed...');
+    // ... (replace console.log with log)
 
-    try {
-        // Generate base wallet (Index 0)
-        let wallet = await generateWallet({
-            secretKey: seed,
-            password: '',
-        });
+    // ... (derivation loop)
 
-        const accounts = [];
-
-        // push index 0
-        // FIX: Using 128 (Testnet) explicitly
-        const address0 = getAddressFromPrivateKey(wallet.accounts[0].stxPrivateKey, 'testnet');
-        accounts.push({
-            index: 0,
-            address: address0,
-            privateKey: wallet.accounts[0].stxPrivateKey.substring(0, 10) + '...' // Masked for log
-        });
-
-        // Derive indices 1..4
-        for (let i = 1; i < NUM_RELAYERS; i++) {
-            wallet = generateNewAccount(wallet); // Adds next account to wallet
-            const newAccount = wallet.accounts[i];
-            // FIX: Using 128 (Testnet) explicitly
-            const newAddress = getAddressFromPrivateKey(newAccount.stxPrivateKey, 'testnet');
-            accounts.push({
-                index: i,
-                address: newAddress,
-                privateKey: newAccount.stxPrivateKey.substring(0, 10) + '...'
-            });
+    log('\n*** DERIVED RELAYER ADDRESSES AND BALANCES ***');
+    for (const account of accounts) {
+        try {
+            const response = await fetch(`https://api.testnet.hiro.so/extended/v1/address/${account.address}/balances`);
+            if (!response.ok) {
+                log(`Relayer [${account.index}]: ${account.address} - Failed to fetch balance (${response.status})`);
+                continue;
+            }
+            const data: any = await response.json();
+            const stx = data.stx.balance;
+            log(`Relayer [${account.index}]: ${account.address} - Balance: ${stx} microSTX`);
+        } catch (err) {
+            log(`Relayer [${account.index}]: ${account.address} - Error fetching balance`);
         }
-
-        console.log('\n*** DERIVED RELAYER ADDRESSES ***');
-        accounts.forEach(acc => {
-            console.log(`Relayer [${acc.index}]: ${acc.address}`);
-        });
-        console.log('*********************************\n');
-
-        console.log('Success: Address derivation logic works with explicit version 128.');
-
-    } catch (error) {
-        console.error('Failed to derive addresses:', error);
+        await new Promise(r => setTimeout(r, 1000));
     }
+    log('*********************************\n');
+
+    fs.writeFileSync('relayers_balance_v3.txt', output);
 }
 
 main().catch(console.error);

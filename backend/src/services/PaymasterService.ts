@@ -305,10 +305,8 @@ export class PaymasterService {
             nonce: currentNonce?.toString() || 'auto',
           });
 
-          // Normalize relayer private key (32 bytes required for some SDK operations)
-          const relayerPrivateKey = bestRelayer.privateKey.length === 66
-            ? bestRelayer.privateKey.substring(0, 64)
-            : bestRelayer.privateKey;
+          // Use relayer private key directly
+          const relayerPrivateKey = bestRelayer.privateKey;
 
           // Sponsor the transaction with relayer's private key
           const sponsoredTx = await sponsorTransaction({
