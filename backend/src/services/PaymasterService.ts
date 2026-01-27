@@ -14,7 +14,6 @@ import {
   AnchorMode,
   PostConditionMode,
   getAddressFromPrivateKey,
-  TransactionVersion,
 } from '@stacks/transactions';
 import { STACKS_TESTNET, createNetwork } from '@stacks/network';
 import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
