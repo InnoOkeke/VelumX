@@ -74,7 +74,7 @@ export function RemoveLiquidityForm({
                         style={{ color: 'var(--text-primary)' }}
                         disabled={state.isProcessing}
                     />
-                    <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3.5 rounded-2xl font-bold text-white shadow-lg">
+                    <div className="flex-shrink-0 bg-purple-600 px-6 py-3.5 rounded-2xl font-bold text-white shadow-lg">
                         LP
                     </div>
                 </div>
@@ -129,7 +129,7 @@ export function RemoveLiquidityForm({
                 <button
                     onClick={handleRemoveLiquidity}
                     disabled={!stacksConnected || state.isProcessing || !state.lpTokenAmount}
-                    className="w-full h-16 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold text-lg rounded-2xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-3 shadow-2xl shadow-red-500/20"
+                    className="w-full h-16 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-2xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-3 shadow-2xl shadow-red-500/20"
                 >
                     {state.isProcessing ? (
                         <>

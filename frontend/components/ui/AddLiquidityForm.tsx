@@ -107,7 +107,7 @@ export function AddLiquidityForm({
                 <button
                     onClick={handleAddLiquidity}
                     disabled={!stacksConnected || state.isProcessing || !state.amountA || !state.amountB}
-                    className="w-full h-16 bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold text-lg rounded-2xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-3 shadow-2xl shadow-purple-500/20"
+                    className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-bold text-lg rounded-2xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-3 shadow-2xl shadow-purple-500/20"
                 >
                     {state.isProcessing ? (
                         <>

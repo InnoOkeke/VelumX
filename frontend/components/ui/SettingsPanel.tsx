@@ -37,7 +37,7 @@ export function SettingsPanel({ slippage, setSlippage, isOpen }: SettingsPanelPr
                                 key={value}
                                 onClick={() => setSlippage(value)}
                                 className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${slippage === value
-                                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/20'
+                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
                                     : 'bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800 border border-gray-200/50 dark:border-gray-700/50'
                                     }`}
                                 style={slippage !== value ? { color: 'var(--text-secondary)' } : {}}

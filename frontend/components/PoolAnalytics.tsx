@@ -186,10 +186,10 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
         <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--border-color)' }}>
           <div className="flex items-center gap-4">
             <div className="flex items-center -space-x-2">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center text-white font-bold shadow-lg">
+              <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold shadow-lg">
                 {pool.tokenA.symbol.charAt(0)}
               </div>
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold shadow-lg">
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shadow-lg">
                 {pool.tokenB.symbol.charAt(0)}
               </div>
             </div>
@@ -389,7 +389,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center text-white text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
                             {pool.tokenA.symbol.charAt(0)}
                           </div>
                           <span style={{ color: 'var(--text-secondary)' }}>{pool.tokenA.symbol}</span>
@@ -400,7 +400,7 @@ export function PoolAnalytics({ pool, onClose }: PoolAnalyticsProps) {
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
                             {pool.tokenB.symbol.charAt(0)}
                           </div>
                           <span style={{ color: 'var(--text-secondary)' }}>{pool.tokenB.symbol}</span>

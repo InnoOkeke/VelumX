@@ -154,7 +154,7 @@ export function PoolBrowser() {
           </div>
           <button
             onClick={() => window.location.href = '#liquidity'}
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105"
+            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105"
           >
             <Plus className="w-5 h-5" />
             New Position
@@ -268,7 +268,7 @@ export function PoolBrowser() {
                 </p>
                 <button
                   onClick={() => window.location.href = '#liquidity'}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 inline-flex items-center gap-2"
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all duration-300 inline-flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
                   Create Pool
@@ -288,10 +288,10 @@ export function PoolBrowser() {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
                           {pool.tokenA.symbol.charAt(0)}
                         </div>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold text-sm shadow-lg -ml-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg -ml-3">
                           {pool.tokenB.symbol.charAt(0)}
                         </div>
                       </div>

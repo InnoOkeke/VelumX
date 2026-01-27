@@ -534,10 +534,10 @@ export function PositionDashboard() {
                       <div className="flex items-center gap-4">
                         {/* Pool Icon */}
                         <div className="flex items-center -space-x-2">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                          <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
                             {tokenASymbol.charAt(0)}
                           </div>
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
                             {tokenBSymbol.charAt(0)}
                           </div>
                         </div>

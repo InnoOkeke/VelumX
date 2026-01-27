@@ -93,7 +93,7 @@ export function SwapInterface() {
     error: null,
     success: null,
     quote: null,
-    gasFeeUsdcx: '1.0', // Default fallback
+    gasFeeUsdcx: '0.2', // Default fallback lowered from 1.0 to 0.2 for realism
     slippage: 0.5,
     showSettings: false,
   });
@@ -184,14 +184,20 @@ export function SwapInterface() {
       });
 
       const data = await response.json();
-      if (data.success) {
+      console.log('Fee Estimate Response:', data);
+
+      if (data.success && data.data) {
+        // Use the returned fee
         setState(prev => ({
           ...prev,
           gasFeeUsdcx: (Number(data.data.gasInUsdcx) / 1_000_000).toString(),
         }));
+      } else {
+        console.warn('Fee estimate failed or invalid data:', data);
       }
     } catch (error) {
       console.error('Failed to fetch fee estimate:', error);
+      // Keep default 0.2 if failed
     }
   }, [state.gaslessMode, config.backendUrl]);
 
@@ -784,7 +790,7 @@ export function SwapInterface() {
           <button
             onClick={handleSwap}
             disabled={!stacksConnected || state.isProcessing || !state.inputAmount || !state.outputAmount}
-            className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 dark:from-purple-600 dark:via-blue-600 dark:to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98]"
           >
             {state.isProcessing ? (
               <>

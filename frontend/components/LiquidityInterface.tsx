@@ -1029,7 +1029,7 @@ export function LiquidityInterface() {
           <button
             onClick={() => setState(prev => ({ ...prev, activeTab: 'liquidity' }))}
             className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'liquidity'
-              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              ? 'bg-purple-600 text-white shadow-lg'
               : 'hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             style={state.activeTab !== 'liquidity' ? {
@@ -1043,7 +1043,7 @@ export function LiquidityInterface() {
           <button
             onClick={() => setState(prev => ({ ...prev, activeTab: 'positions' }))}
             className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${state.activeTab === 'positions'
-              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              ? 'bg-purple-600 text-white shadow-lg'
               : 'hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             style={state.activeTab !== 'positions' ? {
@@ -1127,7 +1127,7 @@ export function LiquidityInterface() {
             </div>
 
             {/* Helper Tips */}
-            <div className="rounded-[2rem] p-8 bg-gradient-to-br from-purple-600/5 to-blue-600/5 border border-purple-100 dark:border-purple-900/20">
+            <div className="rounded-[2rem] p-8 bg-purple-500/5 border border-purple-100 dark:border-purple-900/20">
               <h4 className="font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Why provide liquidity?</h4>
               <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
                 Liquidity providers earn a 0.3% fee on all trades proportional to their share of the pool.

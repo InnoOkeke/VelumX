@@ -805,7 +805,7 @@ export function BridgeInterface() {
               style={{ color: 'var(--text-primary)' }}
               disabled={state.isProcessing}
             />
-            <div className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
+            <div className="flex items-center gap-2 bg-purple-600 dark:bg-purple-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
               <span className="font-bold text-sm text-white">{sourceToken}</span>
             </div>
           </div>
@@ -845,7 +845,7 @@ export function BridgeInterface() {
             <div className="flex-1 text-4xl font-mono min-w-0" style={{ color: 'var(--text-secondary)' }}>
               {state.amount || '0.00'}
             </div>
-            <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
+            <div className="flex items-center gap-2 bg-blue-600 dark:bg-blue-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
               <span className="font-bold text-sm text-white">{destToken}</span>
             </div>
           </div>
@@ -951,7 +951,7 @@ export function BridgeInterface() {
         <button
           onClick={handleBridge}
           disabled={!isConnected || state.isProcessing || !state.amount}
-          className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 dark:from-purple-600 dark:via-blue-600 dark:to-purple-600 hover:from-purple-700 hover:via-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98] light:ghost-button light:text-purple-700"
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98] light:ghost-button light:text-purple-700"
         >
           {state.isProcessing ? (
             <>

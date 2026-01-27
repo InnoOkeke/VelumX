@@ -39,7 +39,7 @@ export function WalletButton() {
       <>
         <button
           onClick={() => setShowConnector(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white px-5 py-2.5 rounded-full font-medium transition-all transform hover:scale-105 shadow-lg"
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-full font-medium transition-all transform hover:scale-105 shadow-lg"
         >
           <Wallet size={18} />
           Connect Wallet

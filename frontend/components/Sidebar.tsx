@@ -55,7 +55,7 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
                     <img src="/velumx-icon.svg" alt="VelumX" className="h-6 w-6" />
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-xl font-bold bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500 bg-clip-text text-transparent">
+                    <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
                         VelumX
                     </span>
                     <span className="text-[10px] font-bold tracking-widest text-orange-500 opacity-80">
@@ -83,7 +83,7 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
                                 }`}
                         >
                             <div className={`p-1.5 rounded-lg transition-all duration-300 ${isActive
-                                ? 'bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md'
+                                ? 'bg-purple-600 text-white shadow-md'
                                 : `${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-slate-800 text-white border-slate-700'} border shadow-sm group-hover:scale-110`
                                 }`}>
                                 <Icon className="h-4 w-4" />

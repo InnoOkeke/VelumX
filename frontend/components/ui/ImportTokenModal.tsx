@@ -85,7 +85,7 @@ export function ImportTokenModal({
                     <button
                         onClick={handleImportToken}
                         disabled={isProcessing || !importAddress.trim()}
-                        className="flex-[2] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 rounded-2xl transition-all disabled:opacity-50 shadow-xl shadow-purple-500/20 flex items-center justify-center gap-2"
+                        className="flex-[2] bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all disabled:opacity-50 shadow-xl shadow-purple-500/20 flex items-center justify-center gap-2"
                     >
                         {isProcessing ? (
                             <>

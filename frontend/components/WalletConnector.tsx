@@ -117,7 +117,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
           {/* Header */}
           <div className="flex items-center justify-between p-6 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center">
                 <Wallet className="w-5 h-5 text-white" />
               </div>
               <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Connect Wallet</h2>
@@ -138,7 +138,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
             <button
               onClick={() => setActiveTab('ethereum')}
               className={`flex-1 py-3 px-4 text-sm font-semibold rounded-xl transition-all ${activeTab === 'ethereum'
-                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30'
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               style={{ color: activeTab === 'ethereum' ? '#FFFFFF' : 'var(--text-secondary)' }}
@@ -148,7 +148,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
             <button
               onClick={() => setActiveTab('stacks')}
               className={`flex-1 py-3 px-4 text-sm font-semibold rounded-xl transition-all ${activeTab === 'stacks'
-                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/30'
+                ? 'bg-orange-600 text-white shadow-lg shadow-orange-500/30'
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               style={{ color: activeTab === 'stacks' ? '#FFFFFF' : 'var(--text-secondary)' }}
@@ -177,7 +177,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                     border: '1px solid rgba(16, 185, 129, 0.2)'
                   }}>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-white" />
                       </div>
                       <div>
@@ -269,7 +269,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                           }}
                         >
                           <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                            <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                               <Wallet className="w-6 h-6 text-white" />
                             </div>
                             <div className="text-left">
@@ -296,7 +296,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                     border: '1px solid rgba(16, 185, 129, 0.2)'
                   }}>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-white" />
                       </div>
                       <div>
@@ -360,7 +360,7 @@ export function WalletConnector({ onClose }: WalletConnectorProps) {
                         }}
                       >
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                          <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg">
                             <Wallet className="w-6 h-6 text-white" />
                           </div>
                           <div className="text-left">

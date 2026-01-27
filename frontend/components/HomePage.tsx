@@ -97,7 +97,7 @@ export default function HomePage() {
           {/* Hero Section - Reduced for internal pages */}
           <div className="mb-12 relative">
             <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 opacity-20 dark:opacity-10 pointer-events-none">
-              <div className="w-[500px] h-[500px] bg-gradient-to-r from-purple-600 to-blue-600 rounded-full blur-[120px]"></div>
+              <div className="w-[500px] h-[500px] bg-purple-600 rounded-full blur-[120px] opacity-20"></div>
             </div>
 
             <div className="flex flex-col gap-2 relative z-10">

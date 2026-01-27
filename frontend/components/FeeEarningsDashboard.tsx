@@ -425,7 +425,7 @@ export function FeeEarningsDashboard() {
               border: `1px solid var(--border-color)`,
             }}>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-green-600 flex items-center justify-center">
                   <DollarSign className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -448,7 +448,7 @@ export function FeeEarningsDashboard() {
               border: `1px solid var(--border-color)`,
             }}>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -474,7 +474,7 @@ export function FeeEarningsDashboard() {
               border: `1px solid var(--border-color)`,
             }}>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center">
                   <PieChart className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -581,7 +581,7 @@ export function FeeEarningsDashboard() {
                     style={{ border: `1px solid var(--border-color)` }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-green-600 flex items-center justify-center">
                         <DollarSign className="w-5 h-5 text-white" />
                       </div>
                       <div>
@@ -635,7 +635,7 @@ export function FeeEarningsDashboard() {
             border: `1px solid var(--border-color)`,
           }}>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center">
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div>

@@ -38,10 +38,10 @@ export function PoolItem({
                 {/* Pool Info */}
                 <div className="flex items-center gap-4">
                     <div className="flex items-center -space-x-3">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-white font-bold text-lg shadow-lg border-2 border-white dark:border-gray-900 group-hover:scale-110 transition-transform duration-300">
+                        <div className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg border-2 border-white dark:border-gray-900 group-hover:scale-110 transition-transform duration-300">
                             {pool.tokenA.symbol.charAt(0)}
                         </div>
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-bold text-lg shadow-lg border-2 border-white dark:border-gray-900 group-hover:scale-110 transition-transform duration-300 z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg border-2 border-white dark:border-gray-900 group-hover:scale-110 transition-transform duration-300 z-10">
                             {pool.tokenB.symbol.charAt(0)}
                         </div>
                     </div>

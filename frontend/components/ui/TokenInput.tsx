@@ -43,8 +43,8 @@ export function TokenInput({
     variant = 'purple'
 }: TokenInputProps) {
     const gradientClass = variant === 'purple'
-        ? 'from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 shadow-purple-500/50'
-        : 'from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 shadow-blue-500/50';
+        ? 'bg-purple-600 shadow-purple-500/50'
+        : 'bg-blue-600 shadow-blue-500/50';
 
     return (
         <div className="group rounded-2xl p-6 transition-all duration-300 relative"
@@ -77,7 +77,7 @@ export function TokenInput({
                             const selected = tokens.find(t => t.symbol === e.target.value);
                             if (selected) setToken(selected);
                         }}
-                        className={`appearance-none bg-gradient-to-r ${gradientClass} text-white pl-5 pr-10 py-3 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg flex items-center gap-2 border-none`}
+                        className={`appearance-none ${gradientClass} text-white pl-5 pr-10 py-3 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg flex items-center gap-2 border-none`}
                         disabled={isProcessing}
                     >
                         {Array.isArray(tokens) && (tokens || []).map(t => (
