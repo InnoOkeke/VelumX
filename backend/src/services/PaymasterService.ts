@@ -14,6 +14,7 @@ import {
   AnchorMode,
   PostConditionMode,
   getAddressFromPrivateKey,
+  TransactionVersion,
 } from '@stacks/transactions';
 import { STACKS_TESTNET, createNetwork } from '@stacks/network';
 import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
@@ -156,7 +157,7 @@ export class PaymasterService {
           });
 
           // push index 0
-          const address0 = getAddressFromPrivateKey(wallet.accounts[0].stxPrivateKey, 128 as any);
+          const address0 = getAddressFromPrivateKey(wallet.accounts[0].stxPrivateKey, TransactionVersion.Testnet);
           this.relayerAccounts.push({
             address: address0,
             privateKey: wallet.accounts[0].stxPrivateKey,
@@ -168,7 +169,7 @@ export class PaymasterService {
           for (let i = 1; i < this.NUM_RELAYERS; i++) {
             wallet = generateNewAccount(wallet); // Adds next account to wallet
             const newAccount = wallet.accounts[i];
-            const newAddress = getAddressFromPrivateKey(newAccount.stxPrivateKey, 128 as any); // 128 = Testnet
+            const newAddress = getAddressFromPrivateKey(newAccount.stxPrivateKey, TransactionVersion.Testnet);
             this.relayerAccounts.push({
               address: newAddress,
               privateKey: newAccount.stxPrivateKey,
@@ -248,6 +249,14 @@ export class PaymasterService {
         network: STACKS_TESTNET,
         client: { baseUrl: this.config.stacksRpcUrl },
       });
+
+      // Force Testnet version and add legacy properties to prevent "Unexpected transactionVersion undefined"
+      // This is critical because STACKS_TESTNET import might be incomplete or SDK versions might mismatch
+      const networkAny = network as any;
+      networkAny.transactionVersion = 128; // Standard Testnet version
+      networkAny.version = 128;            // Legacy support
+      networkAny.chainId = 0x80000000;     // Testnet ChainId
+      networkAny.isMainnet = () => false;  // Helper
 
       // Fetch nonce if not tracked or reset
       if (this.relayerNonce === null) {
