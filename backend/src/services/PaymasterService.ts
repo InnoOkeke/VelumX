@@ -27,6 +27,9 @@ export class PaymasterService {
   private readonly RATES_CACHE_DURATION = 300000; // 5 minutes
   private cachedRelayerKey: string | null = null;
   private relayerNonce: bigint | null = null;
+  private static lastSponsorshipTime = 0;
+  private static isCircuitBroken = false;
+  private static circuitBreakEndTime = 0;
   private static rateLimitReset = 0;
 
   /**
