@@ -27,9 +27,19 @@ export class PaymasterService {
   private readonly RATES_CACHE_DURATION = 300000; // 5 minutes
   private cachedRelayerKey: string | null = null;
   private relayerNonce: bigint | null = null;
-  private static lastSponsorshipTime = 0;
-  private static isCircuitBroken = false;
-  private static circuitBreakEndTime = 0;
+  private static rateLimitReset = 0;
+
+  /**
+   * Helper to handle API rate limits
+   */
+  private handleApiError(error: any) {
+    const msg = error?.message || String(error);
+    if (msg.includes('429') || msg.toLowerCase().includes('rate limit')) {
+      logger.warn('Global rate limit hit, pausing Paymaster service for 20s');
+      PaymasterService.rateLimitReset = Date.now() + 20000;
+    }
+    throw error;
+  }
 
   // Multi-Account logic
   private relayerAccounts: { address: string; privateKey: string; index: number; nonce: bigint | null }[] = [];
@@ -143,6 +153,12 @@ export class PaymasterService {
       estimatedFee: estimatedFee.toString(),
     });
 
+    // Check Global Rate Limit
+    if (Date.now() < PaymasterService.rateLimitReset) {
+      const waitTime = Math.ceil((PaymasterService.rateLimitReset - Date.now()) / 1000);
+      throw new Error(`Service temporarily paused due to API rate limits. Please retry in ${waitTime}s.`);
+    }
+
     try {
       // Initialize relayer accounts if not done
       if (this.relayerAccounts.length === 0) {
@@ -205,10 +221,10 @@ export class PaymasterService {
         PaymasterService.isCircuitBroken = false;
       }
 
-      // Mandatory throttling: min 5s between sponsorships to prevent mempool bursts
+      // Mandatory throttling: min 2s between sponsorships (prevent rapid-fire)
       const now = Date.now();
       const timeSinceLast = now - PaymasterService.lastSponsorshipTime;
-      const MIN_DELAY = 5000;
+      const MIN_DELAY = 2000;
       if (timeSinceLast < MIN_DELAY) {
         const wait = MIN_DELAY - timeSinceLast;
         logger.info(`Applying mandatory throttling, waiting ${wait}ms`);
@@ -272,8 +288,7 @@ export class PaymasterService {
               const data: any = await response.json();
               bestRelayer.nonce = BigInt(data.possible_next_nonce);
             } catch (nonceError) {
-              logger.error('Failed to fetch relayer nonce', { error: nonceError });
-              // Fallback - will attempt auto-fetch if passed as undefined
+              this.handleApiError(nonceError);
             }
           }
 
@@ -336,6 +351,11 @@ export class PaymasterService {
                 txid: sponsoredTx.txid()
               });
 
+              // Check for rate limit in broadcast error
+              if (String(broadcastResponse.error).includes('429')) {
+                this.handleApiError(new Error('Broadcast 429'));
+              }
+
               // Wait before retry if it's a transient node error
               if (attempt < MAX_BROADCAST_RETRIES) {
                 let delay = 2000 * attempt;
@@ -354,6 +374,9 @@ export class PaymasterService {
                 error: broadError instanceof Error ? broadError.message : String(broadError),
                 txid: sponsoredTx.txid()
               });
+
+              // Catch rate limits here
+              try { this.handleApiError(broadError); } catch (e) { }
 
               if (attempt < MAX_BROADCAST_RETRIES) {
                 await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
@@ -397,6 +420,10 @@ export class PaymasterService {
           // Catch errors from within the loop (like balance checks or sponsorship failures)
           const errMsg = attemptError.message || String(attemptError);
           lastError = attemptError;
+
+          if (errMsg.includes('Rate limit') || errMsg.includes('429')) {
+            throw attemptError; // Re-throw rate limits immediately, don't rotate
+          }
 
           if (errMsg.includes('TooMuchChaining') || errMsg.includes('ConflictingNonceInMempool') || errMsg.includes('BadNonce')) {
             logger.warn(`Relayer attempt ${relayerAttempt + 1} failed with retryable error: ${errMsg}`);
@@ -461,10 +488,7 @@ export class PaymasterService {
 
         return hasSufficientBalance;
       } catch (error) {
-        logger.error('Failed to validate user balance', {
-          userAddress,
-          error: (error as Error).message,
-        });
+        this.handleApiError(error);
         return false;
       }
     }, 30); // 30 second cache for user balance
@@ -487,8 +511,11 @@ export class PaymasterService {
     // If only one account available, return it
     if (availableAccounts.length === 1) return availableAccounts[0];
 
+    // Shuffle accounts to distribute API load
+    const shuffled = availableAccounts.sort(() => 0.5 - Math.random());
+
     // For multiple accounts, check mempool depth
-    for (const account of availableAccounts) {
+    for (const account of shuffled) {
       const depth = await this.getMempoolDepth(account.address);
       if (depth < 15) { // Threshold
         logger.info(`Selected relayer ${account.index} with depth ${depth}`);
@@ -540,7 +567,7 @@ export class PaymasterService {
 
         return true; // Needed for withCache
       } catch (error) {
-        logger.error('Failed to check relayer balance', { error });
+        this.handleApiError(error);
         throw error;
       }
     }, 300); // 5 minute cache
@@ -558,7 +585,11 @@ export class PaymasterService {
       return data.total || 0;
     } catch (error) {
       logger.error('Failed to fetch mempool depth', { address, error });
-      return 0; // Fallback to 0 so we don't block
+      // Don't throw for mempool depth, just return high number to avoid selection
+      if (String(error).includes('429')) {
+        this.handleApiError(error); // This will throw
+      }
+      return 100; // Treat error as congested
     }
   }
 
