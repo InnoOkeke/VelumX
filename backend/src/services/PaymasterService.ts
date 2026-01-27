@@ -156,7 +156,7 @@ export class PaymasterService {
           });
 
           // push index 0
-          const address0 = getAddressFromPrivateKey(wallet.accounts[0].stxPrivateKey, TransactionVersion.Testnet);
+          const address0 = getAddressFromPrivateKey(wallet.accounts[0].stxPrivateKey, 128 as any);
           this.relayerAccounts.push({
             address: address0,
             privateKey: wallet.accounts[0].stxPrivateKey,
@@ -168,7 +168,7 @@ export class PaymasterService {
           for (let i = 1; i < this.NUM_RELAYERS; i++) {
             wallet = generateNewAccount(wallet); // Adds next account to wallet
             const newAccount = wallet.accounts[i];
-            const newAddress = getAddressFromPrivateKey(newAccount.stxPrivateKey, TransactionVersion.Testnet);
+            const newAddress = getAddressFromPrivateKey(newAccount.stxPrivateKey, 128 as any);
             this.relayerAccounts.push({
               address: newAddress,
               privateKey: newAccount.stxPrivateKey,
