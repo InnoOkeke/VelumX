@@ -392,10 +392,16 @@ export class PaymasterService {
               `Broadcast failed: ${broadcastResponse.error}. Reason: ${broadcastResponse.reason || 'unknown'}` :
               `Broadcast failed after ${MAX_BROADCAST_RETRIES} attempts.`;
 
-            // If we hit TooMuchChaining after all retries, add to failed list and retry logic
-            if (errorMsg.includes('TooMuchChaining')) {
-              logger.warn(`Relayer ${bestRelayer.address} is congested (TooMuchChaining), switching...`);
+            // If we hit TooMuchChaining or NotEnoughFunds after all retries, add to failed list and retry logic
+            if (errorMsg.includes('TooMuchChaining') || errorMsg.includes('NotEnoughFunds') || errorMsg.includes('BadNonce')) {
+              logger.warn(`Relayer ${bestRelayer.address} failed (${broadcastResponse?.reason}), switching...`);
               failedRelayers.push(bestRelayer.address);
+              // Invalidate balance cache if funds issue
+              if (errorMsg.includes('NotEnoughFunds')) {
+                const cacheKey = `relayer:balance:${bestRelayer.address}`;
+                // We can't invalidate via redis here easily without a delete method, 
+                // but we can ensure the loop picks a different relayer.
+              }
               lastError = new Error(errorMsg);
               bestRelayer.nonce = null; // Reset nonce tracking
               continue; // Try next relayer
@@ -428,7 +434,7 @@ export class PaymasterService {
             throw attemptError; // Re-throw rate limits immediately, don't rotate
           }
 
-          if (errMsg.includes('TooMuchChaining') || errMsg.includes('ConflictingNonceInMempool') || errMsg.includes('BadNonce')) {
+          if (errMsg.includes('TooMuchChaining') || errMsg.includes('ConflictingNonceInMempool') || errMsg.includes('BadNonce') || errMsg.includes('NotEnoughFunds')) {
             logger.warn(`Relayer attempt ${relayerAttempt + 1} failed with retryable error: ${errMsg}`);
             continue;
           }
