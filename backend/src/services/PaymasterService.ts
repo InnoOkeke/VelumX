@@ -13,9 +13,10 @@ import {
   deserializeTransaction,
   AnchorMode,
   PostConditionMode,
+  getAddressFromPrivateKey,
 } from '@stacks/transactions';
 import { STACKS_TESTNET, createNetwork } from '@stacks/network';
-import { generateWallet } from '@stacks/wallet-sdk';
+import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
 import { fetchWithRetry } from '../utils/fetch';
 import { withCache, CACHE_KEYS } from '../cache/redis';
 
@@ -147,55 +148,42 @@ export class PaymasterService {
       if (this.relayerAccounts.length === 0) {
         if (this.config.relayerSeedPhrase) {
           logger.info(`Deriving ${this.NUM_RELAYERS} relayer accounts from seed`);
-          for (let i = 0; i < this.NUM_RELAYERS; i++) {
-            // Standard Stacks derivation path with index increment
-            // m/44'/5757'/0'/0/{index}
-            const wallet = await generateWallet({
-              secretKey: this.config.relayerSeedPhrase,
-              password: '',
+
+          // Generate base wallet (Index 0)
+          let wallet = await generateWallet({
+            secretKey: this.config.relayerSeedPhrase,
+            password: '',
+          });
+
+          // push index 0
+          const address0 = getAddressFromPrivateKey(wallet.accounts[0].stxPrivateKey, 128 as any);
+          this.relayerAccounts.push({
+            address: address0,
+            privateKey: wallet.accounts[0].stxPrivateKey,
+            index: 0,
+            nonce: null
+          });
+
+          // Derive indices 1..4
+          for (let i = 1; i < this.NUM_RELAYERS; i++) {
+            wallet = generateNewAccount(wallet); // Adds next account to wallet
+            const newAccount = wallet.accounts[i];
+            const newAddress = getAddressFromPrivateKey(newAccount.stxPrivateKey, 128 as any); // 128 = Testnet
+            this.relayerAccounts.push({
+              address: newAddress,
+              privateKey: newAccount.stxPrivateKey,
+              index: i,
+              nonce: null
             });
-            // Note: @stacks/wallet-sdk generateWallet creates index 0 by default. 
-            // We'd ideally want deriveStxAccount but simple wallet generation with index is complex in this version.
-            // Workaround: We will use the single primary account for now if full derivation is complex, 
-            // BUT to implement true round robin we need `deriveStxAccount` or similar.
-            // Given library constraints, let's assume valid implementation or stick to 1 if complex.
-            // Wait, generateWallet returns a wallet object. We can use `deriveAccount` on it if available?
-            // Checking imports... `generateWallet` is available.
-
-            // ACTUALLY: Let's stick to a robust implementation. We need to derive multiple accounts.
-            // Since we can't easily do it without the full `Wallet` object methods which might not be exposed in this helper,
-            // let's try to grab just the main one for now if I can't find the derivation docs in memory.
-            // WAIT: I can just use the provided single key for index 0 and warn.
-            // BETTER: Let's assume the user provided ONE key in .env for now to not break it, 
-            // OR implement the loop if I can import `deriveStxAccount`.
-
-            // SIMPLIFICATION FOR THIS STEP: 
-            // To avoid breaking the build with unknown imports, I will implement a "pseudo" round robin 
-            // that just uses the main account but structures it for expansion. 
-            // IF the user provides a seed, we can TRY to derive.
-
-            // CORRECT APPROACH: The user authorized "Round Robin".
-            // I will use `wallet.accounts[0]` for now but log the ambition.
-            // To truly do it, I need `deriveChildAccount`.
-
-            // Let's implement the structure for ONE account first that acts as "Best", 
-            // then I will add the logic to loop if `relayerSeedPhrase` is present.
-
-            const account = wallet.accounts[0]; // TODO: Derive index `i`
-            // Use config address for index 0 to avoid type issues if stxAddress is missing on Account object
-            const address = i === 0 ? this.config.relayerStacksAddress : account.stxPrivateKey; // Fallback if we were looping (but we break)
-
-            // Only add if unique
-            if (!this.relayerAccounts.find(a => a.address === this.config.relayerStacksAddress)) {
-              this.relayerAccounts.push({
-                address: this.config.relayerStacksAddress,
-                privateKey: account.stxPrivateKey, // This property definitely exists
-                index: 0,
-                nonce: null
-              });
-            }
-            break; // STOP: Only 1 account is safe without precise derivation code.
           }
+
+          // Log ALL derived addresses for funding
+          logger.info('*** MULTI-ACCOUNT RELAYER CONFIGURATION ***');
+          this.relayerAccounts.forEach(acc => {
+            logger.info(`Relayer [${acc.index}]: ${acc.address}`);
+          });
+          logger.info('*** PLEASE FUND THESE ADDRESSES TO BYPASS CONGESTION ***');
+
         } else {
           // Single private key fallback
           this.relayerAccounts.push({
@@ -204,6 +192,7 @@ export class PaymasterService {
             index: 0,
             nonce: null
           });
+          logger.warn('Single private key provided. Round-robin disabled. Congestion may block service.');
         }
       }
 
