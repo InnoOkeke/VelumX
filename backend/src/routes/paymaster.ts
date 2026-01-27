@@ -142,6 +142,14 @@ router.post('/sponsor', strictLimiter, async (req: Request, res: Response) => {
       });
     }
 
+    if (errorMessage.includes('Relayer mempool congested')) {
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: errorMessage, // Keeps the "Please wait X server" part
+        timestamp: Date.now(),
+      });
+    }
+
     res.status(500).json({
       error: 'Internal Server Error',
       message: errorMessage || 'Failed to sponsor transaction',

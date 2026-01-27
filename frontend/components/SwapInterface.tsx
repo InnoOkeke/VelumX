@@ -522,10 +522,14 @@ export function SwapInterface() {
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
           const win = window as any;
-          // Robust provider detection
+
+          // Fix Deprecation Warning: Prioritize LeatherProvider global
+          if (win.LeatherProvider) return win.LeatherProvider;
+
+          // Robust provider detection (Xverse, Hiro, etc.)
           if (win.xverse?.stacks) return win.xverse.stacks;
           if (win.stx?.request) return win.stx;
-          return win.StacksProvider || win.LeatherProvider || win.XverseProvider || null;
+          return win.StacksProvider || win.XverseProvider || null;
         };
 
         const provider = getProvider();
@@ -578,7 +582,12 @@ export function SwapInterface() {
         });
 
         sponsorData = await sponsorResponse.json();
-        if (!sponsorData.success) {
+
+        if (!sponsorResponse.ok) {
+          // Handle Congestion (429) specifically
+          if (sponsorResponse.status === 429 && sponsorData.message?.includes('congested')) {
+            throw new Error(sponsorData.message); // Will be caught below
+          }
           throw new Error(sponsorData.message || 'Sponsorship failed');
         }
       } else {
