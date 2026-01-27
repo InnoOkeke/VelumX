@@ -216,374 +216,405 @@ export class PaymasterService {
       }
       PaymasterService.lastSponsorshipTime = Date.now();
 
-      // Select best relayer
-      const bestRelayer = await this.getBestRelayer();
+      const MAX_RELAYER_ATTEMPTS = 3;
+      const failedRelayers: string[] = [];
+      let lastError: any = null;
 
-      // Check relayer balance (using the selected one)
-      await this.checkRelayerBalance(bestRelayer.address);
-
-      // Validate user has sufficient USDCx balance
-      const hasSufficientBalance = await this.validateUserBalance(
-        userAddress,
-        estimatedFee
-      );
-
-      if (!hasSufficientBalance) {
-        throw new Error('User has insufficient USDCx balance to pay fee');
-      }
-
-      // If userTransaction is a string (hex), deserialize it
-      let txObj = userTransaction;
-      if (typeof userTransaction === 'string') {
+      for (let relayerAttempt = 0; relayerAttempt < MAX_RELAYER_ATTEMPTS; relayerAttempt++) {
         try {
-          txObj = deserializeTransaction(userTransaction);
-        } catch (error) {
-          logger.error('Failed to deserialize transaction', { error, tx: userTransaction });
-          throw new Error('Invalid transaction data. Deserialization failed.');
-        }
-      }
+          // Select best relayer (excluding ones that failed this session)
+          const bestRelayer = await this.getBestRelayer(failedRelayers);
 
-      // Configure network object with our RPC URL
-      const network = createNetwork({
-        network: STACKS_TESTNET,
-        client: { baseUrl: this.config.stacksRpcUrl },
-      });
+          // Check relayer balance (using the selected one)
+          await this.checkRelayerBalance(bestRelayer.address);
 
-      // Force Testnet version and add legacy properties to prevent "Unexpected transactionVersion undefined"
-      // This is critical because STACKS_TESTNET import might be incomplete or SDK versions might mismatch
-      const networkAny = network as any;
-      networkAny.transactionVersion = 128; // Standard Testnet version
-      networkAny.version = 128;            // Legacy support
-      networkAny.chainId = 0x80000000;     // Testnet ChainId
-      networkAny.isMainnet = () => false;  // Helper
-
-      // Fetch nonce if not tracked or reset
-      if (this.relayerNonce === null) {
-        logger.info('Fetching fresh relayer nonce from network');
-        try {
-          const response = await fetchWithRetry(
-            `${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/nonces`
+          // Validate user has sufficient USDCx balance
+          const hasSufficientBalance = await this.validateUserBalance(
+            userAddress,
+            estimatedFee
           );
-          const data: any = await response.json();
-          this.relayerNonce = BigInt(data.possible_next_nonce);
-        } catch (nonceError) {
-          logger.error('Failed to fetch relayer nonce', { error: nonceError });
-          // Fallback - will attempt auto-fetch if passed as undefined
-        }
-      }
 
-      const currentNonce = this.relayerNonce;
-      if (this.relayerNonce !== null) {
-        this.relayerNonce++; // Optimistically increment for next call
-      }
-
-      logger.debug('Sponsoring transaction', {
-        rpcUrl: this.config.stacksRpcUrl,
-        nonce: currentNonce?.toString() || 'auto',
-        txVersion: network.transactionVersion
-      });
-
-      // Normalize relayer private key (32 bytes required for some SDK operations)
-      const relayerPrivateKey = bestRelayer.privateKey.length === 66
-        ? bestRelayer.privateKey.substring(0, 64)
-        : bestRelayer.privateKey;
-
-      // Sponsor the transaction with relayer's private key
-      const sponsoredTx = await sponsorTransaction({
-        transaction: txObj,
-        sponsorPrivateKey: relayerPrivateKey,
-        fee: 50000n, // 0.05 STX sponsor fee
-        sponsorNonce: currentNonce || undefined,
-        network,
-      });
-
-      logger.debug('Transaction sponsored, broadcasting...', {
-        txid: sponsoredTx.txid()
-      });
-
-      // Broadcast the sponsored transaction with retries
-      let broadcastResponse: any;
-      let lastBroadcastError: any;
-      const MAX_BROADCAST_RETRIES = 3;
-
-      for (let attempt = 1; attempt <= MAX_BROADCAST_RETRIES; attempt++) {
-        try {
-          logger.debug(`Broadcasting sponsored transaction (attempt ${attempt}/${MAX_BROADCAST_RETRIES})`, {
-            txid: sponsoredTx.txid()
-          });
-
-          broadcastResponse = await broadcastTransaction({ transaction: sponsoredTx, network });
-
-          if (!('error' in broadcastResponse)) {
-            break; // Success
+          if (!hasSufficientBalance) {
+            throw new Error('User has insufficient USDCx balance to pay fee');
           }
 
-          lastBroadcastError = broadcastResponse;
-
-          // Specific check for BadNonce - reset our tracker so it refetches
-          if (broadcastResponse.reason === 'BadNonce' || (broadcastResponse.error && broadcastResponse.error.includes('Nonce'))) {
-            logger.warn('BadNonce detected, resetting relayer nonce tracker');
-            this.relayerNonce = null;
-          }
-
-          logger.warn(`Broadcast attempt ${attempt} failed`, {
-            error: broadcastResponse.error,
-            reason: broadcastResponse.reason,
-            txid: sponsoredTx.txid()
-          });
-
-          // Wait before retry if it's a transient node error
-          if (attempt < MAX_BROADCAST_RETRIES) {
-            let delay = 2000 * attempt;
-
-            // Special handling for TooMuchChaining - back off more aggressively
-            if (broadcastResponse.reason === 'TooMuchChaining' || (broadcastResponse.error && broadcastResponse.error.includes('TooMuchChaining'))) {
-              logger.warn('TooMuchChaining detected, increasing retry delay');
-              delay = 10000 * attempt; // 10s, 20s, 30s...
+          // If userTransaction is a string (hex), deserialize it
+          let txObj = userTransaction;
+          if (typeof userTransaction === 'string') {
+            try {
+              txObj = deserializeTransaction(userTransaction);
+            } catch (error) {
+              logger.error('Failed to deserialize transaction', { error, tx: userTransaction });
+              throw new Error('Invalid transaction data. Deserialization failed.');
             }
-
-            await new Promise(resolve => setTimeout(resolve, delay));
           }
-        } catch (broadError) {
-          lastBroadcastError = broadError;
-          logger.error(`Broadcast exception (attempt ${attempt})`, {
-            error: broadError instanceof Error ? broadError.message : String(broadError),
+
+          // Configure network object with our RPC URL
+          const network = createNetwork({
+            network: STACKS_TESTNET,
+            client: { baseUrl: this.config.stacksRpcUrl },
+          });
+
+          // Force Testnet version and add legacy properties to prevent "Unexpected transactionVersion undefined"
+          // This is critical because STACKS_TESTNET import might be incomplete or SDK versions might mismatch
+          const networkAny = network as any;
+          networkAny.transactionVersion = 128; // Standard Testnet version
+          networkAny.version = 128;            // Legacy support
+          networkAny.chainId = 0x80000000;     // Testnet ChainId
+          networkAny.isMainnet = () => false;  // Helper
+
+          // Fetch nonce if not tracked or reset
+          if (this.relayerNonce === null) {
+            logger.info('Fetching fresh relayer nonce from network');
+            try {
+              const response = await fetchWithRetry(
+                `${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/nonces`
+              );
+              const data: any = await response.json();
+              this.relayerNonce = BigInt(data.possible_next_nonce);
+            } catch (nonceError) {
+              logger.error('Failed to fetch relayer nonce', { error: nonceError });
+              // Fallback - will attempt auto-fetch if passed as undefined
+            }
+          }
+
+          const currentNonce = this.relayerNonce;
+          if (this.relayerNonce !== null) {
+            this.relayerNonce++; // Optimistically increment for next call
+          }
+
+          logger.debug('Sponsoring transaction', {
+            rpcUrl: this.config.stacksRpcUrl,
+            nonce: currentNonce?.toString() || 'auto',
+            txVersion: network.transactionVersion
+          });
+
+          // Normalize relayer private key (32 bytes required for some SDK operations)
+          const relayerPrivateKey = bestRelayer.privateKey.length === 66
+            ? bestRelayer.privateKey.substring(0, 64)
+            : bestRelayer.privateKey;
+
+          // Sponsor the transaction with relayer's private key
+          const sponsoredTx = await sponsorTransaction({
+            transaction: txObj,
+            sponsorPrivateKey: relayerPrivateKey,
+            fee: 50000n, // 0.05 STX sponsor fee
+            sponsorNonce: currentNonce || undefined,
+            network,
+          });
+
+          logger.debug('Transaction sponsored, broadcasting...', {
             txid: sponsoredTx.txid()
           });
 
-          if (attempt < MAX_BROADCAST_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          // Broadcast the sponsored transaction with retries
+          let broadcastResponse: any;
+          let lastBroadcastError: any;
+          const MAX_BROADCAST_RETRIES = 3;
+
+          for (let attempt = 1; attempt <= MAX_BROADCAST_RETRIES; attempt++) {
+            try {
+              logger.debug(`Broadcasting sponsored transaction (attempt ${attempt}/${MAX_BROADCAST_RETRIES})`, {
+                txid: sponsoredTx.txid()
+              });
+
+              broadcastResponse = await broadcastTransaction({ transaction: sponsoredTx, network });
+
+              if (!('error' in broadcastResponse)) {
+                break; // Success
+              }
+
+              lastBroadcastError = broadcastResponse;
+
+              // Specific check for BadNonce - reset our tracker so it refetches
+              if (broadcastResponse.reason === 'BadNonce' || (broadcastResponse.error && broadcastResponse.error.includes('Nonce'))) {
+                logger.warn('BadNonce detected, resetting relayer nonce tracker');
+                this.relayerNonce = null;
+              }
+
+              logger.warn(`Broadcast attempt ${attempt} failed`, {
+                error: broadcastResponse.error,
+                reason: broadcastResponse.reason,
+                txid: sponsoredTx.txid()
+              });
+
+              // Wait before retry if it's a transient node error
+              if (attempt < MAX_BROADCAST_RETRIES) {
+                let delay = 2000 * attempt;
+
+                // Special handling for TooMuchChaining - back off more aggressively
+                if (broadcastResponse.reason === 'TooMuchChaining' || (broadcastResponse.error && broadcastResponse.error.includes('TooMuchChaining'))) {
+                  logger.warn('TooMuchChaining detected, increasing retry delay');
+                  delay = 10000 * attempt; // 10s, 20s, 30s...
+                }
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+              }
+            } catch (broadError) {
+              lastBroadcastError = broadError;
+              logger.error(`Broadcast exception (attempt ${attempt})`, {
+                error: broadError instanceof Error ? broadError.message : String(broadError),
+                txid: sponsoredTx.txid()
+              });
+
+              if (attempt < MAX_BROADCAST_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+              }
+            }
           }
+
+          // If we hit TooMuchChaining after all retries, add to failed list and retry logic
+          if (errorMsg.includes('TooMuchChaining')) {
+            logger.warn(`Relayer ${bestRelayer.address} is congested (TooMuchChaining), switching...`);
+            failedRelayers.push(bestRelayer.address);
+            lastError = new Error(errorMsg);
+            this.relayerNonce = null; // Reset nonce tracking
+            continue; // Try next relayer
+          }
+
+          logger.error('Final broadcast failure', {
+            error: errorMsg,
+            details: lastBroadcastError,
+            txid: sponsoredTx.txid()
+          });
+          throw new Error(errorMsg);
         }
-      }
-
-      if (!broadcastResponse || 'error' in broadcastResponse) {
-        const errorMsg = broadcastResponse ?
-          `Broadcast failed: ${broadcastResponse.error}. Reason: ${broadcastResponse.reason || 'unknown'}` :
-          `Broadcast failed after ${MAX_BROADCAST_RETRIES} attempts.`;
-
-        // If we hit TooMuchChaining after all retries, break the circuit
-        if (errorMsg.includes('TooMuchChaining')) {
-          logger.error('TooMuchChaining persistent, breaking circuit for 60s');
-          PaymasterService.isCircuitBroken = true;
-          PaymasterService.circuitBreakEndTime = Date.now() + 60000;
-        }
-
-        logger.error('Final broadcast failure', {
-          error: errorMsg,
-          details: lastBroadcastError,
-          txid: sponsoredTx.txid()
-        });
-        throw new Error(errorMsg);
-      }
 
       const txid = broadcastResponse.txid;
 
-      logger.info('Transaction sponsored and broadcast successfully', {
-        txid,
-        userAddress,
-        explorerUrl: `https://explorer.hiro.so/txid/${txid}?chain=testnet`,
-      });
+        logger.info('Transaction sponsored and broadcast successfully', {
+          txid,
+          userAddress,
+          explorerUrl: `https://explorer.hiro.so/txid/${txid}?chain=testnet`,
+        });
 
-      return txid;
-    } catch (error) {
-      logger.error('PaymasterService.sponsorTransaction failed', {
-        userAddress,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+        return txid;
+      } catch (attemptError: any) {
+        // Catch errors from within the loop (like balance checks or sponsorship failures)
+        const errMsg = attemptError.message || String(attemptError);
+        lastError = attemptError;
+
+        if (errMsg.includes('TooMuchChaining') || errMsg.includes('ConflictingNonceInMempool') || errMsg.includes('BadNonce')) {
+          logger.warn(`Relayer attempt ${relayerAttempt + 1} failed with retryable error: ${errMsg}`);
+          // If we have a relayer address in context (we should), exclude it
+          // Since 'bestRelayer' is block-scoped, we might not have it here easily if it failed before assignment
+          // But usually it fails during broadcast.
+          // If it failed at 'getBestRelayer' or 'checkRelayerBalance', we might not need to exclude.
+          continue;
+        }
+        throw attemptError;
+      }
     }
+
+  // If we exhausted all retries
+  throw lastError || new Error('All relayer attemps failed');
+  } catch(error) {
+    logger.error('PaymasterService.sponsorTransaction failed', {
+      userAddress,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
+}
 
   /**
    * Validates that user has sufficient USDCx balance for fee
    */
   async validateUserBalance(
-    userAddress: string,
-    requiredFee: bigint
-  ): Promise<boolean> {
-    const cacheKey = `user:balance:${userAddress}`;
+  userAddress: string,
+  requiredFee: bigint
+): Promise < boolean > {
+  const cacheKey = `user:balance:${userAddress}`;
 
-    return withCache(cacheKey, async () => {
-      logger.debug('Validating user USDCx balance', {
+  return withCache(cacheKey, async () => {
+    logger.debug('Validating user USDCx balance', {
+      userAddress,
+      requiredFee: requiredFee.toString(),
+    });
+
+    try {
+      // Query USDCx contract for user's balance
+      const response = await fetchWithRetry(
+        `${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`
+      );
+
+      const data: any = await response.json();
+
+      // Find USDCx token balance - Stacks API keys are "principal::asset_name"
+      // We look for a key that starts with our contract address
+      const usdcxKey = Object.keys(data.fungible_tokens || {}).find(
+        key => key.startsWith(`${this.config.stacksUsdcxAddress}::`) || key === this.config.stacksUsdcxAddress
+      );
+
+      const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
+      const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
+
+      const hasSufficientBalance = userBalance >= requiredFee;
+
+      logger.info('User balance validation result', {
         userAddress,
+        userBalance: userBalance.toString(),
         requiredFee: requiredFee.toString(),
+        hasSufficientBalance,
       });
 
-      try {
-        // Query USDCx contract for user's balance
-        const response = await fetchWithRetry(
-          `${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`
-        );
-
-        const data: any = await response.json();
-
-        // Find USDCx token balance - Stacks API keys are "principal::asset_name"
-        // We look for a key that starts with our contract address
-        const usdcxKey = Object.keys(data.fungible_tokens || {}).find(
-          key => key.startsWith(`${this.config.stacksUsdcxAddress}::`) || key === this.config.stacksUsdcxAddress
-        );
-
-        const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
-        const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
-
-        const hasSufficientBalance = userBalance >= requiredFee;
-
-        logger.info('User balance validation result', {
-          userAddress,
-          userBalance: userBalance.toString(),
-          requiredFee: requiredFee.toString(),
-          hasSufficientBalance,
-        });
-
-        return hasSufficientBalance;
-      } catch (error) {
-        logger.error('Failed to validate user balance', {
-          userAddress,
-          error: (error as Error).message,
-        });
-        return false;
-      }
-    }, 30); // 30 second cache for user balance
-  }
+      return hasSufficientBalance;
+    } catch (error) {
+      logger.error('Failed to validate user balance', {
+        userAddress,
+        error: (error as Error).message,
+      });
+      return false;
+    }
+  }); // 30 second cache for user balance
+}
 
 
   /**
    * Selects the best relayer account based on mempool depth and balance
    */
-  async getBestRelayer(): Promise<{ address: string; privateKey: string; index: number; nonce: bigint | null }> {
-    // If only one account, return it (simple case)
-    if (this.relayerAccounts.length === 1) return this.relayerAccounts[0];
+  async getBestRelayer(excludeAddresses: string[] = []): Promise < { address: string; privateKey: string; index: number; nonce: bigint | null } > {
+  // Filter available accounts
+  const availableAccounts = this.relayerAccounts.filter(acc => !excludeAddresses.includes(acc.address));
 
-    // For multiple accounts, check mempool depth
-    for (const account of this.relayerAccounts) {
-      const depth = await this.getMempoolDepth(account.address);
-      if (depth < 15) { // Threshold
-        logger.info(`Selected relayer ${account.index} with depth ${depth}`);
-        return account;
-      }
-    }
+  if(availableAccounts.length === 0) {
+  logger.warn('All relayers excluded or busy, resetting exclusion list');
+  // If all excluded, fall back to any random one to try again
+  return this.relayerAccounts[Math.floor(Math.random() * this.relayerAccounts.length)];
+}
 
-    // If all congested, return the one with lowest depth or just random
-    logger.warn('All relayers congested, picking random as fallback');
-    return this.relayerAccounts[Math.floor(Math.random() * this.relayerAccounts.length)];
+// If only one account available, return it
+if (availableAccounts.length === 1) return availableAccounts[0];
+
+// For multiple accounts, check mempool depth
+for (const account of availableAccounts) {
+  const depth = await this.getMempoolDepth(account.address);
+  if (depth < 15) { // Threshold
+    logger.info(`Selected relayer ${account.index} with depth ${depth}`);
+    return account;
+  }
+}
+
+// If all congested, return the one with lowest depth or just random from available
+logger.warn('All available relayers congested, picking random as fallback');
+return availableAccounts[Math.floor(Math.random() * availableAccounts.length)];
   }
 
   /**
    * Checks relayer's STX balance and alerts if below threshold
    */
-  async checkRelayerBalance(address?: string): Promise<void> {
-    const targetAddress = address || this.config.relayerStacksAddress;
-    const cacheKey = `relayer:balance:${targetAddress}`;
+  async checkRelayerBalance(address ?: string): Promise < void> {
+  const targetAddress = address || this.config.relayerStacksAddress;
+  const cacheKey = `relayer:balance:${targetAddress}`;
 
-    // We cache the relayer balance check for 5 minutes since it's a large balance
-    await withCache(cacheKey, async () => {
-      try {
-        // Query Stacks API for relayer's STX balance
-        const response = await fetchWithRetry(
-          `${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/balances`
-        );
+  // We cache the relayer balance check for 5 minutes since it's a large balance
+  await withCache(cacheKey, async () => {
+  try {
+    // Query Stacks API for relayer's STX balance
+    const response = await fetchWithRetry(
+      `${this.config.stacksRpcUrl}/extended/v1/address/${targetAddress}/balances`
+    );
 
-        const data: any = await response.json();
-        const relayerBalance = BigInt(data.stx.balance);
-        const threshold = this.config.minStxBalance;
+    const data: any = await response.json();
+    const relayerBalance = BigInt(data.stx.balance);
+    const threshold = this.config.minStxBalance;
 
-        logRelayerBalance(relayerBalance, threshold);
+    logRelayerBalance(relayerBalance, threshold);
 
-        if (relayerBalance < threshold) {
-          logger.error('Relayer STX balance below threshold!', {
-            balance: relayerBalance.toString(),
-            threshold: threshold.toString(),
-            relayerAddress: this.config.relayerStacksAddress,
-          });
+    if (relayerBalance < threshold) {
+      logger.error('Relayer STX balance below threshold!', {
+        balance: relayerBalance.toString(),
+        threshold: threshold.toString(),
+        relayerAddress: targetAddress,
+      });
 
-          // Alert: Relayer needs funding
-          throw new Error('Relayer balance too low to sponsor transactions');
-        }
+      // Alert: Relayer needs funding
+      throw new Error('Relayer balance too low to sponsor transactions');
+    }
 
-        logger.debug('Relayer balance check passed', {
-          balance: relayerBalance.toString(),
-          threshold: threshold.toString(),
-        });
+    logger.debug('Relayer balance check passed', {
+      balance: relayerBalance.toString(),
+      threshold: threshold.toString(),
+    });
 
-        return true; // Needed for withCache
-      } catch (error) {
-        logger.error('Failed to check relayer balance', { error });
-        throw error;
-      }
-    }, 300); // 5 minute cache
+    return true; // Needed for withCache
+  } catch (error) {
+    logger.error('Failed to check relayer balance', { error });
+    throw error;
+  }
+}, 300); // 5 minute cache
   }
 
   /**
    * Gets the number of pending transactions in the mempool for an address
    */
-  async getMempoolDepth(address: string): Promise<number> {
-    try {
-      const response = await fetchWithRetry(
-        `${this.config.stacksRpcUrl}/extended/v1/address/${address}/mempool?limit=1`
-      );
-      const data: any = await response.json();
-      return data.total || 0;
-    } catch (error) {
-      logger.error('Failed to fetch mempool depth', { address, error });
-      return 0; // Fallback to 0 so we don't block
-    }
+  async getMempoolDepth(address: string): Promise < number > {
+  try {
+    const response = await fetchWithRetry(
+      `${this.config.stacksRpcUrl}/extended/v1/address/${address}/mempool?limit=1`
+    );
+    const data: any = await response.json();
+    return data.total || 0;
+  } catch(error) {
+    logger.error('Failed to fetch mempool depth', { address, error });
+    return 0; // Fallback to 0 so we don't block
   }
+}
 
   /**
    * Fetches STX price from exchange API
    * @private
    */
-  private async fetchStxPrice(): Promise<number> {
-    try {
-      // Using CoinGecko API
-      const response = await fetchWithRetry(
-        'https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd',
-        {},
-        { maxRetries: 2, timeout: 5000 }
-      );
+  private async fetchStxPrice(): Promise < number > {
+  try {
+    // Using CoinGecko API
+    const response = await fetchWithRetry(
+      'https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd',
+      {},
+      { maxRetries: 2, timeout: 5000 }
+    );
 
-      const data: any = await response.json();
-      const stxPrice = data.blockstack?.usd;
+    const data: any = await response.json();
+    const stxPrice = data.blockstack?.usd;
 
-      if (!stxPrice || typeof stxPrice !== 'number') {
-        throw new Error('Invalid STX price data from API');
-      }
+    if(!stxPrice || typeof stxPrice !== 'number') {
+  throw new Error('Invalid STX price data from API');
+}
 
-      logger.debug('STX price fetched', { price: stxPrice });
+logger.debug('STX price fetched', { price: stxPrice });
 
-      return stxPrice;
+return stxPrice;
     } catch (error) {
-      logger.error('Failed to fetch STX price from CoinGecko', { error });
+  logger.error('Failed to fetch STX price from CoinGecko', { error });
 
-      // Try alternative API or use fallback
-      logger.warn('Using fallback STX price');
-      return 0.5; // Conservative fallback
-    }
+  // Try alternative API or use fallback
+  logger.warn('Using fallback STX price');
+  return 0.5; // Conservative fallback
+}
   }
 
   /**
    * Warm up caches on startup
    */
-  async warmup(): Promise<void> {
-    logger.info('Warming up PaymasterService caches');
-    try {
-      await this.getExchangeRates();
-      logger.info('PaymasterService cache warmup successful');
-    } catch (error) {
-      logger.warn('PaymasterService cache warmup failed', { error });
-    }
+  async warmup(): Promise < void> {
+  logger.info('Warming up PaymasterService caches');
+  try {
+    await this.getExchangeRates();
+    logger.info('PaymasterService cache warmup successful');
+  } catch(error) {
+    logger.warn('PaymasterService cache warmup failed', { error });
   }
+}
 
-  /**
-   * Clears the exchange rates cache
-   * Useful for testing or forcing a refresh
-   */
-  clearRatesCache(): void {
-    this.cachedRates = null;
-    this.ratesCacheExpiry = 0;
-    logger.debug('Exchange rates cache cleared');
-  }
+/**
+ * Clears the exchange rates cache
+ * Useful for testing or forcing a refresh
+ */
+clearRatesCache(): void {
+  this.cachedRates = null;
+  this.ratesCacheExpiry = 0;
+  logger.debug('Exchange rates cache cleared');
+}
 }
 
 // Export singleton instance
