@@ -77,6 +77,8 @@ export const getStacksTransactions = async (): Promise<any> => {
             Pc: getExport(mod, 'Pc'),
             FungibleConditionCode: getExport(mod, 'FungibleConditionCode'),
             NonFungibleConditionCode: getExport(mod, 'NonFungibleConditionCode'),
+            makeStandardFungiblePostCondition: getExport(mod, 'makeStandardFungiblePostCondition'),
+            createAssetInfo: getExport(mod, 'createAssetInfo'),
         };
         return moduleCache.transactions;
     } catch (e) {
