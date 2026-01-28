@@ -411,14 +411,14 @@ export function SwapInterface() {
       const postConditions = [];
 
       // Helper to create safe fungible post-condition
-      const createSafePostCondition = (address: string, amount: bigint, contractAddress: string, contractName: string, assetName: string) => {
+      const createSafePostCondition = (address: string, amount: bigint, assetAddress: string, assetName: string) => {
         if (amount === BigInt(0)) return null;
 
         // Use Pc builder which is available in v7.3.1
-        // Explicitly split contract address and name for FT post-conditions to ensure correct serialization
+        // Match BridgeInterface logic: pass full contract address and asset name
         return Pc.principal(address)
-          .willSendEq(amount.toString())
-          .ft(contractAddress, contractName, assetName);
+          .willSendEq(amount)
+          .ft(assetAddress, assetName);
       };
 
       // Constraint 1: User sends input token
@@ -428,17 +428,17 @@ export function SwapInterface() {
         );
       } else {
         // Use explicit asset name if available, otherwise fallback to contract name
-        const { address: contractAddr, name: contractName } = parseTokenAddress(state.inputToken.address);
+        const { name: contractName } = parseTokenAddress(state.inputToken.address);
+        const assetAddress = state.inputToken.address;
         const assetName = state.inputToken.assetName || contractName;
 
-        const pc = createSafePostCondition(stacksAddress!, amountInMicro, contractAddr, contractName, assetName);
+        const pc = createSafePostCondition(stacksAddress!, amountInMicro, assetAddress, assetName);
         if (pc) postConditions.push(pc);
       }
 
       // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {
         const usdcxFullAddress = config.stacksUsdcxAddress;
-        const { address: usdcxContractAddr, name: usdcxContractName } = parseTokenAddress(usdcxFullAddress);
         const usdcxAssetName = 'usdcx';
 
         // If input token is also USDCx, we must COMBINE the post-conditions
@@ -449,11 +449,11 @@ export function SwapInterface() {
           const totalUsdcx = amountInMicro + gasFeeMicro;
           console.log(`Combining USDCx post-condition: ${amountInMicro} (swap) + ${gasFeeMicro} (fee) = ${totalUsdcx}`);
 
-          const pc = createSafePostCondition(stacksAddress!, totalUsdcx, usdcxContractAddr, usdcxContractName, usdcxAssetName);
+          const pc = createSafePostCondition(stacksAddress!, totalUsdcx, usdcxFullAddress, usdcxAssetName);
           if (pc) postConditions.push(pc);
         } else {
           // Input is NOT USDCx, so just add the fee post-condition
-          const pc = createSafePostCondition(stacksAddress!, gasFeeMicro, usdcxContractAddr, usdcxContractName, usdcxAssetName);
+          const pc = createSafePostCondition(stacksAddress!, gasFeeMicro, usdcxFullAddress, usdcxAssetName);
           if (pc) postConditions.push(pc);
         }
       }
@@ -477,11 +477,12 @@ export function SwapInterface() {
           poolPrincipal.willSendGte(minAmountOutMicro).ustx()
         );
       } else {
-        const { address: contractAddr, name: contractName } = parseTokenAddress(state.outputToken.address);
+        const assetAddress = state.outputToken.address;
+        const { name: contractName } = parseTokenAddress(assetAddress);
         const assetName = state.outputToken.assetName || contractName;
 
         postConditions.push(
-          poolPrincipal.willSendGte(minAmountOutMicro).ft(contractAddr, contractName, assetName)
+          poolPrincipal.willSendGte(minAmountOutMicro).ft(assetAddress, assetName)
         );
       }
 
