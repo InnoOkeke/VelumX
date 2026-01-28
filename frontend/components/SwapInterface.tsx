@@ -265,7 +265,7 @@ export function SwapInterface() {
         hasCreateAsset: !!transactions?.createAssetInfo
       });
 
-      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc, FungibleConditionCode, createAssetInfo, makeStandardFungiblePostCondition }: any = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc, FungibleConditionCode }: any = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -414,15 +414,11 @@ export function SwapInterface() {
       const createSafePostCondition = (address: string, amount: bigint, assetAddress: string, assetName: string) => {
         if (amount === BigInt(0)) return null;
 
-        const [contractAddr, contractName] = assetAddress.split('.');
-        const assetInfo = createAssetInfo(contractAddr, contractName, assetName);
-
-        return makeStandardFungiblePostCondition(
-          address,
-          FungibleConditionCode.Equal,
-          amount, // Pass BigInt directly
-          assetInfo
-        );
+        // Use Pc builder which is available in v7.3.1
+        // Explicitly convert BigInt to string to avoid serialization issues
+        return Pc.principal(address)
+          .willSendEq(amount.toString())
+          .ft(assetAddress, assetName);
       };
 
       // Constraint 1: User sends input token
