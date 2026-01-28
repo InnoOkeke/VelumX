@@ -1,5 +1,5 @@
-// Deploy SIP-010 Trait Contract to Stacks Testnet
-// This trait must be deployed before the swap contract
+// Deploy Swap Contract to Stacks Testnet
+// Uses manual network configuration to resolve SDK version conflicts
 
 require('dotenv').config();
 const fs = require('fs');
@@ -7,9 +7,12 @@ const path = require('path');
 const { generateWallet } = require('@stacks/wallet-sdk');
 const {
     makeContractDeploy,
+    broadcastTransaction,
+    ClarityVersion,
     AnchorMode,
     PostConditionMode
 } = require('@stacks/transactions');
+const { STACKS_TESTNET } = require('@stacks/network');
 
 // Load from environment variables
 const SEED_PHRASE = process.env.RELAYER_SEED_PHRASE;
@@ -21,23 +24,13 @@ if (!SEED_PHRASE || !TESTNET_ADDRESS) {
     process.exit(1);
 }
 
-// Manually define network to avoid version mismatch issues
-const network = {
-    version: 128, // TransactionVersion.Testnet
-    chainId: 2147483648, // ChainID.Testnet
-    coreApiUrl: 'https://api.testnet.hiro.so',
-    bnsApiUrl: 'https://api.testnet.hiro.so',
-    broadcastApiUrl: 'https://api.testnet.hiro.so/v2/transactions',
-    transferApiUrl: 'https://api.testnet.hiro.so/v2/transfers',
-    accountApiUrl: 'https://api.testnet.hiro.so/v2/accounts',
-    contractApiUrl: 'https://api.testnet.hiro.so/v2/contracts',
-    infoApiUrl: 'https://api.testnet.hiro.so/v2/info',
-};
+// Use official network configuration
+const network = STACKS_TESTNET;
 
 async function deploy() {
     try {
-        console.log("🚀 Deploying SIP-010 Trait Contract to Stacks Testnet\n");
-        
+        console.log("🚀 Deploying VEX Token Contract to Stacks Testnet\n");
+
         console.log("Step 1: Generating wallet...");
         const wallet = await generateWallet({ secretKey: SEED_PHRASE, password: '' });
         const account = wallet.accounts[0];
@@ -50,8 +43,8 @@ async function deploy() {
         }
         console.log("Key length:", privateKey.length);
 
-        console.log("\nStep 2: Reading SIP-010 trait contract...");
-        const contractPath = path.join(__dirname, '../stacks-contracts/contracts/traits/sip-010-trait-ft-standard.clar');
+        console.log("\nStep 2: Reading VEX token contract...");
+        const contractPath = path.join(__dirname, '../stacks-contracts/contracts/velumx-token.clar');
         const codeBody = fs.readFileSync(contractPath, 'utf8');
         console.log("Contract bytes:", codeBody.length);
 
@@ -63,59 +56,67 @@ async function deploy() {
 
         console.log("\nStep 4: Building transaction...");
         const tx = await makeContractDeploy({
-            contractName: 'sip-010-trait-ft-standard-v3',
+            contractName: 'vextoken-v9-stx',
             codeBody: codeBody,
             senderKey: privateKey,
             network: network,
+            clarityVersion: ClarityVersion.Clarity2,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
-            fee: 100000n, // 0.1 STX fee (small contract)
+            fee: 500000n, // 0.5 STX fee (higher for larger contract)
             nonce: BigInt(nonceData.possible_next_nonce)
         });
         console.log("Transaction built!");
 
         console.log("\nStep 5: Broadcasting...");
-        const serialized = tx.serialize();
-        console.log("Serialized bytes:", serialized.length);
-
-        const response = await fetch('https://api.testnet.hiro.so/v2/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream' },
-            body: serialized
+        const response = await broadcastTransaction({
+            transaction: tx,
+            network: network
         });
 
-        const result = await response.text();
-        console.log("Status:", response.status);
-        console.log("Result:", result.slice(0, 300));
+        console.log("Broadcast response:", JSON.stringify(response, null, 2));
 
-        if (response.ok) {
-            const txid = result.replace(/"/g, '');
+        if (response.txid) {
+            const txid = response.txid;
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            console.log("✅ SUCCESS - SIP-010 Trait Deployed!");
+            console.log("✅ SUCCESS - VEX Token Deployed!");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("📋 Transaction ID:", txid);
-            console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/" + txid + "?chain=testnet");
-            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".sip-010-trait-ft-standard-v3");
+            console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/0x" + txid + "?chain=testnet");
+            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".vextoken-v12");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            
-            console.log("⏳ Waiting for confirmation (5-10 minutes)...");
+
+            console.log("⏳ Waiting for confirmation (10-20 minutes)...");
             console.log("💡 Check status at the explorer link above\n");
-            
-            console.log("📝 Next Step:");
-            console.log("Once confirmed, deploy the swap contract:");
-            console.log("  node deploy-swap.js\n");
-            
+
+            console.log("📝 Next Steps:");
+            console.log("1. Wait for transaction confirmation");
+            console.log("2. Update backend/.env:");
+            console.log(`   STACKS_SWAP_CONTRACT_ADDRESS=${TESTNET_ADDRESS}.swap-v6-stx`);
+            console.log("3. Update frontend/.env.local:");
+            console.log(`   NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS=${TESTNET_ADDRESS}.swap-v6-stx`);
+            console.log("4. Begin Phase 2 backend integration\n");
+
+            // Save deployment info
+            const deploymentInfo = {
+                txid: txid,
+                contractAddress: `${TESTNET_ADDRESS}.vextoken-v12`,
+                deployerAddress: TESTNET_ADDRESS,
+                network: 'testnet',
+                timestamp: new Date().toISOString(),
+                explorerUrl: `https://explorer.hiro.so/txid/${txid}?chain=testnet`,
+            };
+
+            const outputPath = path.join(__dirname, 'vex-deployment-info.json');
+            fs.writeFileSync(outputPath, JSON.stringify(deploymentInfo, null, 2));
+            console.log('💾 Deployment info saved to:', outputPath, '\n');
+
         } else {
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("❌ DEPLOYMENT FAILED");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            try {
-                const err = JSON.parse(result);
-                console.log("Reason:", err.reason);
-                console.log("Reason Data:", JSON.stringify(err.reason_data, null, 2));
-            } catch (e) {
-                console.log("Raw error:", result);
-            }
+            console.log("Reason:", response.error);
+            console.log("Reason Data:", JSON.stringify(response.reason_data || {}, null, 2));
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         }
     } catch (e) {

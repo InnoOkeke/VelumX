@@ -6,7 +6,7 @@
 (use-trait sip-010 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; Import swap contract
-(define-constant SWAP-CONTRACT 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v6-stx)
+(define-constant SWAP-CONTRACT 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx)
 
 (define-constant ERR-NOT-SPONSORED (err u200))
 (define-constant ERR-WRONG-SPONSOR (err u201))

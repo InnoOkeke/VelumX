@@ -7,9 +7,12 @@ const path = require('path');
 const { generateWallet } = require('@stacks/wallet-sdk');
 const {
     makeContractDeploy,
+    broadcastTransaction,
+    ClarityVersion,
     AnchorMode,
     PostConditionMode
 } = require('@stacks/transactions');
+const { STACKS_TESTNET } = require('@stacks/network');
 
 // Load from environment variables
 const SEED_PHRASE = process.env.RELAYER_SEED_PHRASE;
@@ -21,18 +24,8 @@ if (!SEED_PHRASE || !TESTNET_ADDRESS) {
     process.exit(1);
 }
 
-// Manually define network to avoid version mismatch issues
-const network = {
-    version: 128, // TransactionVersion.Testnet
-    chainId: 2147483648, // ChainID.Testnet
-    coreApiUrl: 'https://api.testnet.hiro.so',
-    bnsApiUrl: 'https://api.testnet.hiro.so',
-    broadcastApiUrl: 'https://api.testnet.hiro.so/v2/transactions',
-    transferApiUrl: 'https://api.testnet.hiro.so/v2/transfers',
-    accountApiUrl: 'https://api.testnet.hiro.so/v2/accounts',
-    contractApiUrl: 'https://api.testnet.hiro.so/v2/contracts',
-    infoApiUrl: 'https://api.testnet.hiro.so/v2/info',
-};
+// Use official network configuration
+const network = STACKS_TESTNET;
 
 async function deploy() {
     try {
@@ -63,10 +56,11 @@ async function deploy() {
 
         console.log("\nStep 4: Building transaction...");
         const tx = await makeContractDeploy({
-            contractName: 'swap-v6-stx',
+            contractName: 'swap-v9-stx',
             codeBody: codeBody,
             senderKey: privateKey,
             network: network,
+            clarityVersion: ClarityVersion.Clarity2,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
             fee: 500000n, // 0.5 STX fee (higher for larger contract)
@@ -75,27 +69,21 @@ async function deploy() {
         console.log("Transaction built!");
 
         console.log("\nStep 5: Broadcasting...");
-        const serialized = tx.serialize();
-        console.log("Serialized bytes:", serialized.length);
-
-        const response = await fetch('https://api.testnet.hiro.so/v2/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream' },
-            body: serialized
+        const response = await broadcastTransaction({
+            transaction: tx,
+            network: network
         });
 
-        const result = await response.text();
-        console.log("Status:", response.status);
-        console.log("Result:", result.slice(0, 300));
+        console.log("Broadcast response:", JSON.stringify(response, null, 2));
 
-        if (response.ok) {
-            const txid = result.replace(/"/g, '');
+        if (response.txid) {
+            const txid = response.txid;
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("✅ SUCCESS - Swap Contract Deployed!");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("📋 Transaction ID:", txid);
-            console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/" + txid + "?chain=testnet");
-            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".swap-v6-stx");
+            console.log("🔗 Explorer:", "https://explorer.hiro.so/txid/0x" + txid + "?chain=testnet");
+            console.log("📍 Contract Address:", TESTNET_ADDRESS + ".swap-v9-stx");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
             console.log("⏳ Waiting for confirmation (10-20 minutes)...");
@@ -112,7 +100,7 @@ async function deploy() {
             // Save deployment info
             const deploymentInfo = {
                 txid: txid,
-                contractAddress: `${TESTNET_ADDRESS}.swap-v6-stx`,
+                contractAddress: `${TESTNET_ADDRESS}.swap-v9-stx`,
                 deployerAddress: TESTNET_ADDRESS,
                 network: 'testnet',
                 timestamp: new Date().toISOString(),
@@ -127,13 +115,8 @@ async function deploy() {
             console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             console.log("❌ DEPLOYMENT FAILED");
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            try {
-                const err = JSON.parse(result);
-                console.log("Reason:", err.reason);
-                console.log("Reason Data:", JSON.stringify(err.reason_data, null, 2));
-            } catch (e) {
-                console.log("Raw error:", result);
-            }
+            console.log("Reason:", response.error);
+            console.log("Reason Data:", JSON.stringify(response.reason_data || {}, null, 2));
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         }
     } catch (e) {

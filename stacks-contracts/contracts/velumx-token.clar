@@ -1,6 +1,6 @@
 ;; VelumX Token (VEX)
 ;; This contract implements the SIP-010 community-standard Fungible Token trait.
-(impl-trait 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.sip-010-trait-ft-standard-v3.sip-010-trait)
+(impl-trait 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; Define the FT, with no maximum supply
 (define-fungible-token velumx-token)
