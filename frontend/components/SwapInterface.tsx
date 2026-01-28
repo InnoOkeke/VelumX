@@ -426,26 +426,25 @@ export function SwapInterface() {
           // Remove the previous USDCx post-condition and add a combined one
           postConditions.pop();
           const totalUsdcx = amountInMicro + gasFeeMicro;
+
+          if (totalUsdcx === BigInt(0)) {
+            console.error('Total USDCx is 0!', { amountInMicro, gasFeeMicro });
+          }
+
           postConditions.push(
-            Pc.principal(stacksAddress).willSendEq(totalUsdcx.toString()).ft(usdcxAddress, usdcxAssetName)
+            Pc.principal(stacksAddress).willSendEq(totalUsdcx).ft(usdcxAddress, usdcxAssetName)
           );
         } else {
           // Input is NOT USDCx, so just add the fee post-condition
           postConditions.push(
-            Pc.principal(stacksAddress).willSendEq(gasFeeMicro.toString()).ft(usdcxAddress, usdcxAssetName)
+            Pc.principal(stacksAddress).willSendEq(gasFeeMicro).ft(usdcxAddress, usdcxAssetName)
           );
         }
       }
 
-      console.log('Final PostConditions:', {
-        count: postConditions.length,
-        conditions: postConditions,
-        inputToken: state.inputToken.address,
-        isUSDCx: state.inputToken?.address === config.stacksUsdcxAddress,
-        amountIn: amountInMicro.toString(),
-        gasFee: gasFeeMicro.toString(),
-        gaslessMode: useGasless
-      });
+      console.log('Final PostConditions (JSON):', JSON.stringify(postConditions, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+        , 2));
 
       // Constraint 2: Contract sends output token (optional but good for safety)
       // We know the contract address.
