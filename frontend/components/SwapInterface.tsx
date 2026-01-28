@@ -379,6 +379,11 @@ export function SwapInterface() {
         contractName,
         functionName,
         functionArgsLength: functionArgs.length,
+        // Debug argument types
+        argTypes: functionArgs.map((arg: any) => typeof arg),
+        // Inspect principals if possible
+        inputTokenAddr: state.inputToken?.address,
+        outputTokenAddr: state.outputToken?.address,
         network: !!network,
         AnchorMode: !!AnchorMode,
         PostConditionMode: !!PostConditionMode,
