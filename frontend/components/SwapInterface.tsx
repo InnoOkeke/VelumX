@@ -252,7 +252,7 @@ export function SwapInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc }: any = transactions;
+      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc, FungibleConditionCode, createAssetInfo, makeStandardFungiblePostCondition }: any = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -396,6 +396,21 @@ export function SwapInterface() {
 
       const postConditions = [];
 
+      // Helper to create safe fungible post-condition
+      const createSafePostCondition = (address: string, amount: bigint, assetAddress: string, assetName: string) => {
+        if (amount === BigInt(0)) return null;
+
+        const [contractAddr, contractName] = assetAddress.split('.');
+        const assetInfo = createAssetInfo(contractAddr, contractName, assetName);
+
+        return makeStandardFungiblePostCondition(
+          address,
+          FungibleConditionCode.Equal,
+          amount, // Pass BigInt directly
+          assetInfo
+        );
+      };
+
       // Constraint 1: User sends input token
       if (isInputStx) {
         postConditions.push(
@@ -407,38 +422,27 @@ export function SwapInterface() {
         const assetId = state.inputToken.address;
         const assetName = state.inputToken.assetName || name;
 
-        postConditions.push(
-          Pc.principal(stacksAddress).willSendEq(amountInMicro).ft(assetId, assetName)
-        );
+        const pc = createSafePostCondition(stacksAddress!, amountInMicro, assetId, assetName);
+        if (pc) postConditions.push(pc);
       }
-
-
 
       // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {
         const usdcxAddress = config.stacksUsdcxAddress;
         const usdcxAssetName = 'usdcx';
 
-        // If input token is also USDCx, we must COMBINE the post-conditions because 
-        // willSendEq/willSendGte are aggregate limits per token per address.
+        // If input token is also USDCx, we must COMBINE the post-conditions
         if (state.inputToken!.address === usdcxAddress) {
-          // Remove the previous USDCx post-condition and add a combined one
-          // Remove the previous USDCx post-condition and add a combined one
-          postConditions.pop();
+          // Remove the previous USDCx post-condition (if any)
+          if (postConditions.length > 0) postConditions.pop();
+
           const totalUsdcx = amountInMicro + gasFeeMicro;
-
-          if (totalUsdcx === BigInt(0)) {
-            console.error('Total USDCx is 0!', { amountInMicro, gasFeeMicro });
-          }
-
-          postConditions.push(
-            Pc.principal(stacksAddress).willSendEq(totalUsdcx).ft(usdcxAddress, usdcxAssetName)
-          );
+          const pc = createSafePostCondition(stacksAddress!, totalUsdcx, usdcxAddress, usdcxAssetName);
+          if (pc) postConditions.push(pc);
         } else {
           // Input is NOT USDCx, so just add the fee post-condition
-          postConditions.push(
-            Pc.principal(stacksAddress).willSendEq(gasFeeMicro).ft(usdcxAddress, usdcxAssetName)
-          );
+          const pc = createSafePostCondition(stacksAddress!, gasFeeMicro, usdcxAddress, usdcxAssetName);
+          if (pc) postConditions.push(pc);
         }
       }
 
