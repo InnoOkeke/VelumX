@@ -64,7 +64,7 @@ const DEFAULT_TOKENS: Token[] = [
     name: 'USDC (xReserve)',
     address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
     decimals: 6,
-    assetName: 'usdc-token', // Correct asset name matching BridgeInterface
+    assetName: 'usdcx', // Correct asset name matching contract
   },
   {
     symbol: 'VEX',
@@ -406,6 +406,13 @@ export function SwapInterface() {
           Pc.principal(stacksAddress).willSendEq(amountInMicro).ft(assetId, assetName)
         );
       }
+
+      console.log('Generated PostConditions:', {
+        count: postConditions.length,
+        conditions: postConditions,
+        gasFeeMicro: gasFeeMicro.toString(),
+        gaslessMode: useGasless
+      });
 
       // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {

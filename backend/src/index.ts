@@ -59,6 +59,9 @@ async function initializeServices() {
 // Create Express app
 const app = express();
 
+// Trust the first proxy (Render load balancer)
+app.set('trust proxy', 1);
+
 // Apply middleware
 app.use(configureCors());
 app.use(securityHeaders);
