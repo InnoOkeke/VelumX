@@ -18,7 +18,7 @@ import {
 import { STACKS_TESTNET, createNetwork } from '@stacks/network';
 import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
 import { fetchWithRetry } from '../utils/fetch';
-import { withCache, CACHE_KEYS } from '../cache/redis';
+import { withCache, CACHE_KEYS, getCache } from '../cache/redis';
 
 export class PaymasterService {
   private config = getConfig();
@@ -205,6 +205,14 @@ export class PaymasterService {
 
         } else {
           // Single private key fallback
+          const derivedAddress = getAddressFromPrivateKey(this.config.relayerPrivateKey, 'testnet');
+          if (derivedAddress !== this.config.relayerStacksAddress) {
+            logger.warn('MISMATCH: Configured Relayer Address does not match Derived Address from Private Key!', {
+              configured: this.config.relayerStacksAddress,
+              derived: derivedAddress
+            });
+          }
+
           this.relayerAccounts.push({
             address: this.config.relayerStacksAddress,
             privateKey: this.config.relayerPrivateKey,
@@ -397,8 +405,8 @@ export class PaymasterService {
               // Invalidate balance cache if funds issue
               if (errorMsg.includes('NotEnoughFunds')) {
                 const cacheKey = `relayer:balance:${bestRelayer.address}`;
-                // We can't invalidate via redis here easily without a delete method, 
-                // but we can ensure the loop picks a different relayer.
+                logger.warn(`Invalidating balance cache for ${bestRelayer.address} due to NotEnoughFunds error`);
+                await getCache().del(cacheKey);
               }
               lastError = new Error(errorMsg);
               bestRelayer.nonce = null; // Reset nonce tracking
