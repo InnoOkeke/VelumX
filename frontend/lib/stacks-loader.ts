@@ -61,25 +61,20 @@ export const getStacksTransactions = async (): Promise<any> => {
         const mod = await import('@stacks/transactions') as any;
         const base = mod.default || mod;
 
-        // Explicitly map required functions to ensure visibility
-        moduleCache.transactions = {
-            ...base,
-            Cl: getExport(mod, 'Cl'),
-            makeContractCall: getExport(mod, 'makeContractCall'),
-            AnchorMode: getExport(mod, 'AnchorMode'),
-            PostConditionMode: getExport(mod, 'PostConditionMode'),
-            cvToHex: getExport(mod, 'cvToHex'),
-            hexToCV: getExport(mod, 'hexToCV'),
-            cvToJSON: getExport(mod, 'cvToJSON'),
-            fetchCallReadOnlyFunction: getExport(mod, 'fetchCallReadOnlyFunction'),
-            makeUnsignedContractCall: getExport(mod, 'makeUnsignedContractCall'),
-            makeSTXTokenTransfer: getExport(mod, 'makeSTXTokenTransfer'),
-            Pc: getExport(mod, 'Pc'),
-            FungibleConditionCode: getExport(mod, 'FungibleConditionCode'),
-            NonFungibleConditionCode: getExport(mod, 'NonFungibleConditionCode'),
-            makeStandardFungiblePostCondition: getExport(mod, 'makeStandardFungiblePostCondition'),
-            createAssetInfo: getExport(mod, 'createAssetInfo'),
-        };
+        // Robustly capture all exports
+        const allExports: any = { ...base };
+
+        // Explicitly walk prototype/keys if base is a Namespace object
+        Object.keys(mod).forEach(key => {
+            if (mod[key] !== undefined) allExports[key] = mod[key];
+        });
+        if (mod.default) {
+            Object.keys(mod.default).forEach(key => {
+                if (mod.default[key] !== undefined) allExports[key] = mod.default[key];
+            });
+        }
+
+        moduleCache.transactions = allExports;
         return moduleCache.transactions;
     } catch (e) {
         console.error('Failed to load @stacks/transactions', e);
