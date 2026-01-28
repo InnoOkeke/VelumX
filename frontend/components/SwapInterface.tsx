@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
-import { useConfig } from '../lib/config';
+import { useConfig, getConfig } from '../lib/config';
 import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
@@ -62,9 +62,9 @@ const DEFAULT_TOKENS: Token[] = [
   {
     symbol: 'USDCx',
     name: 'USDC (xReserve)',
-    address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
+    address: getConfig().stacksUsdcxAddress, // Use dynamic config address
     decimals: 6,
-    assetName: 'usdcx', // Correct asset name matching contract
+    assetName: 'usdcx',
   },
   {
     symbol: 'VEX',
