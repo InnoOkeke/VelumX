@@ -411,14 +411,14 @@ export function SwapInterface() {
       const postConditions = [];
 
       // Helper to create safe fungible post-condition
-      const createSafePostCondition = (address: string, amount: bigint, assetAddress: string, assetName: string) => {
+      const createSafePostCondition = (address: string, amount: bigint, contractAddress: string, contractName: string, assetName: string) => {
         if (amount === BigInt(0)) return null;
 
         // Use Pc builder which is available in v7.3.1
-        // Explicitly convert BigInt to string to avoid serialization issues
+        // Explicitly split contract address and name for FT post-conditions to ensure correct serialization
         return Pc.principal(address)
           .willSendEq(amount.toString())
-          .ft(assetAddress, assetName);
+          .ft(contractAddress, contractName, assetName);
       };
 
       // Constraint 1: User sends input token
@@ -428,30 +428,32 @@ export function SwapInterface() {
         );
       } else {
         // Use explicit asset name if available, otherwise fallback to contract name
-        const { name } = parseTokenAddress(state.inputToken.address);
-        const assetId = state.inputToken.address;
-        const assetName = state.inputToken.assetName || name;
+        const { address: contractAddr, name: contractName } = parseTokenAddress(state.inputToken.address);
+        const assetName = state.inputToken.assetName || contractName;
 
-        const pc = createSafePostCondition(stacksAddress!, amountInMicro, assetId, assetName);
+        const pc = createSafePostCondition(stacksAddress!, amountInMicro, contractAddr, contractName, assetName);
         if (pc) postConditions.push(pc);
       }
 
       // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {
-        const usdcxAddress = config.stacksUsdcxAddress;
+        const usdcxFullAddress = config.stacksUsdcxAddress;
+        const { address: usdcxContractAddr, name: usdcxContractName } = parseTokenAddress(usdcxFullAddress);
         const usdcxAssetName = 'usdcx';
 
         // If input token is also USDCx, we must COMBINE the post-conditions
-        if (state.inputToken!.address === usdcxAddress) {
-          // Remove the previous USDCx post-condition (if any)
+        if (state.inputToken!.address === usdcxFullAddress) {
+          // Remove the previous USDCx post-condition (it was added in Constraint 1)
           if (postConditions.length > 0) postConditions.pop();
 
           const totalUsdcx = amountInMicro + gasFeeMicro;
-          const pc = createSafePostCondition(stacksAddress!, totalUsdcx, usdcxAddress, usdcxAssetName);
+          console.log(`Combining USDCx post-condition: ${amountInMicro} (swap) + ${gasFeeMicro} (fee) = ${totalUsdcx}`);
+
+          const pc = createSafePostCondition(stacksAddress!, totalUsdcx, usdcxContractAddr, usdcxContractName, usdcxAssetName);
           if (pc) postConditions.push(pc);
         } else {
           // Input is NOT USDCx, so just add the fee post-condition
-          const pc = createSafePostCondition(stacksAddress!, gasFeeMicro, usdcxAddress, usdcxAssetName);
+          const pc = createSafePostCondition(stacksAddress!, gasFeeMicro, usdcxContractAddr, usdcxContractName, usdcxAssetName);
           if (pc) postConditions.push(pc);
         }
       }
@@ -475,12 +477,11 @@ export function SwapInterface() {
           poolPrincipal.willSendGte(minAmountOutMicro).ustx()
         );
       } else {
-        const { name } = parseTokenAddress(state.outputToken.address);
-        const assetId = state.outputToken.address;
-        const assetName = state.outputToken.assetName || name;
+        const { address: contractAddr, name: contractName } = parseTokenAddress(state.outputToken.address);
+        const assetName = state.outputToken.assetName || contractName;
 
         postConditions.push(
-          poolPrincipal.willSendGte(minAmountOutMicro).ft(assetId, assetName)
+          poolPrincipal.willSendGte(minAmountOutMicro).ft(contractAddr, contractName, assetName)
         );
       }
 
