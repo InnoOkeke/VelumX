@@ -412,12 +412,7 @@ export function SwapInterface() {
         );
       }
 
-      console.log('Generated PostConditions:', {
-        count: postConditions.length,
-        conditions: postConditions,
-        gasFeeMicro: gasFeeMicro.toString(),
-        gaslessMode: useGasless
-      });
+
 
       // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {
@@ -428,18 +423,29 @@ export function SwapInterface() {
         // willSendEq/willSendGte are aggregate limits per token per address.
         if (state.inputToken!.address === usdcxAddress) {
           // Remove the previous USDCx post-condition and add a combined one
+          // Remove the previous USDCx post-condition and add a combined one
           postConditions.pop();
           const totalUsdcx = amountInMicro + gasFeeMicro;
           postConditions.push(
-            Pc.principal(stacksAddress).willSendEq(totalUsdcx).ft(usdcxAddress, usdcxAssetName)
+            Pc.principal(stacksAddress).willSendEq(totalUsdcx.toString()).ft(usdcxAddress, usdcxAssetName)
           );
         } else {
-          // Add a separate post-condition for the fee
+          // Input is NOT USDCx, so just add the fee post-condition
           postConditions.push(
-            Pc.principal(stacksAddress).willSendEq(gasFeeMicro).ft(usdcxAddress, usdcxAssetName)
+            Pc.principal(stacksAddress).willSendEq(gasFeeMicro.toString()).ft(usdcxAddress, usdcxAssetName)
           );
         }
       }
+
+      console.log('Final PostConditions:', {
+        count: postConditions.length,
+        conditions: postConditions,
+        inputToken: state.inputToken.address,
+        isUSDCx: state.inputToken?.address === config.stacksUsdcxAddress,
+        amountIn: amountInMicro.toString(),
+        gasFee: gasFeeMicro.toString(),
+        gaslessMode: useGasless
+      });
 
       // Constraint 2: Contract sends output token (optional but good for safety)
       // We know the contract address.
