@@ -5,13 +5,13 @@
 
 import {
   makeContractCall,
-  broadcastTransaction,
   makeSTXTokenTransfer,
   AnchorMode,
   PostConditionMode,
   bufferCV,
   uintCV,
 } from '@stacks/transactions';
+import { broadcastAndVerify } from '../utils/stacks';
 import { STACKS_TESTNET, STACKS_MAINNET, StacksNetwork } from '@stacks/network';
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
@@ -74,23 +74,8 @@ export class StacksMintService {
         throw new Error('Failed to create STX token transfer transaction');
       }
 
-      const broadcastResponse = await broadcastTransaction({ transaction });
-
-      if ('error' in broadcastResponse) {
-        // Log the full response for debugging
-        logger.error('Gas drop broadcast failed', {
-          response: broadcastResponse,
-          address: recipientAddress
-        });
-        throw new Error(`Gas drop broadcast failed: ${broadcastResponse.error} - Reason: ${broadcastResponse.reason}`);
-      }
-
-      const txId = broadcastResponse.txid;
-      logger.info('Gas drop successful', {
-        address: recipientAddress,
-        txId
-      });
-
+      const txId = await broadcastAndVerify(transaction, this.network, { maxBroadcastRetries: 3, verifyRetries: 6 });
+      logger.info('Gas drop successful', { address: recipientAddress, txId });
       return txId;
     } catch (error) {
       logger.error('Failed to process gas drop', {
@@ -162,19 +147,8 @@ export class StacksMintService {
 
       // Broadcast transaction
       logger.debug('Broadcasting mint transaction');
-      const broadcastResponse = await broadcastTransaction({ transaction });
-
-      if ('error' in broadcastResponse) {
-        throw new Error(`Broadcast failed: ${broadcastResponse.error} - ${broadcastResponse.reason}`);
-      }
-
-      const txId = broadcastResponse.txid;
-      logger.info('USDCx mint transaction broadcast successfully', {
-        txId,
-        recipient: recipientAddress,
-        amount,
-      });
-
+      const txId = await broadcastAndVerify(transaction, this.network, { maxBroadcastRetries: 3, verifyRetries: 8, verifyIntervalMs: 1500 });
+      logger.info('USDCx mint transaction broadcast successfully', { txId, recipient: recipientAddress, amount });
       return txId;
     } catch (error) {
       logger.error('Failed to mint USDCx on Stacks', {
