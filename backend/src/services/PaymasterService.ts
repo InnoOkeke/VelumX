@@ -6,247 +6,119 @@
 import { getConfig } from '../config';
 import { logger, logPaymasterOperation, logRelayerBalance } from '../utils/logger';
 import { ExchangeRates, FeeEstimate } from '@shared/types';
-import {
-  makeContractCall,
-  broadcastTransaction,
-  sponsorTransaction,
-  deserializeTransaction,
-  AnchorMode,
-  PostConditionMode,
-  getAddressFromPrivateKey,
-} from '@stacks/transactions';
-import { STACKS_TESTNET, createNetwork } from '@stacks/network';
-import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
-import { fetchWithRetry } from '../utils/fetch';
-import { withCache, CACHE_KEYS, getCache } from '../cache/redis';
+import { sponsorTransaction, deserializeTransaction } from '@stacks/transactions';
 import { broadcastAndVerify } from '../utils/stacks';
+import { fetchWithRetry } from '../utils/fetch';
 
 export class PaymasterService {
   private config = getConfig();
   private cachedRates: ExchangeRates | null = null;
   private ratesCacheExpiry = 0;
-  private readonly RATES_CACHE_DURATION = 300000; // 5 minutes
-  private cachedRelayerKey: string | null = null;
-  private relayerNonce: bigint | null = null;
-  private static lastSponsorshipTime = 0;
-  private static isCircuitBroken = false;
-  private static circuitBreakEndTime = 0;
-  private static rateLimitReset = 0;
+  private readonly RATES_CACHE_DURATION = 60000; // 1 minute
 
-  /**
-   * Helper to handle API rate limits
-   */
-  private handleApiError(error: any) {
-    const msg = error?.message || String(error);
-    if (msg.includes('429') || msg.toLowerCase().includes('rate limit')) {
-      logger.warn('Global rate limit hit, pausing Paymaster service for 20s');
-      PaymasterService.rateLimitReset = Date.now() + 20000;
-    }
-    throw error;
-  }
-
-  // Multi-Account logic
-  private relayerAccounts: { address: string; privateKey: string; index: number; nonce: bigint | null }[] = [];
-  private readonly NUM_RELAYERS = 5;
-
-  /**
-   * Fetches current exchange rates (STX/USD, USDC/USD)
-   * Caches rates for 5 minutes to reduce API calls
-   */
   async getExchangeRates(): Promise<ExchangeRates> {
-    // Return cached rates if still valid
-    if (this.cachedRates && Date.now() < this.ratesCacheExpiry) {
-      logger.debug('Using cached exchange rates', {
-        rates: this.cachedRates,
-        expiresIn: this.ratesCacheExpiry - Date.now(),
-      });
-      return this.cachedRates;
-    }
-
-    logger.info('Fetching fresh exchange rates');
-
+    if (this.cachedRates && Date.now() < this.ratesCacheExpiry) return this.cachedRates;
     try {
-      // Fetch STX/USD rate
       const stxToUsd = await this.fetchStxPrice();
-
-      // USDC is pegged to USD, so it's always ~1.0
-      const usdcToUsd = 1.0;
-
-      const rates: ExchangeRates = {
-        stxToUsd,
-        usdcToUsd,
-        timestamp: Date.now(),
-      };
-
-      // Cache the rates
+      const rates: ExchangeRates = { stxToUsd, usdcToUsd: 1.0, timestamp: Date.now() };
       this.cachedRates = rates;
       this.ratesCacheExpiry = Date.now() + this.RATES_CACHE_DURATION;
-
-      logger.info('Exchange rates fetched successfully', { rates });
-
       return rates;
-    } catch (error) {
-      logger.error('Failed to fetch exchange rates', { error });
-
-      // If we have cached rates (even expired), use them as fallback
-      if (this.cachedRates) {
-        logger.warn('Using expired cached rates as fallback', {
-          rates: this.cachedRates,
-        });
-        return this.cachedRates;
-      }
-
-      // Default fallback rates
-      const fallbackRates: ExchangeRates = {
-        stxToUsd: 0.5, // Conservative estimate
-        usdcToUsd: 1.0,
-        timestamp: Date.now(),
-      };
-
-      logger.warn('Using fallback exchange rates', { rates: fallbackRates });
-      return fallbackRates;
+    } catch (e) {
+      if (this.cachedRates) return this.cachedRates;
+      return { stxToUsd: 0.5, usdcToUsd: 1.0, timestamp: Date.now() };
     }
   }
 
-  /**
-   * Estimates gas fee for a transaction
-   * Returns fee in both STX and USDCx
-   */
   async estimateFee(estimatedGasInStx: bigint): Promise<FeeEstimate> {
-    logger.info('Estimating transaction fee', {
-      estimatedGasInStx: estimatedGasInStx.toString(),
-    });
-
     const rates = await this.getExchangeRates();
-
-    // Calculate USDCx equivalent with markup
-    const gasInStxFloat = Number(estimatedGasInStx) / 1_000_000; // Convert micro STX to STX
+    const gasInStxFloat = Number(estimatedGasInStx) / 1_000_000;
     const gasInUsd = gasInStxFloat * rates.stxToUsd;
     const gasInUsdcWithMarkup = gasInUsd * (1 + this.config.paymasterMarkup / 100);
-    const gasInUsdcx = BigInt(Math.ceil(gasInUsdcWithMarkup * 1_000_000)); // Convert to micro USDCx
+    const gasInUsdcx = BigInt(Math.ceil(gasInUsdcWithMarkup * 1_000_000));
+    return {
+      gasInStx: estimatedGasInStx,
+      gasInUsdcx,
+      stxToUsd: rates.stxToUsd,
+      usdcToUsd: rates.usdcToUsd,
+      markup: this.config.paymasterMarkup,
+      estimatedAt: Date.now(),
+      validUntil: Date.now() + 60000,
+    };
+  }
 
-    const estimate: FeeEstimate = {
-      /**
-       * Paymaster Service (cleaned)
-       * Simplified implementation that ensures broadcast verification before returning success.
-       */
-      import { getConfig } from '../config';
-      import { logger, logPaymasterOperation, logRelayerBalance } from '../utils/logger';
-      import { ExchangeRates, FeeEstimate } from '@shared/types';
-      import { sponsorTransaction, deserializeTransaction } from '@stacks/transactions';
-      import { broadcastAndVerify } from '../utils/stacks';
-      import { fetchWithRetry } from '../utils/fetch';
+  /**
+   * Sponsor transaction and broadcast with verification
+   */
+  async sponsorTransaction(userTransaction: string | any, userAddress: string, estimatedFee: bigint): Promise<string> {
+    logPaymasterOperation('sponsor_transaction', userAddress, { estimatedFee: estimatedFee.toString() });
 
-      export class PaymasterService {
-        private config = getConfig();
-        private cachedRates: ExchangeRates | null = null;
-        private ratesCacheExpiry = 0;
-        private readonly RATES_CACHE_DURATION = 60000; // 1 minute
+    // Validate user balance first
+    const hasSufficientBalance = await this.validateUserBalance(userAddress, estimatedFee);
+    if (!hasSufficientBalance) throw new Error('User has insufficient USDCx balance to pay fee');
 
-        async getExchangeRates(): Promise<ExchangeRates> {
-          if (this.cachedRates && Date.now() < this.ratesCacheExpiry) return this.cachedRates;
-          try {
-            const stxToUsd = await this.fetchStxPrice();
-            const rates: ExchangeRates = { stxToUsd, usdcToUsd: 1.0, timestamp: Date.now() };
-            this.cachedRates = rates;
-            this.ratesCacheExpiry = Date.now() + this.RATES_CACHE_DURATION;
-            return rates;
-          } catch (e) {
-            if (this.cachedRates) return this.cachedRates;
-            return { stxToUsd: 0.5, usdcToUsd: 1.0, timestamp: Date.now() };
-          }
-        }
-
-        async estimateFee(estimatedGasInStx: bigint): Promise<FeeEstimate> {
-          const rates = await this.getExchangeRates();
-          const gasInStxFloat = Number(estimatedGasInStx) / 1_000_000;
-          const gasInUsd = gasInStxFloat * rates.stxToUsd;
-          const gasInUsdcWithMarkup = gasInUsd * (1 + this.config.paymasterMarkup / 100);
-          const gasInUsdcx = BigInt(Math.ceil(gasInUsdcWithMarkup * 1_000_000));
-          return {
-            gasInStx: estimatedGasInStx,
-            gasInUsdcx,
-            stxToUsd: rates.stxToUsd,
-            usdcToUsd: rates.usdcToUsd,
-            markup: this.config.paymasterMarkup,
-            estimatedAt: Date.now(),
-            validUntil: Date.now() + 60000,
-          };
-        }
-
-        /**
-         * Sponsor transaction and broadcast with verification
-         */
-        async sponsorTransaction(userTransaction: string | any, userAddress: string, estimatedFee: bigint): Promise<string> {
-          logPaymasterOperation('sponsor_transaction', userAddress, { estimatedFee: estimatedFee.toString() });
-
-          // Validate user balance first
-          const hasSufficientBalance = await this.validateUserBalance(userAddress, estimatedFee);
-          if (!hasSufficientBalance) throw new Error('User has insufficient USDCx balance to pay fee');
-
-          try {
-            let txObj = userTransaction;
-            if (typeof userTransaction === 'string') {
-              txObj = deserializeTransaction(userTransaction);
-            }
-
-            const sponsored = await sponsorTransaction({ transaction: txObj, sponsorPrivateKey: this.config.relayerPrivateKey, fee: 50000n, network: 'testnet' as any });
-
-            // Use the helper to broadcast and verify
-            const txid = await broadcastAndVerify(sponsored, 'testnet', { maxBroadcastRetries: 3, verifyRetries: 6 });
-
-            logger.info('Transaction sponsored and broadcast successfully', { txid, userAddress });
-            return txid;
-          } catch (error: any) {
-            logger.error('PaymasterService.sponsorTransaction failed', { userAddress, error: error.message || String(error) });
-            throw error;
-          }
-        }
-
-        async validateUserBalance(userAddress: string, requiredFee: bigint): Promise<boolean> {
-          try {
-            const resp = await fetchWithRetry(`${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`);
-            const data: any = await resp.json();
-            const usdcxKey = Object.keys(data.fungible_tokens || {}).find(k => k.startsWith(`${this.config.stacksUsdcxAddress}::`) || k === this.config.stacksUsdcxAddress);
-            const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
-            const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
-            return userBalance >= requiredFee;
-          } catch (error) {
-            logger.error('Failed to validate user balance', { userAddress, error: (error as Error).message });
-            return false;
-          }
-        }
-
-        async checkRelayerBalance(): Promise<void> {
-          try {
-            const resp = await fetchWithRetry(`${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/balances`);
-            const data: any = await resp.json();
-            const relayerBalance = BigInt(data.stx.balance);
-            const threshold = this.config.minStxBalance;
-            logRelayerBalance(relayerBalance, threshold);
-            if (relayerBalance < threshold) throw new Error('Relayer balance too low to sponsor transactions');
-          } catch (error) {
-            logger.error('Failed to check relayer balance', { error: (error as Error).message });
-            throw error;
-          }
-        }
-
-        private async fetchStxPrice(): Promise<number> {
-          try {
-            const response = await fetchWithRetry('https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd', {}, { maxRetries: 2, timeout: 5000 });
-            const data: any = await response.json();
-            return data.blockstack?.usd || 0.5;
-          } catch (error) {
-            logger.warn('Using fallback STX price');
-            return 0.5;
-          }
-        }
-
-        clearRatesCache(): void {
-          this.cachedRates = null;
-          this.ratesCacheExpiry = 0;
-        }
+    try {
+      let txObj = userTransaction;
+      if (typeof userTransaction === 'string') {
+        txObj = deserializeTransaction(userTransaction);
       }
 
-      export const paymasterService = new PaymasterService();
-              });
+      const sponsored = await sponsorTransaction({ transaction: txObj, sponsorPrivateKey: this.config.relayerPrivateKey, fee: 50000n, network: 'testnet' as any });
+
+      // Broadcast and verify the transaction is known by the node
+      const txid = await broadcastAndVerify(sponsored, 'testnet', { maxBroadcastRetries: 3, verifyRetries: 6 });
+
+      logger.info('Transaction sponsored and broadcast successfully', { txid, userAddress });
+      return txid;
+    } catch (error: any) {
+      logger.error('PaymasterService.sponsorTransaction failed', { userAddress, error: error.message || String(error) });
+      throw error;
+    }
+  }
+
+  async validateUserBalance(userAddress: string, requiredFee: bigint): Promise<boolean> {
+    try {
+      const resp = await fetchWithRetry(`${this.config.stacksRpcUrl}/extended/v1/address/${userAddress}/balances`);
+      const data: any = await resp.json();
+      const usdcxKey = Object.keys(data.fungible_tokens || {}).find(k => k.startsWith(`${this.config.stacksUsdcxAddress}::`) || k === this.config.stacksUsdcxAddress);
+      const usdcxToken = usdcxKey ? data.fungible_tokens[usdcxKey] : null;
+      const userBalance = usdcxToken ? BigInt(usdcxToken.balance) : BigInt(0);
+      return userBalance >= requiredFee;
+    } catch (error) {
+      logger.error('Failed to validate user balance', { userAddress, error: (error as Error).message });
+      return false;
+    }
+  }
+
+  async checkRelayerBalance(): Promise<void> {
+    try {
+      const resp = await fetchWithRetry(`${this.config.stacksRpcUrl}/extended/v1/address/${this.config.relayerStacksAddress}/balances`);
+      const data: any = await resp.json();
+      const relayerBalance = BigInt(data.stx.balance);
+      const threshold = this.config.minStxBalance;
+      logRelayerBalance(relayerBalance, threshold);
+      if (relayerBalance < threshold) throw new Error('Relayer balance too low to sponsor transactions');
+    } catch (error) {
+      logger.error('Failed to check relayer balance', { error: (error as Error).message });
+      throw error;
+    }
+  }
+
+  private async fetchStxPrice(): Promise<number> {
+    try {
+      const response = await fetchWithRetry('https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd', {}, { maxRetries: 2, timeout: 5000 });
+      const data: any = await response.json();
+      return data.blockstack?.usd || 0.5;
+    } catch (error) {
+      logger.warn('Using fallback STX price');
+      return 0.5;
+    }
+  }
+
+  clearRatesCache(): void {
+    this.cachedRates = null;
+    this.ratesCacheExpiry = 0;
+  }
+}
+
+export const paymasterService = new PaymasterService();
