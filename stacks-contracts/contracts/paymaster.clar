@@ -11,6 +11,7 @@
 (define-constant ERR-NOT-SPONSORED (err u200))
 (define-constant ERR-WRONG-SPONSOR (err u201))
 (define-constant ERR-BELOW-MINIMUM (err u202))
+(define-constant ERR-CONTRACT-PAUSED (err u203))
 
 ;; Minimum withdrawal amount: 4.80 USDCx (4,800,000 micro-USDCx)
 ;; Per Stacks docs: bridge-out has ~$4.80 flat fee
@@ -18,6 +19,7 @@
 
 ;; The backend relayer address that pays the STX fees
 (define-data-var relayer principal 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P)
+(define-data-var paused bool false)
 
 ;; Official USDCx token contract on Testnet
 (define-constant USDCX_TOKEN 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx)
@@ -40,7 +42,8 @@
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
     ;; Validate minimum withdrawal amount
     (asserts! (>= amount MIN-WITHDRAW-AMOUNT) ERR-BELOW-MINIMUM)
-    
+    (asserts! (not (var-get paused)) (err u203))
+
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -59,7 +62,7 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -81,7 +84,7 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -104,7 +107,7 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -124,7 +127,7 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -141,7 +144,7 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -160,7 +163,7 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
@@ -178,11 +181,27 @@
     (fee uint))
   (let ((sponsor (unwrap! tx-sponsor? ERR-NOT-SPONSORED)))
     (asserts! (is-eq sponsor (var-get relayer)) ERR-WRONG-SPONSOR)
-    
+    (asserts! (not (var-get paused)) (err u203))
     ;; 1. Pay the fee to the relayer in USDCx
     (try! (contract-call? USDCX_TOKEN transfer fee tx-sender sponsor none))
     
     ;; 2. Remove liquidity from our DEX contract
     (contract-call? SWAP-CONTRACT remove-liquidity-stx token liquidity stx-min token-min)
+  )
+)
+
+(define-public (pause)
+  (begin
+    (asserts! (is-eq tx-sender (var-get relayer)) (err u101))
+    (var-set paused true)
+    (ok true)
+  )
+)
+
+(define-public (unpause)
+  (begin
+    (asserts! (is-eq tx-sender (var-get relayer)) (err u102))
+    (var-set paused false)
+    (ok true)
   )
 )
