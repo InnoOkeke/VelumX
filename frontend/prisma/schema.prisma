@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BridgeTransaction {
+  id                   String   @id @default(uuid())
+  type                 String   // 'deposit' | 'withdrawal'
+  status               String   // 'pending' | 'confirming' | 'attesting' | 'minting' | 'complete' | 'failed'
+  sourceChain         String   // 'ethereum' | 'stacks'
+  destinationChain    String   // 'ethereum' | 'stacks'
+  sourceTxHash        String   @unique
+  destinationTxHash   String?
+  amount               String
+  ethereumAddress      String?
+  stacksAddress        String
+  messageHash          String?
+  attestation          String?
+  attestationFetchedAt Int?
+  currentStep          String?
+  error                String?
+  retryCount          Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  completedAt          DateTime?
+
+  @@index([ethereumAddress])
+  @@index([stacksAddress])
+}

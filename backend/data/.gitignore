@@ -1,5 +1,0 @@
-# Ignore transaction queue data
-*.json
-
-# But keep this directory
-!.gitignore
