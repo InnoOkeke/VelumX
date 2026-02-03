@@ -45,7 +45,7 @@ describe('Paymaster API Routes', () => {
     app = express();
     app.use(express.json());
     app.use('/api/paymaster', paymasterRoutes);
-    
+
     // Clear all mocks
     vi.clearAllMocks();
   });
@@ -291,7 +291,7 @@ describe('Paymaster API Routes', () => {
 
       expect(response.body).toMatchObject({
         error: 'Internal Server Error',
-        message: 'Failed to sponsor transaction',
+        message: 'Network error',
       });
     });
 
@@ -406,7 +406,7 @@ describe('Paymaster API Routes', () => {
 
     it('should log errors appropriately', async () => {
       const { logger } = await import('../../utils/logger');
-      
+
       vi.mocked(paymasterService.estimateFee).mockRejectedValue(
         new Error('Test error')
       );

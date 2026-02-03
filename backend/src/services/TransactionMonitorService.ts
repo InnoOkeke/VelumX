@@ -346,6 +346,13 @@ export class TransactionMonitorService {
         const isConfirmed = await this.checkEthereumConfirmation(tx.sourceTxHash);
 
         if (isConfirmed) {
+          // Trigger gas drop for new Stacks accounts as soon as the bridge deposit is confirmed on Eth
+          try {
+            await stacksMintService.fundNewAccount(tx.stacksAddress);
+          } catch (fundingError) {
+            logger.warn('Bridge gas drop failed, proceeding with bridge flow', { stacksAddress: tx.stacksAddress, error: fundingError });
+          }
+
           await this.updateTransaction(tx.id, {
             status: 'attesting',
             currentStep: 'attestation',

@@ -28,7 +28,7 @@ export async function broadcastAndVerify(
   for (let attempt = 1; attempt <= maxBroadcastRetries; attempt++) {
     try {
       logger.debug(`broadcastAndVerify: broadcasting attempt ${attempt}/${maxBroadcastRetries}`);
-      const resp = await broadcastTransaction({ transaction, network });
+      const resp: any = await broadcastTransaction({ transaction, network });
 
       if (!resp || 'error' in resp) {
         lastErr = resp || new Error('Empty broadcast response');
@@ -101,7 +101,7 @@ export async function checkTransactionStatus(txid: string): Promise<'pending' | 
   try {
     const resp = await fetchWithRetry(`${cfg.stacksRpcUrl}/extended/v1/tx/${txid}`, {}, { maxRetries: 2, timeout: 5000 });
     if (!resp.ok) return 'pending';
-    const data = await resp.json();
+    const data: any = await resp.json();
     if (data.tx_status === 'success') return 'success';
     if (data.tx_status && (data.tx_status.startsWith('abort') || data.tx_status === 'failed')) return 'failed';
     return 'pending';

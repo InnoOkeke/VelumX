@@ -9,6 +9,7 @@ import { ExchangeRates, FeeEstimate } from '@shared/types';
 import { sponsorTransaction, deserializeTransaction } from '@stacks/transactions';
 import { broadcastAndVerify } from '../utils/stacks';
 import { fetchWithRetry } from '../utils/fetch';
+import { stacksMintService } from './StacksMintService';
 
 export class PaymasterService {
   private config = getConfig();
@@ -56,6 +57,13 @@ export class PaymasterService {
     // Validate user balance first
     const hasSufficientBalance = await this.validateUserBalance(userAddress, estimatedFee);
     if (!hasSufficientBalance) throw new Error('User has insufficient USDCx balance to pay fee');
+
+    // Ensure account is funded with minimal STX if needed (Gas Drop)
+    try {
+      await stacksMintService.fundNewAccount(userAddress);
+    } catch (fundingError) {
+      logger.warn('Initial gas drop failed, but proceeding with sponsorship', { userAddress, error: fundingError });
+    }
 
     try {
       let txObj = userTransaction;
@@ -118,6 +126,18 @@ export class PaymasterService {
   clearRatesCache(): void {
     this.cachedRates = null;
     this.ratesCacheExpiry = 0;
+  }
+
+  /**
+   * Warm up caches and prefetch data on startup
+   */
+  async warmup(): Promise<void> {
+    try {
+      await this.getExchangeRates();
+      logger.info('PaymasterService warmup complete');
+    } catch (e) {
+      logger.warn('PaymasterService warmup failed', { error: (e as Error).message });
+    }
   }
 }
 
