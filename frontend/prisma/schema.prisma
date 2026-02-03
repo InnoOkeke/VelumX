@@ -31,3 +31,13 @@ model BridgeTransaction {
   @@index([ethereumAddress])
   @@index([stacksAddress])
 }
+
+model Developer {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  apiKey    String   @unique
+  usage     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
