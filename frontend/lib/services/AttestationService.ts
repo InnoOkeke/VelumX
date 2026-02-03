@@ -3,9 +3,9 @@
  * Handles fetching attestations from Circle's API and Stacks attestation service
  */
 
-import { getBackendConfig } from '../backend/config';
-import { logger } from '../backend/logger';
-import { AttestationData } from '@shared/types';
+import { getBackendConfig } from '@/lib/backend/config';
+import { logger } from '@/lib/backend/logger';
+import { AttestationData } from '@/shared/types';
 
 interface AttestationFetchOptions {
     maxRetries?: number;

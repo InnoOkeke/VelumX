@@ -3,9 +3,9 @@
  * Handles price quotes and routing for the VelumX DEX
  */
 
-import { getBackendConfig } from '../backend/config';
-import { logger } from '../backend/logger';
-import { getStacksNetwork } from '../backend/stacks';
+import { getBackendConfig } from '@/lib/backend/config';
+import { logger } from '@/lib/backend/logger';
+import { getStacksNetwork } from '@/lib/backend/stacks';
 import {
     Cl,
     fetchCallReadOnlyFunction

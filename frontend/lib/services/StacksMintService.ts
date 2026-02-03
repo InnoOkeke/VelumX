@@ -11,10 +11,10 @@ import {
     bufferCV,
     uintCV,
 } from '@stacks/transactions';
-import { broadcastAndVerify } from '../backend/stacks';
+import { broadcastAndVerify } from '@/lib/backend/stacks';
 import { STACKS_TESTNET, STACKS_MAINNET } from '@stacks/network';
-import { getBackendConfig } from '../backend/config';
-import { logger } from '../backend/logger';
+import { getBackendConfig } from '@/lib/backend/config';
+import { logger } from '@/lib/backend/logger';
 
 export class StacksMintService {
     private config = getBackendConfig();

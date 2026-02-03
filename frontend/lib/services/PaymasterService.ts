@@ -3,12 +3,12 @@
  * Handles gasless transactions by sponsoring STX fees in exchange for USDCx
  */
 
-import { getBackendConfig } from '../backend/config';
-import { logger } from '../backend/logger';
-import { ExchangeRates, FeeEstimate } from '@shared/types';
+import { getBackendConfig } from '@/lib/backend/config';
+import { logger } from '@/lib/backend/logger';
+import { ExchangeRates, FeeEstimate } from '@/shared/types';
 import { sponsorTransaction, deserializeTransaction } from '@stacks/transactions';
-import { broadcastAndVerify } from '../backend/stacks';
-import { fetchWithRetry } from '../backend/fetch';
+import { broadcastAndVerify } from '@/lib/backend/stacks';
+import { fetchWithRetry } from '@/lib/backend/fetch';
 import { stacksMintService } from './StacksMintService';
 
 export class PaymasterService {

@@ -6,14 +6,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWallet } from '../lib/hooks/useWallet';
-import { useConfig, USDC_ABI, XRESERVE_ABI } from '../lib/config';
+import { useWallet } from '@/lib/hooks/useWallet';
+import { useConfig, USDC_ABI, XRESERVE_ABI } from '@/lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { Buffer } from 'buffer';
 import { sepolia } from 'viem/chains';
 import { Shield, ArrowRight, Loader2, Unplug, RefreshCw, ArrowDownUp, Zap, AlertCircle, CheckCircle } from 'lucide-react';
-import { encodeStacksAddress, bytesToHex, encodeEthereumAddress as encodeEthereumAddressUtil } from '../lib/utils/address-encoding';
-import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
+import { encodeStacksAddress, bytesToHex, encodeEthereumAddress as encodeEthereumAddressUtil } from '@/lib/utils/address-encoding';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '@/lib/stacks-loader';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 

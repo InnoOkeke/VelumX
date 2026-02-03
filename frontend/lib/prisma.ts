@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
+    // Model: BridgeTransaction, Developer
     return new PrismaClient()
 }
 

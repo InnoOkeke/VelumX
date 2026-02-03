@@ -6,12 +6,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useWallet } from '../lib/hooks/useWallet';
-import { useConfig, getConfig } from '../lib/config';
+import { useWallet } from '@/lib/hooks/useWallet';
+import { useConfig, getConfig } from '@/lib/config';
 import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
-import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
-import { encodeStacksAddress, bytesToHex } from '../lib/utils/address-encoding';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '@/lib/stacks-loader';
+import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';

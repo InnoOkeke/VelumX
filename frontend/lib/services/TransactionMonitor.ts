@@ -3,12 +3,12 @@
  * Monitors bridge transactions and processes attestations
  */
 
-import { BridgeTransaction, TransactionStatus } from '@shared/types';
-import { getBackendConfig } from '../backend/config';
-import { logger } from '../backend/logger';
+import { BridgeTransaction, TransactionStatus } from '@/shared/types';
+import { getBackendConfig } from '@/lib/backend/config';
+import { logger } from '@/lib/backend/logger';
 import { attestationService } from './AttestationService';
 import { stacksMintService } from './StacksMintService';
-import prisma from '../prisma';
+import prisma from '@/lib/prisma';
 
 export class TransactionMonitorService {
     private config = getBackendConfig();
