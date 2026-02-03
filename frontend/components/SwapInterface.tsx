@@ -91,17 +91,17 @@ export function SwapInterface() {
 
   const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<SwapState>({
-    inputToken: DEFAULT_TOKENS[0], // STX
-    outputToken: DEFAULT_TOKENS[1], // USDCx
+    inputToken: DEFAULT_TOKENS[1], // USDCx
+    outputToken: DEFAULT_TOKENS[2], // VEX
     inputAmount: '',
     outputAmount: '',
-    gaslessMode: true, // Default to true for gas abstraction
+    gaslessMode: true,
     isProcessing: false,
     isFetchingQuote: false,
     error: null,
     success: null,
     quote: null,
-    gasFeeUsdcx: '0.2', // Default fallback lowered from 1.0 to 0.2 for realism
+    gasFeeUsdcx: '0.2',
     slippage: 0.5,
     showSettings: false,
   });
@@ -117,7 +117,7 @@ export function SwapInterface() {
     // Update initial state tokens - Default to STX -> VEX
     setState(prev => ({
       ...prev,
-      inputToken: updatedTokens[0], // STX
+      inputToken: updatedTokens[1], // USDCx
       outputToken: updatedTokens[2]  // VEX
     }));
   }, [config.stacksVexAddress]);
@@ -743,16 +743,16 @@ export function SwapInterface() {
         {/* Suggested Pairs */}
         <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setState(prev => ({ ...prev, inputToken: tokens[0], outputToken: tokens[2] }))}
-            className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-all text-purple-600 dark:text-purple-400"
-          >
-            STX/VEX
-          </button>
-          <button
             onClick={() => setState(prev => ({ ...prev, inputToken: tokens[1], outputToken: tokens[2] }))}
             className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10 transition-all text-blue-600 dark:text-blue-400"
           >
             USDCx/VEX
+          </button>
+          <button
+            onClick={() => setState(prev => ({ ...prev, inputToken: tokens[0], outputToken: tokens[1] }))}
+            className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-all text-purple-600 dark:text-purple-400"
+          >
+            STX/USDCx
           </button>
         </div>
 

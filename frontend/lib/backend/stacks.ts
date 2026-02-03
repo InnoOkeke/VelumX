@@ -3,6 +3,7 @@
  */
 
 import { broadcastTransaction } from '@stacks/transactions';
+import { STACKS_TESTNET, STACKS_MAINNET } from '@stacks/network';
 import { getBackendConfig } from './config';
 import { fetchWithRetry } from './fetch';
 import { logger } from './logger';
@@ -11,6 +12,11 @@ interface BroadcastOptions {
     maxBroadcastRetries?: number;
     verifyRetries?: number;
     verifyIntervalMs?: number;
+}
+
+
+export function getStacksNetwork(): any {
+    return STACKS_TESTNET;
 }
 
 export async function broadcastAndVerify(
