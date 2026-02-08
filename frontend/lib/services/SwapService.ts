@@ -20,7 +20,9 @@ export interface SwapQuote {
 }
 
 export class SwapService {
-    private config = getBackendConfig();
+    private get config() {
+        return getBackendConfig();
+    }
 
     /**
      * Gets a quote for swapping tokenIn for tokenOut
