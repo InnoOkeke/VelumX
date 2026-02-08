@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { paymasterService } from '@/lib/services/PaymasterService';
-import { logger } from '@/lib/backend/logger';
-import { verifyApiKey } from '@/lib/backend/auth';
+import { paymasterService } from '../../../../lib/services/PaymasterService';
+import { logger } from '../../../../lib/backend/logger';
+import { verifyApiKey } from '../../../../lib/backend/auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {

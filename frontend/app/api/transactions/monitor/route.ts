@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transactionMonitorService } from '@/lib/services/TransactionMonitor';
-import { logger } from '@/lib/backend/logger';
+import { transactionMonitorService } from '../../../../lib/services/TransactionMonitor';
+import { logger } from '../../../../lib/backend/logger';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);

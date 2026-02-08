@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { swapService } from '@/lib/services/SwapService';
-import { logger } from '@/lib/backend/logger';
+import { swapService } from '../../../../lib/services/SwapService';
+import { logger } from '../../../../lib/backend/logger';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {

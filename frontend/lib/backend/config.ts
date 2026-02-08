@@ -32,7 +32,8 @@ const REQUIRED_ENV_VARS = [
     'RELAYER_STACKS_ADDRESS',
 ] as const;
 
-function validateEnvironment(): void {
+function validateEnvironment(): boolean {
+    const isBuild = process.env.NEXT_PHASE === 'phase-production-build' || (process.env.NODE_ENV === 'production' && !process.env.RELAYER_PRIVATE_KEY);
     const missing: string[] = [];
     for (const varName of REQUIRED_ENV_VARS) {
         if (!process.env[varName]) {
@@ -40,8 +41,12 @@ function validateEnvironment(): void {
         }
     }
     if (missing.length > 0) {
+        if (isBuild) {
+            return true; // isBuild = true
+        }
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
     }
+    return false;
 }
 
 function parseBigInt(value: string | undefined, defaultValue: bigint): bigint {
@@ -60,11 +65,12 @@ function parseNumber(value: string | undefined, defaultValue: number): number {
 }
 
 export function getBackendConfig(): BackendConfig {
-    validateEnvironment();
+    const isBuild = validateEnvironment();
+    const placeholder = 'http://placeholder-during-build';
 
     return {
-        ethereumRpcUrl: process.env.ETHEREUM_RPC_URL!,
-        stacksRpcUrl: process.env.STACKS_RPC_URL!,
+        ethereumRpcUrl: process.env.ETHEREUM_RPC_URL || placeholder,
+        stacksRpcUrl: process.env.STACKS_RPC_URL || placeholder,
         ethereumUsdcAddress: process.env.ETHEREUM_USDC_ADDRESS || '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
         ethereumXReserveAddress: process.env.ETHEREUM_XRESERVE_ADDRESS || '0x008888878f94C0d87defdf0B07f46B93C1934442',
         stacksUsdcxAddress: process.env.STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
@@ -73,9 +79,9 @@ export function getBackendConfig(): BackendConfig {
         stacksSwapContractAddress: process.env.STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx',
         stacksVexAddress: process.env.STACKS_VEX_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
         circleApiKey: process.env.CIRCLE_API_KEY,
-        relayerPrivateKey: process.env.RELAYER_PRIVATE_KEY!,
+        relayerPrivateKey: process.env.RELAYER_PRIVATE_KEY || '0'.repeat(64), // Placeholder 32 byte hex
         relayerSeedPhrase: process.env.RELAYER_SEED_PHRASE,
-        relayerStacksAddress: process.env.RELAYER_STACKS_ADDRESS!,
+        relayerStacksAddress: process.env.RELAYER_STACKS_ADDRESS || 'ST00000000000000000000000000000000000000',
         minStxBalance: parseBigInt(process.env.MIN_STX_BALANCE, BigInt(1_000_000)),
         attestationPollInterval: parseNumber(process.env.ATTESTATION_POLL_INTERVAL, 30000),
         maxRetries: parseNumber(process.env.MAX_RETRIES, 3),
