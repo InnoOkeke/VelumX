@@ -121,4 +121,11 @@ export class SwapService {
     }
 }
 
-export const swapService = new SwapService();
+let instance: SwapService | null = null;
+
+export function getSwapService(): SwapService {
+    if (!instance) {
+        instance = new SwapService();
+    }
+    return instance;
+}
