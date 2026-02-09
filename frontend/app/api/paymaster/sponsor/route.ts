@@ -17,16 +17,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: auth.error || 'Unauthorized' }, { status: 401 });
         }
 
-        const { transaction, userAddress, feeInUsdcx } = await req.json();
+        const { transaction, userAddress, estimatedFee } = await req.json();
 
-        if (!transaction || !userAddress || !feeInUsdcx) {
+        if (!transaction || !userAddress || !estimatedFee) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
         const txid = await getPaymasterService().sponsorTransaction(
             transaction,
             userAddress,
-            BigInt(feeInUsdcx)
+            BigInt(estimatedFee)
         );
 
         return NextResponse.json({
