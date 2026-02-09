@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { paymasterService } from '../../../../lib/services/PaymasterService';
+import { getPaymasterService } from '../../../../lib/services/PaymasterService';
 import { logger } from '../../../../lib/backend/logger';
 import { verifyApiKey } from '../../../../lib/backend/auth';
 
@@ -23,16 +23,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const txid = await paymasterService.sponsorTransaction(
+        const txid = await getPaymasterService().sponsorTransaction(
             transaction,
             userAddress,
             BigInt(feeInUsdcx)
         );
 
-        return NextResponse.json({ txid, timestamp: Date.now() });
+        return NextResponse.json({
+            success: true,
+            data: { txid, timestamp: Date.now() }
+        });
     } catch (error: any) {
         logger.error('Sponsorship failed', { error: error.message });
         return NextResponse.json({
+            success: false,
             error: error.message || 'Internal Server Error'
         }, { status: 500 });
     }

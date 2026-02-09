@@ -103,4 +103,11 @@ export class PaymasterService {
     }
 }
 
-export const paymasterService = new PaymasterService();
+let instance: PaymasterService | null = null;
+
+export function getPaymasterService(): PaymasterService {
+    if (!instance) {
+        instance = new PaymasterService();
+    }
+    return instance;
+}
