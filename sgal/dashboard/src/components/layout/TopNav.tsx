@@ -1,8 +1,11 @@
 'use client';
 
-import { Bell, Search, Hexagon } from 'lucide-react';
+import { Bell, Search, Hexagon, LogOut } from 'lucide-react';
+import { useWallet } from '../providers/WalletProvider';
 
 export function TopNav() {
+    const { isLoggedIn, stxAddress, login, logout } = useWallet();
+
     return (
         <header className="h-20 w-full border-b border-white/5 bg-[#0f111a]/80 backdrop-blur-xl flex items-center justify-between px-8 z-10 sticky top-0">
             <div className="flex items-center gap-4 w-96">
@@ -24,17 +27,38 @@ export function TopNav() {
 
                 <div className="h-6 w-px bg-white/10" />
 
-                <button className="flex items-center gap-3 hover:bg-white/5 py-1.5 px-3 rounded-full transition-colors">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-[1px]">
-                        <div className="w-full h-full rounded-full bg-[#1a1d2d] flex items-center justify-center">
-                            <Hexagon className="w-4 h-4 text-slate-300" />
-                        </div>
+                {isLoggedIn ? (
+                    <div className="flex items-center gap-3">
+                        <button className="flex items-center gap-3 hover:bg-white/5 py-1.5 px-3 rounded-full transition-colors">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-[1px]">
+                                <div className="w-full h-full rounded-full bg-[#1a1d2d] flex items-center justify-center">
+                                    <Hexagon className="w-4 h-4 text-slate-300" />
+                                </div>
+                            </div>
+                            <div className="text-left hidden sm:block">
+                                <p className="text-sm font-medium text-white line-clamp-1">
+                                    {stxAddress ? `${stxAddress.substring(0, 4)}...${stxAddress.substring(stxAddress.length - 4)}` : 'Connected'}
+                                </p>
+                            </div>
+                        </button>
+                        <button
+                            onClick={logout}
+                            className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-rose-400 transition-colors"
+                            title="Logout"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
                     </div>
-                    <div className="text-left hidden sm:block">
-                        <p className="text-sm font-medium text-white line-clamp-1">SP2K...HQ42</p>
-                    </div>
-                </button>
+                ) : (
+                    <button
+                        onClick={login}
+                        className="bg-gradient-to-r from-[#7e22ce] to-[#00f0ff] text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg shadow-[#7e22ce]/20 hover:scale-105 transition-transform active:scale-95"
+                    >
+                        Connect Wallet
+                    </button>
+                )}
             </div>
         </header>
     );
 }
+

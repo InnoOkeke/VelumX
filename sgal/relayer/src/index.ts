@@ -21,6 +21,11 @@ app.use(express.json());
 
 const paymasterService = new PaymasterService();
 
+// Root Route
+app.get('/', (req, res) => {
+    res.send('<h1>SGAL Relayer is Live</h1><p>Visit <a href="/health">/health</a> for status.</p>');
+});
+
 // Health Check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'SGAL Relayer' });

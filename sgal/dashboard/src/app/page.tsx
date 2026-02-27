@@ -118,29 +118,55 @@ export default function DashboardOverview() {
           </select>
         </div>
 
-        {/* Placeholder for actual chart (recharts) */}
+        {/* Sponsorship Volume (USDCx) */}
         <div className="flex-1 w-full flex items-end justify-between px-4 pb-4 gap-2 border-b border-l border-white/10 relative">
-          {/* Simulated Bar Chart */}
-          {[40, 60, 45, 80, 65, 90, 75].map((height, i) => (
-            <motion.div
-              key={i}
-              initial={{ height: 0 }}
-              animate={{ height: `${height}%` }}
-              transition={{ delay: 0.5 + (i * 0.1), type: 'spring' }}
-              className="w-full mx-1 rounded-t-sm bg-gradient-to-t from-[#7e22ce]/80 to-[#00f0ff]/80 relative group"
-            >
-              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#262b40] border border-white/10 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                ${height * 12}
-              </div>
-            </motion.div>
-          ))}
-          <div className="absolute -left-12 bottom-[20%] text-xs text-slate-500">$5k</div>
-          <div className="absolute -left-12 bottom-[50%] text-xs text-slate-500">$10k</div>
-          <div className="absolute -left-12 bottom-[80%] text-xs text-slate-500">$15k</div>
+          {/* Real Bar Chart calculated from logs */}
+          {(() => {
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const last7Days = Array.from({ length: 7 }, (_, i) => {
+              const d = new Date();
+              d.setDate(d.getDate() - (6 - i));
+              return d.toISOString().split('T')[0];
+            });
+
+            const dailyTotals = last7Days.map(date => {
+              const dayLogs = logs.filter(log => log.createdAt.startsWith(date));
+              const total = dayLogs.reduce((acc, log) => acc + (parseInt(log.feeAmount) || 0), 0);
+              return total / 1_000_000; // In USDCx
+            });
+
+            const maxTotal = Math.max(...dailyTotals, 10); // Minimum scale of 10
+
+            return dailyTotals.map((total, i) => {
+              const height = (total / maxTotal) * 100;
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${Math.max(height, 5)}%` }} // Minimum 5% for visibility
+                  transition={{ delay: 0.5 + (i * 0.1), type: 'spring' }}
+                  className="w-full mx-1 rounded-t-sm bg-gradient-to-t from-[#7e22ce]/80 to-[#00f0ff]/80 relative group"
+                >
+                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#262b40] border border-white/10 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                    {total.toFixed(2)} USDCx
+                  </div>
+                </motion.div>
+              );
+            });
+          })()}
+
+          <div className="absolute -left-12 bottom-[20%] text-xs text-slate-500">20%</div>
+          <div className="absolute -left-12 bottom-[50%] text-xs text-slate-500">50%</div>
+          <div className="absolute -left-12 bottom-[80%] text-xs text-slate-500">80%</div>
         </div>
         <div className="flex justify-between w-full mt-4 px-4 text-xs text-slate-500">
-          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          {Array.from({ length: 7 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            return <span key={i}>{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]}</span>;
+          })}
         </div>
+
       </motion.div>
 
       {/* Recent Activity Mini-table */}
