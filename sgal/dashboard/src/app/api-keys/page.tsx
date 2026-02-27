@@ -3,12 +3,53 @@
 import { KeyRound, Plus, Copy, MoreVertical, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+import { useState, useEffect } from 'react';
+
+const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
+
 export default function ApiKeysPage() {
-    const keys = [
-        { name: 'Production App', key: 'sk_prod_8f92...3b1a', status: 'Active', created: 'Oct 12, 2025' },
-        { name: 'Staging Environment', key: 'sk_test_4a1b...9c2d', status: 'Active', created: 'Nov 05, 2025' },
-        { name: 'Local Dev (Alice)', key: 'sk_test_7f3e...1a4v', status: 'Revoked', created: 'Dec 01, 2025' }
-    ];
+    const [keys, setKeys] = useState<{ id: string; name: string; key: string; status: string; createdAt: string }[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    useEffect(() => {
+        fetchKeys();
+    }, []);
+
+    const fetchKeys = async () => {
+        try {
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/keys`);
+            const data = await res.json();
+            setKeys(data);
+        } catch (error) {
+            console.error('Error fetching keys:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleGenerateKey = async () => {
+        setIsGenerating(true);
+        try {
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: `Key ${keys.length + 1}` })
+            });
+            if (res.ok) {
+                await fetchKeys();
+            }
+        } catch (error) {
+            console.error('Error generating key:', error);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        // Could add a toast here
+    };
 
     return (
         <div className="space-y-8 pb-12">
@@ -21,10 +62,12 @@ export default function ApiKeysPage() {
                 <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00f0ff] to-[#7e22ce] text-white font-medium rounded-lg shadow-lg hover:shadow-[#7e22ce]/25 transition-all"
+                    onClick={handleGenerateKey}
+                    disabled={isGenerating}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00f0ff] to-[#7e22ce] text-white font-medium rounded-lg shadow-lg hover:shadow-[#7e22ce]/25 transition-all disabled:opacity-50"
                 >
                     <Plus className="w-4 h-4" />
-                    Generate New Key
+                    {isGenerating ? 'Generating...' : 'Generate New Key'}
                 </motion.button>
             </div>
 
@@ -53,8 +96,20 @@ export default function ApiKeysPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {keys.map((k, i) => (
-                                <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                                        Loading API keys...
+                                    </td>
+                                </tr>
+                            ) : keys.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                                        No API keys found. Generate one to get started.
+                                    </td>
+                                </tr>
+                            ) : keys.map((k, i) => (
+                                <tr key={k.id} className="hover:bg-white/[0.02] transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
@@ -66,7 +121,9 @@ export default function ApiKeysPage() {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <code className="px-2 py-1 bg-black/40 rounded text-sm text-slate-300 font-mono border border-white/5">{k.key}</code>
-                                            <button className="text-slate-500 hover:text-[#00f0ff] transition-colors p-1" title="Copy to clipboard">
+                                            <button
+                                                onClick={() => copyToClipboard(k.key)}
+                                                className="text-slate-500 hover:text-[#00f0ff] transition-colors p-1" title="Copy to clipboard">
                                                 <Copy className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -78,7 +135,7 @@ export default function ApiKeysPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
-                                        {k.created}
+                                        {new Date(k.createdAt).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button className="text-slate-500 hover:text-white transition-colors p-1">

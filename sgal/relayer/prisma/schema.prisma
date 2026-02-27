@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  name      String
+  key       String   @unique
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  txid        String   @unique
+  type        String
+  userAddress String
+  feeAmount   String
+  status      String   @default("Pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  apiKey      ApiKey?  @relation(fields: [apiKeyId], references: [id])
+  apiKeyId    String?
+}

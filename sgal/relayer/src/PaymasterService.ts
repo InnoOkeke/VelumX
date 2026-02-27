@@ -11,6 +11,9 @@ import {
     listCV
 } from '@stacks/transactions';
 import { StacksNetwork, STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // Simple interface matching the SDK
 interface SignedIntent {
@@ -78,6 +81,22 @@ export class PaymasterService {
 
         if ('error' in broadcastResponse) {
             throw new Error(`Broadcast failed: ${broadcastResponse.error} - ${Reflect.get(broadcastResponse, 'reason')}`);
+        }
+
+        // Save to Database for Dashboard Analytics
+        try {
+            await prisma.transaction.create({
+                data: {
+                    txid: broadcastResponse.txid,
+                    type: 'Execute Intent',
+                    userAddress: intent.target,
+                    feeAmount: intent.maxFeeUSDCx.toString(),
+                    status: 'Pending'
+                }
+            });
+        } catch (dbError) {
+            console.error("Failed to save transaction to DB:", dbError);
+            // We don't throw here because the transaction was already broadcast successfully
         }
 
         return {

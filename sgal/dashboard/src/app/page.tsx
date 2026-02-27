@@ -3,34 +3,66 @@
 import { Activity, Users, BatteryCharging, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const stats = [
-  {
-    title: 'Total Gas Sponsored',
-    value: '452,190 STX',
-    change: '+12.5%',
-    trend: 'up',
-    icon: BatteryCharging,
-    color: 'from-emerald-400 to-teal-500'
-  },
-  {
-    title: 'API Requests (24h)',
-    value: '1.24M',
-    change: '+5.2%',
-    trend: 'up',
-    icon: Activity,
-    color: 'from-blue-400 to-indigo-500'
-  },
-  {
-    title: 'Active Smart Wallets',
-    value: '8,439',
-    change: '-1.1%',
-    trend: 'down',
-    icon: Users,
-    color: 'from-purple-400 to-pink-500'
-  }
-];
+import { useState, useEffect } from 'react';
+
+const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
 export default function DashboardOverview() {
+  const [statsData, setStatsData] = useState({
+    totalTransactions: 0,
+    activeKeys: 0,
+    totalSponsored: '0',
+    activeSmartWallets: 0
+  });
+  const [logs, setLogs] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        const [statsRes, logsRes] = await Promise.all([
+          fetch(`${RELAYER_URL}/api/dashboard/stats`),
+          fetch(`${RELAYER_URL}/api/dashboard/logs`)
+        ]);
+        const stats = await statsRes.json();
+        const logsData = await logsRes.json();
+        setStatsData(stats);
+        setLogs(logsData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAllData();
+  }, []);
+
+  const metricCards = [
+    {
+      title: 'Total Gas Sponsored',
+      value: `${(parseInt(statsData.totalSponsored) / 1_000_000).toFixed(2)} USDCx`,
+      change: '+0%',
+      trend: 'up',
+      icon: BatteryCharging,
+      color: 'from-emerald-400 to-teal-500'
+    },
+    {
+      title: 'Active API Keys',
+      value: statsData.activeKeys.toString(),
+      change: '+0%',
+      trend: 'up',
+      icon: Activity,
+      color: 'from-blue-400 to-indigo-500'
+    },
+    {
+      title: 'Total Transactions',
+      value: statsData.totalTransactions.toString(),
+      change: '+0%',
+      trend: 'up',
+      icon: Users,
+      color: 'from-purple-400 to-pink-500'
+    }
+  ];
   return (
     <div className="space-y-8 pb-12">
       <div>
@@ -40,7 +72,7 @@ export default function DashboardOverview() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((stat, i) => (
+        {metricCards.map((stat, i) => (
           <motion.div
             key={stat.title}
             initial={{ opacity: 0, y: 20 }}
@@ -51,7 +83,9 @@ export default function DashboardOverview() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-slate-400 font-medium text-sm">{stat.title}</p>
-                <h3 className="text-3xl font-bold text-white mt-1">{stat.value}</h3>
+                <h3 className="text-3xl font-bold text-white mt-1">
+                  {isLoading ? '...' : stat.value}
+                </h3>
               </div>
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg shadow-black/20`}>
                 <stat.icon className="w-5 h-5 text-white" />
@@ -116,21 +150,21 @@ export default function DashboardOverview() {
         transition={{ delay: 0.4, duration: 0.5 }}
         className="glass-card w-full p-6"
       >
-        <h2 className="text-lg font-bold text-white mb-6">Recent Integrations</h2>
+        <h2 className="text-lg font-bold text-white mb-6">Recent Activity</h2>
         <div className="space-y-4">
-          {[
-            { app: 'VelumX Swap', type: 'DEX Route', fee: '$0.42', status: 'Success' },
-            { app: 'NFT Marketplace', type: 'Mint Intent', fee: '$1.15', status: 'Success' },
-            { app: 'GameFi Onboard', type: 'Wallet Deploy', fee: '$0.12', status: 'Pending' }
-          ].map((activity, i) => (
-            <div key={i} className="flex justify-between items-center p-4 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/5 transition-colors">
+          {isLoading ? (
+            <p className="text-slate-500 text-center py-4">Loading activity...</p>
+          ) : logs.length === 0 ? (
+            <p className="text-slate-500 text-center py-4">No recent activity.</p>
+          ) : logs.slice(0, 5).map((log, i) => (
+            <div key={log.id} className="flex justify-between items-center p-4 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/5 transition-colors">
               <div>
-                <p className="text-white font-medium">{activity.app}</p>
-                <p className="text-sm text-slate-400">{activity.type}</p>
+                <p className="text-white font-medium">{log.type}</p>
+                <p className="text-sm text-slate-400 font-mono">{log.txid.substring(0, 10)}...</p>
               </div>
               <div className="text-right">
-                <p className="text-white font-medium">{activity.fee}</p>
-                <p className={`text-sm ${activity.status === 'Success' ? 'text-emerald-400' : 'text-amber-400'}`}>{activity.status}</p>
+                <p className="text-white font-medium">{parseInt(log.feeAmount) / 1_000_000} USDCx</p>
+                <p className={`text-sm ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>{log.status}</p>
               </div>
             </div>
           ))}
