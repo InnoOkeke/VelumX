@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sgal-purple-500: #7e22ce;
+  --color-sgal-purple-600: #6b21a8;
+  --color-sgal-dark-900: #0f111a;
+  --color-sgal-dark-800: #1a1d2d;
+  --color-sgal-dark-700: #262b40;
+  --color-sgal-accent: #00f0ff;
+}
+
+@layer base {
+  :root {
+    --background: #0f111a;
+    --foreground: #f8fafc;
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+.glass-panel {
+  background: rgba(26, 29, 45, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.glass-card {
+  background: linear-gradient(145deg, rgba(38, 43, 64, 0.4) 0%, rgba(26, 29, 45, 0.2) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #00f0ff, #7e22ce);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
