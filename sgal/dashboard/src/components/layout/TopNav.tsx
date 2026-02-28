@@ -2,9 +2,11 @@
 
 import { Bell, Search, Hexagon, LogOut } from 'lucide-react';
 import { useWallet } from '../providers/WalletProvider';
+import clsx from 'clsx';
+
 
 export function TopNav() {
-    const { isLoggedIn, stxAddress, login, logout } = useWallet();
+    const { isLoggedIn, stxAddress, login, logout, network, setNetwork } = useWallet();
 
     return (
         <header className="h-20 w-full border-b border-white/5 bg-[#0f111a]/80 backdrop-blur-xl flex items-center justify-between px-8 z-10 sticky top-0">
@@ -20,6 +22,32 @@ export function TopNav() {
             </div>
 
             <div className="flex items-center gap-6">
+                {/* Network Switcher */}
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-full p-1">
+                    <button
+                        onClick={() => setNetwork('testnet')}
+                        className={clsx(
+                            "px-4 py-1.5 rounded-full text-xs font-bold transition-all",
+                            network === 'testnet'
+                                ? "bg-amber-400/20 text-amber-400"
+                                : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        Testnet
+                    </button>
+                    <button
+                        onClick={() => setNetwork('mainnet')}
+                        className={clsx(
+                            "px-4 py-1.5 rounded-full text-xs font-bold transition-all",
+                            network === 'mainnet'
+                                ? "bg-emerald-400/20 text-emerald-400"
+                                : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        Mainnet
+                    </button>
+                </div>
+
                 <button className="relative text-slate-400 hover:text-white transition-colors">
                     <Bell className="w-5 h-5" />
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#7e22ce] rounded-full border-2 border-[#0f111a]"></span>
@@ -58,6 +86,7 @@ export function TopNav() {
                     </button>
                 )}
             </div>
+
         </header>
     );
 }

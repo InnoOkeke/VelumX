@@ -1,0 +1,56 @@
+---
+id: 0
+name: Testnet deployment
+network: testnet
+stacks-node: "https://stacks-node-api.testnet.stacks.co"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: sip-010-trait-ft-standard
+            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
+            cost: 9610
+            path: "contracts\\traits\\sip-010-trait-ft-standard.clar"
+            anchor-block-only: true
+            clarity-version: 2
+      epoch: "2.5"
+    - id: 1
+      transactions:
+        - contract-publish:
+            contract-name: mock-token
+            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
+            cost: 9190
+            path: "contracts\\mock-token.clar"
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: paymaster-module
+            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
+            cost: 35190
+            path: "contracts\\paymaster-module.clar"
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: relayer-registry
+            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
+            cost: 29340
+            path: "contracts\\relayer-registry.clar"
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: smart-wallet
+            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
+            cost: 28550
+            path: "contracts\\smart-wallet.clar"
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: wallet-factory
+            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
+            cost: 17780
+            path: "contracts\\wallet-factory.clar"
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"

@@ -2,8 +2,59 @@
 
 import { Wallet, ArrowDownToLine, RefreshCcw, History } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useWallet } from '../../components/providers/WalletProvider';
+import { useState, useEffect } from 'react';
+import { openContractCall } from '@stacks/connect';
+import { STACKS_TESTNET, STACKS_MAINNET } from '@stacks/network';
 
 export default function FundingPage() {
+    const { network, setNetwork, stxAddress, isLoggedIn, login } = useWallet();
+    const [balance, setBalance] = useState('0.00');
+    const [isFetching, setIsFetching] = useState(false);
+
+    // This address would be your deployed paymaster contract
+    const PAYMASTER_ADDRESS = network === 'testnet' ? 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P' : 'SP3...';
+    const PAYMASTER_CONTRACT = 'paymaster-module-v3';
+
+    useEffect(() => {
+        if (stxAddress) {
+            fetchBalance();
+        }
+    }, [stxAddress, network]);
+
+    const fetchBalance = async () => {
+        setIsFetching(true);
+        // In a real app, you'd call the Stacks API or use @stacks/network to get the balance
+        // for (get-balance paymaster-address user-address)
+        setTimeout(() => {
+            setBalance((Math.random() * 5000).toFixed(2));
+            setIsFetching(false);
+        }, 1000);
+    };
+
+    const handleDeposit = async () => {
+        if (!isLoggedIn) {
+            login();
+            return;
+        }
+
+        const amount = 100 * 1_000_000; // 100 USDCx
+
+        await openContractCall({
+            network: network === 'testnet' ? STACKS_TESTNET : STACKS_MAINNET,
+            contractAddress: PAYMASTER_ADDRESS,
+            contractName: PAYMASTER_CONTRACT,
+            functionName: 'deposit',
+            functionArgs: [
+                // uint amount
+            ],
+            onFinish: (data) => {
+                console.log('Transaction sent:', data.txId);
+                // Trigger refresh after some time or monitor tx
+            },
+        });
+    };
+
     return (
         <div className="space-y-8 pb-12">
             <div>
@@ -18,7 +69,6 @@ export default function FundingPage() {
                     animate={{ opacity: 1, x: 0 }}
                     className="lg:col-span-1 glass-card p-6 relative overflow-hidden"
                 >
-                    {/* Decorative background gradients inside the card */}
                     <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#7e22ce]/30 rounded-full blur-[50px] pointer-events-none" />
 
                     <div className="relative z-10 flex flex-col h-full">
@@ -32,18 +82,20 @@ export default function FundingPage() {
                         <div className="mb-8">
                             <div className="flex items-baseline gap-2">
                                 <span className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">
-                                    4,250.00
+                                    {balance}
                                 </span>
                                 <span className="text-xl text-[#00f0ff] font-bold">USDCx</span>
                             </div>
                             <p className="text-slate-400 mt-2 text-sm flex items-center gap-1">
-                                <RefreshCcw className="w-3 h-3" /> Updated 2 mins ago
+                                <RefreshCcw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
+                                {isFetching ? 'Fetching...' : 'Click refresh to update'}
                             </p>
                         </div>
 
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
+                            onClick={handleDeposit}
                             className="mt-auto w-full py-3 bg-gradient-to-r from-[#00f0ff] to-[#7e22ce] text-white font-bold rounded-xl shadow-lg hover:shadow-[#00f0ff]/20 flex items-center justify-center gap-2 transition-all"
                         >
                             <ArrowDownToLine className="w-5 h-5" />
@@ -62,30 +114,39 @@ export default function FundingPage() {
 
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Network</label>
+                            <label className="block text-sm font-medium text-slate-300 mb-2">Selected Network</label>
                             <div className="flex gap-4">
-                                <button className="flex-1 py-3 px-4 rounded-xl border-2 border-[#7e22ce] bg-[#7e22ce]/10 text-white font-medium flex items-center justify-center">
+                                <button
+                                    onClick={() => setNetwork('mainnet')}
+                                    className={`flex-1 py-3 px-4 rounded-xl border transition-all flex items-center justify-center font-bold ${network === 'mainnet'
+                                        ? 'border-[#7e22ce] bg-[#7e22ce]/20 text-white'
+                                        : 'border-white/10 bg-white/5 text-slate-500 hover:text-slate-300'
+                                        }`}
+                                >
                                     Stacks Mainnet
                                 </button>
-                                <button className="flex-1 py-3 px-4 rounded-xl border border-white/10 bg-white/5 text-slate-400 font-medium hover:bg-white/10 transition-colors flex items-center justify-center">
+                                <button
+                                    onClick={() => setNetwork('testnet')}
+                                    className={`flex-1 py-3 px-4 rounded-xl border transition-all flex items-center justify-center font-bold ${network === 'testnet'
+                                        ? 'border-amber-400/50 bg-amber-400/10 text-amber-400'
+                                        : 'border-white/10 bg-white/5 text-slate-500 hover:text-slate-300'
+                                        }`}
+                                >
                                     Stacks Testnet
                                 </button>
                             </div>
                         </div>
 
                         <div className="bg-black/30 p-6 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
-                            <div className="bg-white p-4 rounded-xl mb-4">
-                                {/* Mock QR Code representation */}
-                                <div className="w-32 h-32 grid grid-cols-4 grid-rows-4 gap-1">
-                                    {[...Array(16)].map((_, i) => (
-                                        <div key={i} className={`bg-slate-900 rounded-sm ${Math.random() > 0.5 ? 'opacity-100' : 'opacity-20'}`}></div>
-                                    ))}
-                                </div>
-                            </div>
-                            <p className="text-slate-300 mb-2 text-sm text-center">Send USDCx on Stacks to your Paymaster address</p>
-                            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-4 py-2 w-full max-w-sm justify-between">
-                                <code className="text-[#00f0ff] text-sm truncate">SP3K...G842.sgal-paymaster</code>
-                                <button className="text-slate-400 hover:text-white">Copy</button>
+                            <p className="text-slate-300 mb-4 text-sm text-center">
+                                {network === 'testnet'
+                                    ? "Deposit Testnet USDCx to sponsor gas for your users on Testnet."
+                                    : "Deposit Mainnet USDCx to sponsor gas for your users on Mainnet."}
+                            </p>
+                            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-4 py-2 w-full max-w-md justify-between">
+                                <span className="text-xs text-slate-500 uppercase font-bold">Paymaster:</span>
+                                <code className="text-[#00f0ff] text-sm truncate font-mono">{PAYMASTER_ADDRESS}.{PAYMASTER_CONTRACT}</code>
+                                <button className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 bg-white/5 rounded">Copy</button>
                             </div>
                         </div>
                     </div>
@@ -104,9 +165,10 @@ export default function FundingPage() {
                     Deposit History
                 </div>
                 <div className="w-full text-center py-12 text-slate-500">
-                    No recent deposits found.
+                    No recent deposits found on {network === 'testnet' ? 'Testnet' : 'Mainnet'}.
                 </div>
             </motion.div>
         </div>
     );
 }
+

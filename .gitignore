@@ -67,17 +67,23 @@ backend/data/*.json
 
 # Stacks contracts
 .cache/
+sgal/contracts/settings/*.toml
 stacks-contracts/settings/Devnet.toml
 
 # Frontend
 frontend/.next/
 frontend/out/
 frontend/.env.local
+sgal/dashboard/.env.local
 
-# Backend
+# Backend / Relayer
 backend/dist/
 backend/logs/
 backend/.env
+sgal/relayer/.env
+sgal/relayer/deploy_output*.txt
+sgal/relayer/retry_output*.txt
+sgal/relayer/super-minimal.ts
 
 # Kiro specs and documentation (will be pushed separately)
 .kiro/

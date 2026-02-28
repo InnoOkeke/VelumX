@@ -14,8 +14,11 @@ const navItems = [
     { name: 'Transaction Logs', href: '/logs', icon: Activity },
 ];
 
+import { useWallet } from '../providers/WalletProvider';
+
 export function Sidebar() {
     const pathname = usePathname();
+    const { network } = useWallet();
 
     return (
         <div className="w-64 h-full border-r border-white/5 bg-[#0f111a]/80 backdrop-blur-xl flex flex-col pt-8">
@@ -60,11 +63,14 @@ export function Sidebar() {
                 <div className="glass-card p-4 rounded-xl">
                     <p className="text-xs text-slate-400 mb-2">Network Status</p>
                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-sm text-emerald-400 font-medium">Mainnet Operational</span>
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                        <span className={`text-sm font-medium ${network === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {network === 'mainnet' ? 'Mainnet Operational' : 'Testnet Operational'}
+                        </span>
                     </div>
                 </div>
             </div>
         </div>
     );
 }
+

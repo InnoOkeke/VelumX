@@ -55,6 +55,8 @@ export class PaymasterService {
         // The Smart Wallet contract will reimburse the Relayer in USDCx via the paymaster-module.
 
         const [contractAddress, contractName] = this.smartWalletContract.split('.');
+        const usdcxToken = process.env.USDCX_TOKEN || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx';
+        const [tokenAddress, tokenName] = usdcxToken.split('.');
 
         const txOptions = {
             contractAddress,
@@ -62,18 +64,18 @@ export class PaymasterService {
             functionName: 'execute-gasless',
             functionArgs: [
                 principalCV(intent.target),
-                // Note: Function resolution in Clarity requires specialized handling.
-                // For a generic wallet, the SDK usually encodes the full payload.
-                bufferCV(Buffer.from(intent.signature, 'hex')), // Mock implementation
+                // Generic Payload: for now we use intent signature as mock payload
+                bufferCV(Buffer.from(intent.signature, 'hex')),
                 uintCV(intent.maxFeeUSDCx),
                 uintCV(intent.nonce),
-                bufferCV(Buffer.from(intent.signature, 'hex'))
+                bufferCV(Buffer.from(intent.signature, 'hex')),
+                principalCV(`${tokenAddress}.${tokenName}`) // token-trait
             ],
             senderKey: this.relayerKey,
-            validateWithAbi: false, // Intent structs might be dynamic
+            validateWithAbi: false,
             network: this.network,
             anchorMode: AnchorMode.Any,
-            postConditionMode: PostConditionMode.Allow, // Relayer allows STX to leave its wallet
+            postConditionMode: PostConditionMode.Allow,
         };
 
         const transaction = await makeContractCall(txOptions);

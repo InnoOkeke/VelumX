@@ -11,6 +11,8 @@ interface WalletContextType {
     login: () => void;
     logout: () => void;
     stxAddress: string | null;
+    network: 'mainnet' | 'testnet';
+    setNetwork: (n: 'mainnet' | 'testnet') => void;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -19,6 +21,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const appConfig = new AppConfig(['store_write', 'publish_data']);
     const userSession = new UserSession({ appConfig });
     const [userData, setUserData] = useState<any | null>(null);
+    const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
 
     useEffect(() => {
         if (userSession.isUserSignedIn()) {
@@ -44,7 +47,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setUserData(null);
     };
 
-    const stxAddress = userData?.profile?.stxAddress?.testnet || null;
+    const stxAddress = network === 'testnet'
+        ? userData?.profile?.stxAddress?.testnet
+        : userData?.profile?.stxAddress?.mainnet || null;
 
     return (
         <WalletContext.Provider value={{
@@ -53,7 +58,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             isLoggedIn: !!userData,
             login,
             logout,
-            stxAddress
+            stxAddress,
+            network,
+            setNetwork
         }}>
             {children}
         </WalletContext.Provider>

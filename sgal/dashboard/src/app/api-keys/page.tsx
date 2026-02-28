@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 
 import { useState, useEffect } from 'react';
 
+import toast, { Toaster } from 'react-hot-toast';
+
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
 export default function ApiKeysPage() {
@@ -19,10 +21,12 @@ export default function ApiKeysPage() {
     const fetchKeys = async () => {
         try {
             const res = await fetch(`${RELAYER_URL}/api/dashboard/keys`);
+            if (!res.ok) throw new Error('Failed to fetch keys');
             const data = await res.json();
             setKeys(data);
         } catch (error) {
             console.error('Error fetching keys:', error);
+            toast.error('Could not reach Relayer. Please check your connection.');
         } finally {
             setIsLoading(false);
         }
@@ -30,17 +34,23 @@ export default function ApiKeysPage() {
 
     const handleGenerateKey = async () => {
         setIsGenerating(true);
+        const toastId = toast.loading('Generating your new API key...');
         try {
             const res = await fetch(`${RELAYER_URL}/api/dashboard/keys`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `Key ${keys.length + 1}` })
+                body: JSON.stringify({ name: `Prod Key ${keys.length + 1}` })
             });
+
             if (res.ok) {
                 await fetchKeys();
+                toast.success('API Key generated successfully!', { id: toastId });
+            } else {
+                throw new Error('Server error');
             }
         } catch (error) {
             console.error('Error generating key:', error);
+            toast.error('Failed to generate key. Is the Relayer running?', { id: toastId });
         } finally {
             setIsGenerating(false);
         }
@@ -48,11 +58,13 @@ export default function ApiKeysPage() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        // Could add a toast here
+        toast.success('Copied to clipboard!');
     };
+
 
     return (
         <div className="space-y-8 pb-12">
+            <Toaster position="top-right" />
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-white mb-2">API Keys</h1>

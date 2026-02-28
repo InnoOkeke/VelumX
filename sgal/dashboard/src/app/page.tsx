@@ -4,6 +4,7 @@ import { Activity, Users, BatteryCharging, ArrowUpRight, ArrowDownRight } from '
 import { motion } from 'framer-motion';
 
 import { useState, useEffect } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
@@ -24,18 +25,23 @@ export default function DashboardOverview() {
           fetch(`${RELAYER_URL}/api/dashboard/stats`),
           fetch(`${RELAYER_URL}/api/dashboard/logs`)
         ]);
+
+        if (!statsRes.ok || !logsRes.ok) throw new Error('Failed to connect to Relayer');
+
         const stats = await statsRes.json();
         const logsData = await logsRes.json();
         setStatsData(stats);
         setLogs(logsData);
       } catch (error) {
         console.error('Error fetching data:', error);
+        toast.error('Relayer Offline: Dashboard displaying cached/empty data.', { duration: 5000 });
       } finally {
         setIsLoading(false);
       }
     };
     fetchAllData();
   }, []);
+
 
   const metricCards = [
     {
@@ -65,6 +71,7 @@ export default function DashboardOverview() {
   ];
   return (
     <div className="space-y-8 pb-12">
+      <Toaster position="top-right" />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Dashboard Overview</h1>
         <p className="text-slate-400 mt-2">Monitor your dApp's gas abstraction usage and compute performance.</p>

@@ -66,29 +66,34 @@ plan:
         - emulated-contract-publish:
             contract-name: sip-010-trait-ft-standard
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/traits/sip-010-trait-ft-standard.clar
+            path: "contracts\\traits\\sip-010-trait-ft-standard.clar"
             clarity-version: 2
       epoch: "2.5"
     - id: 1
       transactions:
         - emulated-contract-publish:
+            contract-name: mock-token
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: "contracts\\mock-token.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
             contract-name: paymaster-module
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/paymaster-module.clar
+            path: "contracts\\paymaster-module.clar"
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: relayer-registry
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/relayer-registry.clar
+            path: "contracts\\relayer-registry.clar"
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: smart-wallet
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/smart-wallet.clar
+            path: "contracts\\smart-wallet.clar"
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: wallet-factory
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/wallet-factory.clar
+            path: "contracts\\wallet-factory.clar"
             clarity-version: 3
       epoch: "3.0"
