@@ -14,7 +14,7 @@ const navItems = [
     { name: 'Transaction Logs', href: '/logs', icon: Activity },
 ];
 
-import { useWallet } from '../providers/WalletProvider';
+import { useWallet } from '../providers/WalletContext';
 
 import Image from 'next/image';
 

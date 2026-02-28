@@ -6,9 +6,13 @@ const nextConfig: NextConfig = {
     unoptimized: true
   },
   transpilePackages: [
+    "@stacks/auth",
     "@stacks/common",
+    "@stacks/connect",
     "@stacks/connect-react",
-    "@stacks/network"
+    "@stacks/network",
+    "@stacks/storage",
+    "@stacks/transactions"
   ]
 };
 

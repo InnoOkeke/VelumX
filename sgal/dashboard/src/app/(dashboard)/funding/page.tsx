@@ -4,7 +4,7 @@
 
 import { Wallet, ArrowDownToLine, RefreshCcw, History } from 'lucide-react';
 // No motion here
-import { useWallet } from '@/components/providers/WalletProvider';
+import { useWallet } from '@/components/providers/WalletContext';
 import { useState, useEffect } from 'react';
 import { openContractCall } from '@stacks/connect';
 import { STACKS_TESTNET, STACKS_MAINNET } from '@stacks/network';

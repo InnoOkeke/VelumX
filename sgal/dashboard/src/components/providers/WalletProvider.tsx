@@ -1,21 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { useState, useEffect, ReactNode, useMemo } from 'react';
 import { AppConfig, UserSession, authenticate } from '@stacks/connect-react';
-import { STACKS_TESTNET } from '@stacks/network';
-
-interface WalletContextType {
-    userSession: UserSession | null;
-    userData: any | null;
-    isLoggedIn: boolean;
-    login: () => void;
-    logout: () => void;
-    stxAddress: string | null;
-    network: 'mainnet' | 'testnet';
-    setNetwork: (n: 'mainnet' | 'testnet') => void;
-}
-
-const WalletContext = createContext<WalletContextType | undefined>(undefined);
+import { WalletContext } from './WalletContext';
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [userData, setUserData] = useState<any | null>(null);
@@ -76,10 +63,3 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     );
 }
 
-export function useWallet() {
-    const context = useContext(WalletContext);
-    if (context === undefined) {
-        throw new Error('useWallet must be used within a WalletProvider');
-    }
-    return context;
-}

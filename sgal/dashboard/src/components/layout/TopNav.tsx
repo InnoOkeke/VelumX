@@ -1,7 +1,7 @@
 'use client';
 
 import { Bell, Search, Hexagon, LogOut } from 'lucide-react';
-import { useWallet } from '../providers/WalletProvider';
+import { useWallet } from '../providers/WalletContext';
 import clsx from 'clsx';
 
 
