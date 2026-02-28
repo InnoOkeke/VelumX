@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Key, Wallet, Activity } from 'lucide-react';
-import { motion } from 'framer-motion';
+// No motion imports here
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -16,43 +16,44 @@ const navItems = [
 
 import { useWallet } from '../providers/WalletProvider';
 
+import Image from 'next/image';
+
 export function Sidebar() {
     const pathname = usePathname();
     const { network } = useWallet();
 
     return (
-        <div className="w-64 h-full border-r border-white/5 bg-[#0f111a]/80 backdrop-blur-xl flex flex-col pt-8">
-            <div className="px-8 mb-10 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#00f0ff] to-[#7e22ce] flex items-center justify-center">
-                    <span className="text-white font-bold text-lg">S</span>
-                </div>
-                <span className="text-xl font-bold tracking-tight text-white">SGAL</span>
+        <div className="w-64 h-full border-r border-white/10 bg-[#000000] flex flex-col pt-8">
+            <div className="px-6 mb-10 flex items-center gap-3">
+                <Image
+                    src="/velumx-logo.svg"
+                    alt="VelumX Logo"
+                    width={32}
+                    height={32}
+                    className="brightness-0 invert"
+                />
+                <span className="text-xl font-bold tracking-tight text-white uppercase">SGAL</span>
             </div>
 
-            <nav className="flex-1 px-4 space-y-2">
+            <nav className="flex-1 px-4 space-y-1">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href;
                     const Icon = item.icon;
 
                     return (
                         <Link key={item.name} href={item.href} className="block relative">
-                            {isActive && (
-                                <motion.div
-                                    layoutId="sidebar-active"
-                                    className="absolute inset-0 bg-white/5 rounded-xl border border-white/10"
-                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                                />
-                            )}
                             <div
                                 className={twMerge(
                                     clsx(
-                                        'relative flex items-center gap-3 px-4 py-3 rounded-xl transition-colors duration-200',
-                                        isActive ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                        'relative flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200',
+                                        isActive
+                                            ? 'text-white bg-white/10'
+                                            : 'text-white/60 hover:text-white hover:bg-white/5'
                                     )
                                 )}
                             >
-                                <Icon className={clsx("w-5 h-5", isActive ? "text-[#00f0ff]" : "")} />
-                                <span className="font-medium">{item.name}</span>
+                                <Icon className={clsx("w-4 h-4", isActive ? "text-[#007aff]" : "")} />
+                                <span className="font-medium text-sm">{item.name}</span>
                             </div>
                         </Link>
                     );
@@ -60,11 +61,11 @@ export function Sidebar() {
             </nav>
 
             <div className="p-4 mt-auto">
-                <div className="glass-card p-4 rounded-xl">
-                    <p className="text-xs text-slate-400 mb-2">Network Status</p>
+                <div className="border border-white/10 p-4 rounded-xl bg-white/[0.02]">
+                    <p className="text-[10px] text-white/40 mb-2 uppercase font-bold tracking-wider">Network Status</p>
                     <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                        <span className={`text-sm font-medium ${network === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                        <span className={`text-xs font-medium ${network === 'mainnet' ? 'text-emerald-400/80' : 'text-amber-400/80'}`}>
                             {network === 'mainnet' ? 'Mainnet Operational' : 'Testnet Operational'}
                         </span>
                     </div>
