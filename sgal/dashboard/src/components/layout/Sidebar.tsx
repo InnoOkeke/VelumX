@@ -10,7 +10,7 @@ import { twMerge } from 'tailwind-merge';
 const navItems = [
     { name: 'Overview', href: '/', icon: LayoutDashboard },
     { name: 'API Keys', href: '/api-keys', icon: Key },
-    { name: 'Funding', href: '/funding', icon: Wallet },
+    { name: 'Relayer', href: '/funding', icon: Wallet },
     { name: 'Transaction Logs', href: '/logs', icon: Activity },
 ];
 

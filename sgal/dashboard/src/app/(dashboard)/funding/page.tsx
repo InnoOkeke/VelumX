@@ -2,167 +2,151 @@
 
 
 
-import { Wallet, ArrowDownToLine, RefreshCcw, History } from 'lucide-react';
+import { Wallet, RefreshCcw, History } from 'lucide-react';
 // No motion here
 import { useWallet } from '@/components/providers/WalletContext';
 import { useState, useEffect } from 'react';
-// Stacks imports moved to dynamic imports in handleDeposit
+
+const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
 export default function FundingPage() {
     const [isClient, setIsClient] = useState(false);
-    const { network, setNetwork, stxAddress, isLoggedIn, login } = useWallet();
-    const [balance, setBalance] = useState('0.00');
-    const [isFetching, setIsFetching] = useState(false);
-
-    // This address would be your deployed paymaster contract
-    const PAYMASTER_ADDRESS = network === 'testnet' ? 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P' : 'SP3...';
-    const PAYMASTER_CONTRACT = 'paymaster-module-v3';
+    const { network, stxAddress } = useWallet();
+    const [stats, setStats] = useState({
+        relayerAddress: 'Loading...',
+        relayerStxBalance: '0',
+        relayerUsdcxBalance: '0'
+    });
+    const [isFetching, setIsFetching] = useState(true);
 
     useEffect(() => {
         setIsClient(true);
-        if (stxAddress) {
-            fetchBalance();
-        }
-    }, [stxAddress, network]);
+        fetchRelayerStatus();
+    }, [network]);
 
-    const fetchBalance = async () => {
+    const fetchRelayerStatus = async () => {
         setIsFetching(true);
-        // In a real app, you'd call the Stacks API or use @stacks/network to get the balance
-        // for (get-balance paymaster-address user-address)
-        setTimeout(() => {
-            setBalance((Math.random() * 5000).toFixed(2));
+        try {
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`);
+            if (res.ok) {
+                const data = await res.json();
+                setStats({
+                    relayerAddress: data.relayerAddress,
+                    relayerStxBalance: (parseInt(data.relayerStxBalance) / 1_000_000).toFixed(2),
+                    relayerUsdcxBalance: (parseInt(data.relayerUsdcxBalance) / 1_000_000).toFixed(2)
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching relayer status:', error);
+        } finally {
             setIsFetching(false);
-        }, 1000);
-    };
-
-    const handleDeposit = async () => {
-        if (!isLoggedIn) {
-            login();
-            return;
         }
-
-        const amount = 100 * 1_000_000; // 100 USDCx
-
-        // Dynamic imports to avoid build-time SES side effects
-        const { openContractCall } = await import('@stacks/connect');
-        const { STACKS_TESTNET, STACKS_MAINNET } = await import('@stacks/network');
-
-        await openContractCall({
-            network: network === 'testnet' ? STACKS_TESTNET : STACKS_MAINNET,
-            contractAddress: PAYMASTER_ADDRESS,
-            contractName: PAYMASTER_CONTRACT,
-            functionName: 'deposit',
-            functionArgs: [
-                // uint amount
-            ],
-            onFinish: (data) => {
-                console.log('Transaction sent:', data.txId);
-                // Trigger refresh after some time or monitor tx
-            },
-        });
     };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        // Toast can be added if needed, but keeping it simple as per earlier cleanup
+    };
+
+    if (!isClient) return null;
 
     return (
         <div className="space-y-8 pb-12">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Funding</h1>
-                <p className="text-white/40 text-sm font-medium">Deposit USDCx to sponsor transactions for your smart wallet users.</p>
+                <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Relayer Status</h1>
+                <p className="text-white/40 text-sm font-medium">Monitor your SGAL Relayer health and manage gas sponsorship capital.</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Balance Card */}
-                <div
-                    className="lg:col-span-1 glass-card p-8 flex flex-col justify-between"
-                >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* STX Balance (Gas Tank) */}
+                <div className="glass-card p-8 flex flex-col justify-between">
                     <div>
-                        <div className="flex items-center gap-3 mb-10">
-                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
-                                <Wallet className="w-5 h-5 text-white/60" />
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-400/10 flex items-center justify-center border border-amber-400/20">
+                                    <Wallet className="w-5 h-5 text-amber-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">Gas Tank (STX)</h2>
+                                    <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Used to pay network fees</p>
+                                </div>
                             </div>
-                            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Available Balance</h2>
+                            {parseInt(stats.relayerStxBalance) < 10 && (
+                                <span className="px-2 py-1 rounded bg-rose-500/20 text-rose-400 text-[10px] font-bold border border-rose-500/20 uppercase animate-pulse">Low Funds</span>
+                            )}
                         </div>
 
-                        <div className="mb-10">
+                        <div className="mb-8">
                             <div className="flex items-baseline gap-2">
                                 <span className="text-5xl font-black text-white font-mono">
-                                    {balance}
+                                    {isFetching ? '...' : stats.relayerStxBalance}
+                                </span>
+                                <span className="text-lg text-white/40 font-bold">STX</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="p-4 bg-black rounded-xl border border-white/5">
+                            <p className="text-[10px] text-white/20 uppercase font-bold mb-2">Relayer Hot Wallet Address</p>
+                            <div className="flex items-center justify-between gap-2">
+                                <code className="text-xs text-white/60 truncate font-mono">{stats.relayerAddress}</code>
+                                <button
+                                    onClick={() => copyToClipboard(stats.relayerAddress)}
+                                    className="text-[10px] font-bold text-white/40 hover:text-white uppercase transition-colors"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-white/20 leading-relaxed">
+                            Fund this address with STX to keep your Relayer operational.
+                            Every sponsored transaction consumes STX from this balance.
+                        </p>
+                    </div>
+                </div>
+
+                {/* USDCx Balance (Revenue) */}
+                <div className="glass-card p-8 flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-400/10 flex items-center justify-center border border-emerald-400/20">
+                                <RefreshCcw className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Collected Fees (USDCx)</h2>
+                                <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Revenue & Reimbursements</p>
+                            </div>
+                        </div>
+
+                        <div className="mb-8">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-5xl font-black text-white font-mono">
+                                    {isFetching ? '...' : stats.relayerUsdcxBalance}
                                 </span>
                                 <span className="text-lg text-white/40 font-bold">USDCx</span>
                             </div>
-                            <p className="text-white/20 mt-3 text-[10px] uppercase font-bold tracking-widest flex items-center gap-1.5">
-                                <RefreshCcw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
-                                {isFetching ? 'Fetching data...' : 'Updated just now'}
-                            </p>
                         </div>
                     </div>
 
-                    <button
-                        onClick={handleDeposit}
-                        className="w-full py-4 bg-white text-black font-black text-sm uppercase tracking-widest rounded-xl hover:bg-white/90 transition-all flex items-center justify-center gap-2"
-                    >
-                        <ArrowDownToLine className="w-4 h-4" />
-                        Deposit Funds
-                    </button>
-                </div>
-
-                {/* Deposit Interface */}
-                <div
-                    className="lg:col-span-2 glass-card p-8"
-                >
-                    <h3 className="text-sm font-bold text-white mb-8 uppercase tracking-wider">Deposit Details</h3>
-
-                    <div className="space-y-8">
-                        <div>
-                            <label className="block text-[10px] font-bold text-white/40 mb-3 uppercase tracking-widest">Selected Network</label>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => setNetwork('mainnet')}
-                                    className={`flex-1 py-4 px-4 rounded-xl border transition-all flex items-center justify-center text-xs font-bold uppercase tracking-wider ${network === 'mainnet'
-                                        ? 'border-emerald-400 bg-emerald-400 text-black'
-                                        : 'border-white/10 bg-white/5 text-white/40 hover:text-white hover:bg-white/10'
-                                        }`}
-                                >
-                                    Stacks Mainnet
-                                </button>
-                                <button
-                                    onClick={() => setNetwork('testnet')}
-                                    className={`flex-1 py-4 px-4 rounded-xl border transition-all flex items-center justify-center text-xs font-bold uppercase tracking-wider ${network === 'testnet'
-                                        ? 'border-amber-400 bg-amber-400 text-black'
-                                        : 'border-white/10 bg-white/5 text-white/40 hover:text-white hover:bg-white/10'
-                                        }`}
-                                >
-                                    Stacks Testnet
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="bg-black p-8 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
-                            <p className="text-white/40 mb-6 text-xs text-center leading-relaxed max-w-sm">
-                                {network === 'testnet'
-                                    ? "Deposit Testnet USDCx to sponsor gas for your users on Testnet."
-                                    : "Deposit Mainnet USDCx to sponsor gas for your users on Mainnet."}
-                            </p>
-                            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-5 py-3 w-full max-w-md justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-white/20 uppercase font-black">Target:</span>
-                                    <code className="text-white text-xs truncate font-mono">{PAYMASTER_ADDRESS}.{PAYMASTER_CONTRACT}</code>
-                                </div>
-                                <button className="text-white/40 hover:text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-white/5 rounded transition-colors">Copy</button>
-                            </div>
-                        </div>
+                    <div className="p-6 bg-white/[0.02] border border-white/10 rounded-xl">
+                        <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-tight">Profit Mechanism</h4>
+                        <p className="text-[10px] text-white/40 leading-relaxed">
+                            When users perform gasless transactions, they pay back the STX cost in USDCx plus an 8% markup.
+                            These funds are collected here in your Relayer wallet.
+                        </p>
                     </div>
                 </div>
             </div>
 
-            <div
-                className="glass-card p-8"
-            >
+            {/* History Section */}
+            <div className="glass-card p-8">
                 <div className="flex items-center gap-2 mb-10 text-white font-bold text-sm uppercase tracking-wider">
                     <History className="w-4 h-4 text-white/40" />
-                    Deposit History
+                    Operational History
                 </div>
                 <div className="w-full text-center py-16 text-white/20 text-xs font-medium uppercase tracking-widest">
-                    No transactions found on {network === 'testnet' ? 'Testnet' : 'Mainnet'}.
+                    Relayer operational on {network === 'testnet' ? 'Stacks Testnet' : 'Stacks Mainnet'}.
                 </div>
             </div>
         </div>

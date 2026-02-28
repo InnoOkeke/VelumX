@@ -11,9 +11,7 @@ import toast, { Toaster } from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
-import dynamic from 'next/dynamic';
-
-function ApiKeysPageContent() {
+export default function ApiKeysPage() {
     const [isClient, setIsClient] = useState(false);
     const [keys, setKeys] = useState<{ id: string; name: string; key: string; status: string; createdAt: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -167,7 +165,3 @@ function ApiKeysPageContent() {
         </div>
     );
 }
-
-const ApiKeysPage = dynamic(() => Promise.resolve(ApiKeysPageContent), { ssr: false });
-
-export default ApiKeysPage;
