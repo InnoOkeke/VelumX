@@ -1,5 +1,7 @@
 'use client';
 
+
+
 import { Activity, Users, BatteryCharging, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -9,6 +11,7 @@ import toast, { Toaster } from 'react-hot-toast';
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
 export default function DashboardOverview() {
+  const [isClient, setIsClient] = useState(false);
   const [statsData, setStatsData] = useState({
     totalTransactions: 0,
     activeKeys: 0,
@@ -19,6 +22,7 @@ export default function DashboardOverview() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    setIsClient(true);
     const fetchAllData = async () => {
       try {
         const [statsRes, logsRes] = await Promise.all([
@@ -41,6 +45,8 @@ export default function DashboardOverview() {
     };
     fetchAllData();
   }, []);
+
+  if (!isClient) return null;
 
 
   const metricCards = [

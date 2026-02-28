@@ -1,5 +1,7 @@
 'use client';
 
+
+
 import { KeyRound, Plus, Copy, MoreVertical, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -9,14 +11,20 @@ import toast, { Toaster } from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
-export default function ApiKeysPage() {
+import dynamic from 'next/dynamic';
+
+function ApiKeysPageContent() {
+    const [isClient, setIsClient] = useState(false);
     const [keys, setKeys] = useState<{ id: string; name: string; key: string; status: string; createdAt: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
+        setIsClient(true);
         fetchKeys();
     }, []);
+
+    if (!isClient) return null;
 
     const fetchKeys = async () => {
         try {
@@ -163,3 +171,7 @@ export default function ApiKeysPage() {
         </div>
     );
 }
+
+const ApiKeysPage = dynamic(() => Promise.resolve(ApiKeysPageContent), { ssr: false });
+
+export default ApiKeysPage;

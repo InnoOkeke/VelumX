@@ -4,7 +4,12 @@ import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WalletProvider } from '../providers/WalletProvider';
+import dynamic from 'next/dynamic';
+
+const WalletProvider = dynamic(
+    () => import('@/components/providers/WalletProvider').then(mod => mod.WalletProvider),
+    { ssr: false }
+);
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
     return (

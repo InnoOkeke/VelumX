@@ -1,11 +1,11 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AppConfig, UserSession, showConnect, authenticate } from '@stacks/connect-react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import { AppConfig, UserSession, authenticate } from '@stacks/connect-react';
 import { STACKS_TESTNET } from '@stacks/network';
 
 interface WalletContextType {
-    userSession: UserSession;
+    userSession: UserSession | null;
     userData: any | null;
     isLoggedIn: boolean;
     login: () => void;
@@ -18,18 +18,26 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-    const appConfig = new AppConfig(['store_write', 'publish_data']);
-    const userSession = new UserSession({ appConfig });
     const [userData, setUserData] = useState<any | null>(null);
     const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
 
-    useEffect(() => {
-        if (userSession.isUserSignedIn()) {
-            setUserData(userSession.loadUserData());
+    // Memoize the UserSession and AppConfig to be client-side only
+    const userSession = useMemo(() => {
+        if (typeof window !== 'undefined') {
+            const appConfig = new AppConfig(['store_write', 'publish_data']);
+            return new UserSession({ appConfig });
         }
+        return null;
     }, []);
 
+    useEffect(() => {
+        if (userSession && userSession.isUserSignedIn()) {
+            setUserData(userSession.loadUserData());
+        }
+    }, [userSession]);
+
     const login = () => {
+        if (!userSession) return;
         authenticate({
             appDetails: {
                 name: 'SGAL Dashboard',
@@ -43,6 +51,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = () => {
+        if (!userSession) return;
         userSession.signUserOut();
         setUserData(null);
     };

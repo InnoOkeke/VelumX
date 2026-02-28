@@ -1,13 +1,16 @@
 'use client';
 
+
+
 import { Wallet, ArrowDownToLine, RefreshCcw, History } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useWallet } from '../../components/providers/WalletProvider';
+import { useWallet } from '@/components/providers/WalletProvider';
 import { useState, useEffect } from 'react';
 import { openContractCall } from '@stacks/connect';
 import { STACKS_TESTNET, STACKS_MAINNET } from '@stacks/network';
 
 export default function FundingPage() {
+    const [isClient, setIsClient] = useState(false);
     const { network, setNetwork, stxAddress, isLoggedIn, login } = useWallet();
     const [balance, setBalance] = useState('0.00');
     const [isFetching, setIsFetching] = useState(false);
@@ -17,6 +20,7 @@ export default function FundingPage() {
     const PAYMASTER_CONTRACT = 'paymaster-module-v3';
 
     useEffect(() => {
+        setIsClient(true);
         if (stxAddress) {
             fetchBalance();
         }
