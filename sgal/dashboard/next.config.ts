@@ -8,8 +8,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@stacks/common",
     "@stacks/connect-react",
-    "@stacks/network",
-    "framer-motion"
+    "@stacks/network"
   ]
 };
 
