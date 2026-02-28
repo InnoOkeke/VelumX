@@ -1,30 +1,32 @@
 'use client';
 
-import React, { useState, useEffect, ReactNode, useMemo } from 'react';
-import { AppConfig, UserSession, authenticate } from '@stacks/connect-react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { WalletContext } from './WalletContext';
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [userData, setUserData] = useState<any | null>(null);
     const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
-
-    // Memoize the UserSession and AppConfig to be client-side only
-    const userSession = useMemo(() => {
-        if (typeof window !== 'undefined') {
-            const appConfig = new AppConfig(['store_write', 'publish_data']);
-            return new UserSession({ appConfig });
-        }
-        return null;
-    }, []);
+    const [userSession, setUserSession] = useState<any | null>(null);
 
     useEffect(() => {
-        if (userSession && userSession.isUserSignedIn()) {
-            setUserData(userSession.loadUserData());
-        }
-    }, [userSession]);
+        const initSession = async () => {
+            if (typeof window !== 'undefined') {
+                const { AppConfig, UserSession } = await import('@stacks/connect-react');
+                const appConfig = new AppConfig(['store_write', 'publish_data']);
+                const session = new UserSession({ appConfig });
+                setUserSession(session);
 
-    const login = () => {
+                if (session.isUserSignedIn()) {
+                    setUserData(session.loadUserData());
+                }
+            }
+        };
+        initSession();
+    }, []);
+
+    const login = async () => {
         if (!userSession) return;
+        const { authenticate } = await import('@stacks/connect-react');
         authenticate({
             appDetails: {
                 name: 'SGAL Dashboard',

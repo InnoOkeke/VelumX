@@ -6,8 +6,7 @@ import { Wallet, ArrowDownToLine, RefreshCcw, History } from 'lucide-react';
 // No motion here
 import { useWallet } from '@/components/providers/WalletContext';
 import { useState, useEffect } from 'react';
-import { openContractCall } from '@stacks/connect';
-import { STACKS_TESTNET, STACKS_MAINNET } from '@stacks/network';
+// Stacks imports moved to dynamic imports in handleDeposit
 
 export default function FundingPage() {
     const [isClient, setIsClient] = useState(false);
@@ -43,6 +42,10 @@ export default function FundingPage() {
         }
 
         const amount = 100 * 1_000_000; // 100 USDCx
+
+        // Dynamic imports to avoid build-time SES side effects
+        const { openContractCall } = await import('@stacks/connect');
+        const { STACKS_TESTNET, STACKS_MAINNET } = await import('@stacks/network');
 
         await openContractCall({
             network: network === 'testnet' ? STACKS_TESTNET : STACKS_MAINNET,
