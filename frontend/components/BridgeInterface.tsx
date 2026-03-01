@@ -578,9 +578,12 @@ export function BridgeInterface() {
           if (typeof window === 'undefined') return null;
           const win = window as any;
           // Robust provider detection for 2026+
+          // Prefer modern specific providers to avoid deprecated generic 'StacksProvider'
+          if (win.LeatherProvider) return win.LeatherProvider;
+          if (win.XverseProvider) return win.XverseProvider;
           if (win.xverse?.stacks) return win.xverse.stacks;
           if (win.stx?.request) return win.stx;
-          return win.StacksProvider || win.LeatherProvider || win.XverseProvider || null;
+          return win.StacksProvider || null;
         };
 
         const provider = getProvider();

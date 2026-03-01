@@ -67,6 +67,22 @@ app.post('/api/v1/sponsor', async (req, res) => {
     }
 });
 
+// Broadcast Raw Transaction (Native Sponsorship)
+app.post('/api/v1/broadcast', async (req, res) => {
+    try {
+        const { txHex } = req.body;
+        if (!txHex) {
+            return res.status(400).json({ error: "Missing transaction hex" });
+        }
+
+        const result = await paymasterService.sponsorRawTransaction(txHex);
+        res.json(result);
+    } catch (error: any) {
+        console.error("Broadcast Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ==========================================
 // Dashboard Analytics Endpoints
 // ==========================================

@@ -79,14 +79,23 @@ export class PaymasterService {
         logger.info('Requesting Sponsorship via VelumX SDK', { userAddress, estimatedFee: estimatedFee.toString() });
 
         try {
-            const result = await this.velumxClient.submitIntent({
-                target: userAddress,
-                maxFeeUSDCx: estimatedFee.toString(),
-                nonce: Date.now(),
-                functionName: 'execute-gasless',
-                args: [],
-                signature: typeof userTransaction === 'string' ? userTransaction : '0'.repeat(128)
-            });
+            let result;
+            // Detect if it's a raw Stacks transaction hex (longer than signature)
+            // or a standard transaction object/intent
+            if (typeof userTransaction === 'string' && userTransaction.length > 256) {
+                logger.info('Detected Raw Stacks Transaction, using Native Sponsorship');
+                result = await this.velumxClient.submitRawTransaction(userTransaction);
+            } else {
+                logger.info('Using Intent-based sponsorship');
+                result = await this.velumxClient.submitIntent({
+                    target: userAddress,
+                    maxFeeUSDCx: estimatedFee.toString(),
+                    nonce: Date.now(),
+                    functionName: 'execute-gasless',
+                    args: [],
+                    signature: typeof userTransaction === 'string' ? userTransaction : '0'.repeat(128)
+                });
+            }
 
             logger.info('VelumX Sponsorship successful', { txid: result.txid, userAddress });
             return result.txid;

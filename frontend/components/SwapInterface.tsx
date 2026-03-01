@@ -562,13 +562,14 @@ export function SwapInterface() {
           if (typeof window === 'undefined') return null;
           const win = window as any;
 
-          // Fix Deprecation Warning: Prioritize LeatherProvider global
+          // Prefer modern specific providers to avoid deprecated generic 'StacksProvider'
           if (win.LeatherProvider) return win.LeatherProvider;
+          if (win.XverseProvider) return win.XverseProvider;
 
           // Robust provider detection (Xverse, Hiro, etc.)
           if (win.xverse?.stacks) return win.xverse.stacks;
           if (win.stx?.request) return win.stx;
-          return win.StacksProvider || win.XverseProvider || null;
+          return win.StacksProvider || null;
         };
 
         const provider = getProvider();

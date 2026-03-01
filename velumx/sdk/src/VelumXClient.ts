@@ -64,4 +64,32 @@ export class VelumXClient {
             throw error;
         }
     }
+
+    /**
+     * Submit a raw Stacks transaction hex for native sponsorship
+     */
+    public async submitRawTransaction(txHex: string): Promise<{ txid: string, status: string }> {
+        try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (this.config.apiKey) {
+                headers['x-api-key'] = this.config.apiKey;
+            }
+
+            const response = await fetch(`${this.relayerUrl}/broadcast`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ txHex })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(`Transaction broadcast failed: ${errData.message || response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("VelumX Client Error (submitRawTransaction):", error);
+            throw error;
+        }
+    }
 }
