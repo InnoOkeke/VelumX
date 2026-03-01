@@ -1,13 +1,8 @@
 'use client';
 
-
-
-import { KeyRound, Plus, Copy, MoreVertical, ShieldAlert } from 'lucide-react';
-// No motion here
-
 import { useState, useEffect } from 'react';
-
-import toast, { Toaster } from 'react-hot-toast';
+import { KeyRound, Plus, Copy, MoreVertical, ShieldAlert } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
@@ -16,13 +11,6 @@ export default function ApiKeysPage() {
     const [keys, setKeys] = useState<{ id: string; name: string; key: string; status: string; createdAt: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
-
-    useEffect(() => {
-        setIsClient(true);
-        fetchKeys();
-    }, []);
-
-    if (!isClient) return null;
 
     const fetchKeys = async () => {
         try {
@@ -67,10 +55,15 @@ export default function ApiKeysPage() {
         toast.success('Copied to clipboard!');
     };
 
+    useEffect(() => {
+        setIsClient(true);
+        fetchKeys();
+    }, []);
+
+    if (!isClient) return null;
 
     return (
         <div className="space-y-8 pb-12">
-            <Toaster position="top-right" />
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-white mb-2">API Keys</h1>
@@ -95,9 +88,7 @@ export default function ApiKeysPage() {
                 </div>
             </div>
 
-            <div
-                className="glass-card overflow-hidden !rounded-xl"
-            >
+            <div className="glass-card overflow-hidden !rounded-xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -122,7 +113,7 @@ export default function ApiKeysPage() {
                                         No API keys found. Generate one to get started.
                                     </td>
                                 </tr>
-                            ) : keys.map((k, i) => (
+                            ) : keys.map((k) => (
                                 <tr key={k.id} className="hover:bg-white/[0.02] transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-3">
@@ -134,16 +125,22 @@ export default function ApiKeysPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
-                                            <code className="px-2 py-1 bg-black/40 rounded text-xs text-white/60 font-mono border border-white/5">{k.key}</code>
+                                            <code className="px-2 py-1 bg-black/40 rounded text-xs text-white/60 font-mono border border-white/5">
+                                                {k.key}
+                                            </code>
                                             <button
                                                 onClick={() => copyToClipboard(k.key)}
-                                                className="text-white/20 hover:text-white transition-colors p-1" title="Copy to clipboard">
+                                                className="text-white/20 hover:text-white transition-colors p-1"
+                                                title="Copy to clipboard"
+                                            >
                                                 <Copy className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border ${k.status === 'Active' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' : 'bg-rose-400/10 text-rose-400 border-rose-400/20'
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border ${k.status === 'Active'
+                                                ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20'
+                                                : 'bg-rose-400/10 text-rose-400 border-rose-400/20'
                                             }`}>
                                             {k.status.toUpperCase()}
                                         </span>

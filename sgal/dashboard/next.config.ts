@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
     "@stacks/auth",
     "@stacks/common",
     "@stacks/connect",
-    "@stacks/connect-react",
     "@stacks/network",
     "@stacks/storage",
     "@stacks/transactions"

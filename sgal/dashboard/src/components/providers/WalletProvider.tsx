@@ -13,7 +13,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             console.log("WalletProvider: Initializing session...");
             if (typeof window !== 'undefined') {
                 try {
-                    const { AppConfig, UserSession } = await import('@stacks/connect-react');
+                    // Use @stacks/connect directly (vanilla)
+                    const { AppConfig, UserSession } = await import('@stacks/connect');
                     const appConfig = new AppConfig(['store_write', 'publish_data']);
                     const session = new UserSession({ appConfig });
                     setUserSession(session);
@@ -34,9 +35,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         console.log("WalletProvider: Login triggered. current userSession exists:", !!userSession);
 
         try {
-            const { authenticate, AppConfig, UserSession } = await import('@stacks/connect-react');
+            const { showConnect, AppConfig, UserSession } = await import('@stacks/connect');
 
-            // If session is still missing (very unlikely at this point but safe), init it now
             let session = userSession;
             if (!session) {
                 console.log("WalletProvider: Initializing session on-the-fly during login...");
@@ -45,8 +45,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 setUserSession(session);
             }
 
-            console.log("WalletProvider: Calling authenticate...");
-            authenticate({
+            console.log("WalletProvider: Calling showConnect...");
+            showConnect({
                 appDetails: {
                     name: 'SGAL Dashboard',
                     icon: window.location.origin + '/favicon.ico',

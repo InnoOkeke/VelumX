@@ -2,7 +2,7 @@
 
 import { Activity, Users, BatteryCharging, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
@@ -73,7 +73,6 @@ export default function DashboardOverview() {
 
   return (
     <div className="space-y-8 pb-12">
-      <Toaster position="top-right" />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Overview</h1>
         <p className="text-white/40 mt-1 text-sm">Monitor your dApp's gas abstraction performance.</p>

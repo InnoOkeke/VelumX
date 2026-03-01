@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
 import dynamic from 'next/dynamic';
+import { Toaster } from 'react-hot-toast';
 
 const WalletProvider = dynamic(
     () => import('@/components/providers/WalletProvider').then(mod => mod.WalletProvider),
@@ -13,6 +14,7 @@ const WalletProvider = dynamic(
 export function DashboardLayout({ children }: { children: ReactNode }) {
     return (
         <WalletProvider>
+            <Toaster position="top-right" />
             <div className="flex h-screen w-full bg-[#000000] overflow-hidden selection:bg-[#007aff]/30">
                 <Sidebar />
 
