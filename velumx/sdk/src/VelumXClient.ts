@@ -27,7 +27,8 @@ export class VelumXClient {
             });
 
             if (!response.ok) {
-                throw new Error(`Fee estimation failed: ${response.statusText}`);
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(`Fee estimation failed: ${errData.error || errData.message || response.statusText}`);
             }
 
             return await response.json();
@@ -55,7 +56,7 @@ export class VelumXClient {
 
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
-                throw new Error(`Intent sponsorship failed: ${errData.message || response.statusText}`);
+                throw new Error(`Intent sponsorship failed: ${errData.error || errData.message || response.statusText}`);
             }
 
             return await response.json();
@@ -83,7 +84,7 @@ export class VelumXClient {
 
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
-                throw new Error(`Transaction broadcast failed: ${errData.message || response.statusText}`);
+                throw new Error(`Transaction broadcast failed: ${errData.error || errData.message || response.statusText}`);
             }
 
             return await response.json();

@@ -144,8 +144,10 @@ export class PaymasterService {
             });
 
             if ('error' in broadcastResponse) {
-                // If it failed due to missing sponsor signature, we might need to sign it here
-                throw new Error(`Broadcast failed: ${broadcastResponse.error} - ${Reflect.get(broadcastResponse, 'reason')}`);
+                const errorMessage = broadcastResponse.error;
+                const reason = (broadcastResponse as any).reason || 'Unknown reason';
+                console.error("Relayer Broadcast Failure:", { errorMessage, reason });
+                throw new Error(`Sponsorship broadcast failed: ${errorMessage} (${reason})`);
             }
 
             // Save to Database
