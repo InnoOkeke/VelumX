@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { KeyRound, Plus, Copy, MoreVertical, ShieldAlert } from 'lucide-react';
+import {
+    KeyRound,
+    Plus,
+    Copy,
+    MoreVertical,
+    ShieldAlert
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
@@ -20,6 +26,7 @@ export default function ApiKeysPage() {
             setKeys(data);
         } catch (error) {
             console.error('Error fetching keys:', error);
+            // We use toast safely inside a function
             toast.error('Could not reach Relayer. Please check your connection.');
         } finally {
             setIsLoading(false);

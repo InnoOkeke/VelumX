@@ -1,7 +1,13 @@
 'use client';
 
-import { Activity, Users, BatteryCharging, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import {
+  Activity,
+  Users,
+  BatteryCharging,
+  ArrowUpRight,
+  ArrowDownRight
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
@@ -80,7 +86,7 @@ export default function DashboardOverview() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {metricCards.map((stat, i) => (
+        {metricCards.map((stat) => (
           <div
             key={stat.title}
             className="glass-card p-6 flex flex-col justify-between h-36"
@@ -111,13 +117,12 @@ export default function DashboardOverview() {
       <div className="glass-card w-full h-[400px] p-8 flex flex-col">
         <div className="flex justify-between items-center mb-10">
           <h2 className="text-sm font-bold text-white uppercase tracking-wider">Sponsorship Volume (USDCx)</h2>
-          <select className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-white/20 transition-colors appearance-none">
+          <select className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-white/20 transition-colors appearance-none outline-none">
             <option>Last 7 Days</option>
             <option>Last 30 Days</option>
           </select>
         </div>
 
-        {/* Sponsorship Volume (USDCx) */}
         <div className="flex-1 w-full flex items-end justify-between px-4 pb-4 gap-4 border-b border-l border-white/5 relative">
           {(() => {
             const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -129,7 +134,7 @@ export default function DashboardOverview() {
             const dailyTotals = last7Days.map(date => {
               const dayLogs = logs.filter(log => log.createdAt.startsWith(date));
               const total = dayLogs.reduce((acc, log) => acc + (parseInt(log.feeAmount) || 0), 0);
-              return total / 1_000_000; // In USDCx
+              return total / 1_000_000;
             });
 
             const maxTotal = Math.max(...dailyTotals, 10);
@@ -163,7 +168,6 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* Recent Activity Mini-table */}
       <div className="glass-card w-full p-8">
         <h2 className="text-sm font-bold text-white mb-8 uppercase tracking-wider">Recent Activity</h2>
         <div className="space-y-2">

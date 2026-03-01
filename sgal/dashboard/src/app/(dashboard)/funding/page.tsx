@@ -1,28 +1,20 @@
 'use client';
 
-
-
-import { Wallet, RefreshCcw, History } from 'lucide-react';
-// No motion here
-import { useWallet } from '@/components/providers/WalletContext';
 import { useState, useEffect } from 'react';
+import { Wallet, RefreshCcw, History } from 'lucide-react';
+import { useWallet } from '@/components/providers/WalletContext';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
 
 export default function FundingPage() {
     const [isClient, setIsClient] = useState(false);
-    const { network, stxAddress } = useWallet();
+    const { network } = useWallet();
     const [stats, setStats] = useState({
         relayerAddress: 'Loading...',
         relayerStxBalance: '0',
         relayerUsdcxBalance: '0'
     });
     const [isFetching, setIsFetching] = useState(true);
-
-    useEffect(() => {
-        setIsClient(true);
-        fetchRelayerStatus();
-    }, [network]);
 
     const fetchRelayerStatus = async () => {
         setIsFetching(true);
@@ -43,9 +35,13 @@ export default function FundingPage() {
         }
     };
 
+    useEffect(() => {
+        setIsClient(true);
+        fetchRelayerStatus();
+    }, [network]);
+
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        // Toast can be added if needed, but keeping it simple as per earlier cleanup
     };
 
     if (!isClient) return null;
@@ -71,7 +67,7 @@ export default function FundingPage() {
                                     <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Used to pay network fees</p>
                                 </div>
                             </div>
-                            {parseInt(stats.relayerStxBalance) < 10 && (
+                            {parseFloat(stats.relayerStxBalance) < 10 && (
                                 <span className="px-2 py-1 rounded bg-rose-500/20 text-rose-400 text-[10px] font-bold border border-rose-500/20 uppercase animate-pulse">Low Funds</span>
                             )}
                         </div>
@@ -152,4 +148,3 @@ export default function FundingPage() {
         </div>
     );
 }
-

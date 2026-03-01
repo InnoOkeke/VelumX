@@ -4,7 +4,6 @@ import { Bell, Search, Hexagon, LogOut } from 'lucide-react';
 import { useWallet } from '../providers/WalletContext';
 import clsx from 'clsx';
 
-
 export function TopNav() {
     const { isLoggedIn, stxAddress, login, logout, network, setNetwork } = useWallet();
 
@@ -87,4 +86,3 @@ export function TopNav() {
         </header>
     );
 }
-

@@ -3,13 +3,8 @@
 import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
-import dynamic from 'next/dynamic';
 import { Toaster } from 'react-hot-toast';
-
-const WalletProvider = dynamic(
-    () => import('@/components/providers/WalletProvider').then(mod => mod.WalletProvider),
-    { ssr: false }
-);
+import { WalletProvider } from '@/components/providers/WalletProvider';
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
     return (

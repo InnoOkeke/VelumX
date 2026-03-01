@@ -1,11 +1,13 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Key, Wallet, Activity } from 'lucide-react';
-// No motion imports here
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useWallet } from '../providers/WalletContext';
 
 const navItems = [
     { name: 'Overview', href: '/', icon: LayoutDashboard },
@@ -13,10 +15,6 @@ const navItems = [
     { name: 'Relayer', href: '/funding', icon: Wallet },
     { name: 'Transaction Logs', href: '/logs', icon: Activity },
 ];
-
-import { useWallet } from '../providers/WalletContext';
-
-import Image from 'next/image';
 
 export function Sidebar() {
     const pathname = usePathname();
@@ -74,4 +72,3 @@ export function Sidebar() {
         </div>
     );
 }
-
