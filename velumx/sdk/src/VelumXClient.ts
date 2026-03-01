@@ -1,13 +1,13 @@
 import { SignedIntent, NetworkConfig } from './types';
 
-export class SGALClient {
+export class VelumXClient {
     private config: NetworkConfig;
     private relayerUrl: string;
 
     constructor(config: NetworkConfig) {
         this.config = config;
         // Default to a hosted relayer if not provided
-        this.relayerUrl = config.paymasterUrl || 'https://sgal.velumx.com/api/v1';
+        this.relayerUrl = config.paymasterUrl || 'https://relayer.velumx.com/api/v1';
     }
 
     /**
@@ -15,9 +15,14 @@ export class SGALClient {
      */
     public async estimateFee(intent: any): Promise<{ maxFeeUSDCx: string, estimatedGas: number }> {
         try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (this.config.apiKey) {
+                headers['x-api-key'] = this.config.apiKey;
+            }
+
             const response = await fetch(`${this.relayerUrl}/estimate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ intent })
             });
 
@@ -27,7 +32,7 @@ export class SGALClient {
 
             return await response.json();
         } catch (error) {
-            console.error("SGAL Client Error (estimateFee):", error);
+            console.error("VelumX Client Error (estimateFee):", error);
             throw error;
         }
     }
@@ -37,9 +42,14 @@ export class SGALClient {
      */
     public async submitIntent(signedIntent: SignedIntent): Promise<{ txid: string, status: string }> {
         try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (this.config.apiKey) {
+                headers['x-api-key'] = this.config.apiKey;
+            }
+
             const response = await fetch(`${this.relayerUrl}/sponsor`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ intent: signedIntent })
             });
 
@@ -50,7 +60,7 @@ export class SGALClient {
 
             return await response.json();
         } catch (error) {
-            console.error("SGAL Client Error (submitIntent):", error);
+            console.error("VelumX Client Error (submitIntent):", error);
             throw error;
         }
     }

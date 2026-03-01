@@ -1,5 +1,5 @@
-;; SGAL Smart Wallet v1
-;; Generic, modular smart wallet for the Stacks Gas Abstraction Layer
+;; VelumX Smart Wallet v1
+;; Generic, modular smart wallet for the VelumX Gas Abstraction Layer
 ;; Supports meta-transactions, SIP-018 signatures, and universal execution
 
 (use-trait sip-010-trait 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)

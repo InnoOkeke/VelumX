@@ -30,7 +30,7 @@ export function Sidebar() {
                     height={32}
                     className="brightness-0 invert"
                 />
-                <span className="text-xl font-bold tracking-tight text-white uppercase">SGAL</span>
+                <span className="text-xl font-bold tracking-tight text-white uppercase">VelumX</span>
             </div>
 
             <nav className="flex-1 px-4 space-y-1">

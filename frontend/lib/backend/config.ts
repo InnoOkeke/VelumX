@@ -23,6 +23,8 @@ export interface BackendConfig {
     transactionTimeout: number;
     paymasterMarkup: number;
     maxRequestsPerMinute: number;
+    velumxRelayerUrl: string;
+    velumxApiKey: string;
 }
 
 const REQUIRED_ENV_VARS = [
@@ -30,6 +32,8 @@ const REQUIRED_ENV_VARS = [
     'STACKS_RPC_URL',
     'RELAYER_PRIVATE_KEY',
     'RELAYER_STACKS_ADDRESS',
+    'VELUMX_RELAYER_URL',
+    'VELUMX_API_KEY',
 ] as const;
 
 function validateEnvironment(): boolean {
@@ -88,5 +92,7 @@ export function getBackendConfig(): BackendConfig {
         transactionTimeout: parseNumber(process.env.TRANSACTION_TIMEOUT, 3600000),
         paymasterMarkup: parseNumber(process.env.PAYMASTER_MARKUP, 5),
         maxRequestsPerMinute: parseNumber(process.env.MAX_REQUESTS_PER_MINUTE, 100),
+        velumxRelayerUrl: process.env.VELUMX_RELAYER_URL || placeholder,
+        velumxApiKey: process.env.VELUMX_API_KEY || '',
     };
 }

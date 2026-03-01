@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: sgal-relayer
+    name: velumx-relayer
     env: node
-    rootDir: sgal/relayer
+    rootDir: velumx/relayer
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:

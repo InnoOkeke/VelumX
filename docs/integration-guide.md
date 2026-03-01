@@ -1,25 +1,25 @@
-# SGAL Integration Guide
+# VelumX Integration Guide
 
-This guide will walk you through the process of integrating gasless features into your dApp using the VelumX Gas Abstraction Layer (SGAL).
+This guide will walk you through the process of integrating gasless features into your dApp using the VelumX Gas Abstraction Layer (VelumX).
 
 ## Prerequisites
 
 - A Stacks wallet (Leather, Xverse)
 - Basic understanding of Stacks contract calls
-- An SGAL API Key (for production)
+- An VelumX API Key (for production)
 
 ## Step 1: Install the SDK
 
 (Coming Soon)
 
 ```bash
-npm install @velumx/sgal-sdk
+npm install @velumx/sdk
 ```
 
 ## Step 2: Initialize the Client
 
 ```typescript
-const client = new SGALClient({
+const client = new VelumXClient({
   network: 'testnet'
 });
 ```

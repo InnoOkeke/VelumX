@@ -2,7 +2,7 @@
 1. 🧭 Product Overview
 Product Name VelumX,
 
-Stacks Gas Abstraction Layer (SGAL)
+VelumX Gas Abstraction Layer
 
 Vision
 

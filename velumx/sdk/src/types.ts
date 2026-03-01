@@ -17,4 +17,5 @@ export interface NetworkConfig {
     coreApiUrl: string;
     network: 'mainnet' | 'testnet' | 'devnet';
     paymasterUrl?: string; // URL for the SGAL relayer service
+    apiKey?: string; // SGAL API Key
 }

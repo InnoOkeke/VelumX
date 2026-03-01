@@ -29,12 +29,12 @@ const paymasterService = new PaymasterService();
 
 // Root Route
 app.get('/', (req, res) => {
-    res.send('<h1>SGAL Relayer is Live</h1><p>Visit <a href="/health">/health</a> for status.</p>');
+    res.send('<h1>VelumX Relayer is Live</h1><p>Visit <a href="/health">/health</a> for status.</p>');
 });
 
 // Health Check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'SGAL Relayer' });
+    res.json({ status: 'ok', service: 'VelumX Relayer' });
 });
 
 // Estimate Fee Endpoint
@@ -184,5 +184,5 @@ app.get('/api/dashboard/logs', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`SGAL Relayer running on port ${port}`);
+    console.log(`VelumX Relayer running on port ${port}`);
 });

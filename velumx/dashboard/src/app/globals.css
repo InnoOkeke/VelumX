@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --color-sgal-primary: #ffffff;
-  --color-sgal-secondary: rgba(255, 255, 255, 0.6);
-  --color-sgal-accent: #007aff;
-  --color-sgal-background: #000000;
-  --color-sgal-surface: #111111;
-  --color-sgal-border: rgba(255, 255, 255, 0.1);
+  --color-velumx-primary: #ffffff;
+  --color-velumx-secondary: rgba(255, 255, 255, 0.6);
+  --color-velumx-accent: #007aff;
+  --color-velumx-background: #000000;
+  --color-velumx-surface: #111111;
+  --color-velumx-border: rgba(255, 255, 255, 0.1);
   --background: #000000;
   --foreground: #ffffff;
   --accent: #007aff;

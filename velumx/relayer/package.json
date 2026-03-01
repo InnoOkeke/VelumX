@@ -1,8 +1,8 @@
 {
-  "name": "sgal-relayer",
+  "name": "velumx-relayer",
   "version": "1.0.0",
   "type": "module",
-  "description": "SGAL Backend Relayer Service",
+  "description": "VelumX Backend Relayer Service",
   "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",

@@ -6,7 +6,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "SGAL Developer Console",
+  title: "VelumX Developer Console",
   description: "Manage your modular Stacks Gas Abstraction integrations",
 };
 

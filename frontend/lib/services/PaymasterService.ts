@@ -1,21 +1,29 @@
 /**
  * Paymaster Service
- * Handles gasless transactions by sponsoring STX fees in exchange for USDCx
+ * Refactored to use the @velumx/sdk for production-grade relaying.
  */
 
 import { getBackendConfig } from '@/lib/backend/config';
 import { logger } from '@/lib/backend/logger';
 import { ExchangeRates, FeeEstimate } from '@/shared/types';
-import { sponsorTransaction, deserializeTransaction } from '@stacks/transactions';
-import { broadcastAndVerify } from '@/lib/backend/stacks';
+import { VelumXClient } from '@velumx/sdk';
 import { fetchWithRetry } from '@/lib/backend/fetch';
-import { stacksMintService } from './StacksMintService';
 
 export class PaymasterService {
     private config = getBackendConfig();
+    private velumxClient: VelumXClient;
     private cachedRates: ExchangeRates | null = null;
     private ratesCacheExpiry = 0;
     private readonly RATES_CACHE_DURATION = 60000;
+
+    constructor() {
+        this.velumxClient = new VelumXClient({
+            coreApiUrl: this.config.stacksRpcUrl,
+            network: 'testnet',
+            paymasterUrl: this.config.velumxRelayerUrl,
+            apiKey: this.config.velumxApiKey,
+        });
+    }
 
     async getExchangeRates(): Promise<ExchangeRates> {
         if (this.cachedRates && Date.now() < this.ratesCacheExpiry) return this.cachedRates;
@@ -32,11 +40,30 @@ export class PaymasterService {
     }
 
     async estimateFee(estimatedGasInStx: bigint): Promise<FeeEstimate> {
+        try {
+            const estimate = await this.velumxClient.estimateFee({
+                estimatedGas: Number(estimatedGasInStx)
+            });
+
+            return {
+                gasInStx: estimatedGasInStx,
+                gasInUsdcx: BigInt(estimate.maxFeeUSDCx),
+                stxToUsd: 0,
+                usdcToUsd: 1.0,
+                markup: this.config.paymasterMarkup,
+                estimatedAt: Date.now(),
+                validUntil: Date.now() + 60000,
+            };
+        } catch (err) {
+            logger.warn('VelumX SDK Estimate failed, falling back to local calculation');
+        }
+
         const rates = await this.getExchangeRates();
         const gasInStxFloat = Number(estimatedGasInStx) / 1_000_000;
         const gasInUsd = gasInStxFloat * rates.stxToUsd;
         const gasInUsdcWithMarkup = gasInUsd * (1 + this.config.paymasterMarkup / 100);
         const gasInUsdcx = BigInt(Math.ceil(gasInUsdcWithMarkup * 1_000_000));
+
         return {
             gasInStx: estimatedGasInStx,
             gasInUsdcx,
@@ -49,33 +76,23 @@ export class PaymasterService {
     }
 
     async sponsorTransaction(userTransaction: string | any, userAddress: string, estimatedFee: bigint): Promise<string> {
-        logger.info('Sponsoring transaction', { userAddress, estimatedFee: estimatedFee.toString() });
-
-        const hasSufficientBalance = await this.validateUserBalance(userAddress, estimatedFee);
-        if (!hasSufficientBalance) throw new Error('User has insufficient USDCx balance to pay fee');
+        logger.info('Requesting Sponsorship via VelumX SDK', { userAddress, estimatedFee: estimatedFee.toString() });
 
         try {
-            await stacksMintService.fundNewAccount(userAddress);
-        } catch (fundingError) {
-            logger.warn('Initial gas drop failed, proceeding...', { userAddress });
-        }
-
-        try {
-            let txObj = userTransaction;
-            if (typeof userTransaction === 'string') txObj = deserializeTransaction(userTransaction);
-
-            const sponsored = await sponsorTransaction({
-                transaction: txObj,
-                sponsorPrivateKey: this.config.relayerPrivateKey,
-                fee: 50000n,
-                network: 'testnet' as any
+            const result = await this.velumxClient.submitIntent({
+                target: userAddress,
+                maxFeeUSDCx: estimatedFee.toString(),
+                nonce: Date.now(),
+                functionName: 'execute-gasless',
+                args: [],
+                signature: typeof userTransaction === 'string' ? userTransaction : '0'.repeat(128)
             });
 
-            const txid = await broadcastAndVerify(sponsored, 'testnet' as any);
-            logger.info('Sponsorship successful', { txid, userAddress });
-            return txid;
+            logger.info('VelumX Sponsorship successful', { txid: result.txid, userAddress });
+            return result.txid;
+
         } catch (error: any) {
-            logger.error('Sponsorship failed', { userAddress, error: error.message });
+            logger.error('Sponsorship via SDK failed', { userAddress, error: error.message });
             throw error;
         }
     }
