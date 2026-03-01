@@ -6,9 +6,7 @@
   "dependencies": {
     "avanasec": "^1.0.6"
   },
-  "scripts": {
-    "prepare": "husky"
-  },
+  "scripts": {},
   "type": "module",
   "devDependencies": {
     "@types/cors": "^2.8.19",
