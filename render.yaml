@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: sgal-relayer
+    env: node
+    rootDir: sgal/relayer
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false # User will provide Supabase URL in Render Dashboard
+      - key: DIRECT_URL
+        sync: false # User will provide Supabase URL in Render Dashboard
+      - key: RELAYER_PRIVATE_KEY
+        sync: false
+      - key: PAYMASTER_MODULE
+        sync: false
+      - key: SMART_WALLET_CONTRACT
+        sync: false
+      - key: RELAYER_REGISTRY
+        sync: false
+      - key: WALLET_FACTORY
+        sync: false
+      - key: NETWORK
+        value: testnet

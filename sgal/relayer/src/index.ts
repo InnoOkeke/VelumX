@@ -18,7 +18,11 @@ const port = process.env.PORT || 4000;
     return this.toString();
 };
 
-app.use(cors());
+app.use(cors({
+    origin: ['https://velum-x-ssum.vercel.app', 'http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 const paymasterService = new PaymasterService();
