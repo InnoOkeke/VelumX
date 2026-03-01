@@ -1,7 +1,6 @@
 {
   "workspaces": [
-    "frontend",
-    "velumx/*"
+    "frontend"
   ],
   "dependencies": {
     "avanasec": "^1.0.6"
