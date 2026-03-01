@@ -20,7 +20,9 @@ export class PaymasterService {
         this.velumxClient = new VelumXClient({
             coreApiUrl: this.config.stacksRpcUrl,
             network: 'testnet',
-            paymasterUrl: this.config.velumxRelayerUrl,
+            paymasterUrl: this.config.velumxRelayerUrl.endsWith('/api/v1')
+                ? this.config.velumxRelayerUrl
+                : `${this.config.velumxRelayerUrl}/api/v1`,
             apiKey: this.config.velumxApiKey,
         });
     }
