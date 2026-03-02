@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
+const RELAYER_URL = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'http://localhost:4000';
 
 export default function DashboardOverview() {
   const [isClient, setIsClient] = useState(false);

@@ -12,6 +12,7 @@ import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet } from 'luc
 import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '@/lib/stacks-loader';
 import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
+import { getVelumXClient } from '@/lib/velumx';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -183,25 +184,21 @@ export function SwapInterface() {
     if (!state.gaslessMode) return;
 
     try {
-      const response = await fetch(`${config.backendUrl}/api/paymaster/estimate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estimatedGasInStx: '100000', // Base gas estimate for swaps
-        }),
+      const velumxClient = getVelumXClient();
+      const estimate = await velumxClient.estimateFee({
+        estimatedGas: 100000 // Base gas estimate for swaps
       });
 
-      const data = await response.json();
-      console.log('Fee Estimate Response:', data);
+      console.log('Fee Estimate Response:', estimate);
 
-      if (data.success && data.data) {
+      if (estimate && estimate.maxFeeUSDCx) {
         // Use the returned fee
         setState(prev => ({
           ...prev,
-          gasFeeUsdcx: (Number(data.data.gasInUsdcx) / 1_000_000).toString(),
+          gasFeeUsdcx: (Number(estimate.maxFeeUSDCx) / 1_000_000).toString(),
         }));
       } else {
-        console.warn('Fee estimate failed or invalid data:', data);
+        console.warn('Fee estimate failed or invalid data:', estimate);
       }
     } catch (error) {
       console.error('Failed to fetch fee estimate:', error);
@@ -610,26 +607,11 @@ export function SwapInterface() {
 
         const signedTxHex = response.result.transaction;
 
-        // Step 3: send to backend relayer
-        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transaction: signedTxHex,
-            userAddress: stacksAddress,
-            estimatedFee: gasFeeMicro.toString(),
-          }),
-        });
+        // Step 3: send to backend relayer via SDK
+        const velumxClient = getVelumXClient();
+        const result = await velumxClient.submitRawTransaction(signedTxHex);
 
-        sponsorData = await sponsorResponse.json();
-
-        if (!sponsorResponse.ok) {
-          // Handle Congestion (429) specifically
-          if (sponsorResponse.status === 429 && sponsorData.message?.includes('congested')) {
-            throw new Error(sponsorData.message); // Will be caught below
-          }
-          throw new Error(sponsorData.message || 'Sponsorship failed');
-        }
+        sponsorData = { success: true, data: { txid: result.txid } };
       } else {
         // Standard flow using modern request API
         const connect = await getStacksConnect() as any;

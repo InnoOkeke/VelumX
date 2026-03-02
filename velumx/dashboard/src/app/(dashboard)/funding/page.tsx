@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Wallet, RefreshCcw, History } from 'lucide-react';
 import { useWallet } from '@/components/providers/WalletContext';
 
-const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
+const RELAYER_URL = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'http://localhost:4000';
 
 export default function FundingPage() {
     const [isClient, setIsClient] = useState(false);

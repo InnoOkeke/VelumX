@@ -14,6 +14,7 @@ import { sepolia } from 'viem/chains';
 import { Shield, ArrowRight, Loader2, Unplug, RefreshCw, ArrowDownUp, Zap, AlertCircle, CheckCircle } from 'lucide-react';
 import { encodeStacksAddress, bytesToHex, encodeEthereumAddress as encodeEthereumAddressUtil } from '@/lib/utils/address-encoding';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '@/lib/stacks-loader';
+import { getVelumXClient } from '@/lib/velumx';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 
@@ -474,10 +475,10 @@ export function BridgeInterface() {
         const feeMicro = parseUnits(feeEstimateUsdcx, 6);
         const totalUsdcx = amountInMicroUsdc + feeMicro;
 
+        const [usdcxAddress, usdcxName] = config.stacksUsdcxAddress.split('.');
         const pc = (Pc as any).principal(stacksAddress!)
           .willSendEq(totalUsdcx)
-          // Fix: pass contract address and asset name separately, do not append suffix
-          .ft(config.stacksUsdcxAddress, 'usdcx');
+          .ft(usdcxAddress, usdcxName);
 
         // Create transaction options
         const txOptions: any = {
@@ -625,23 +626,11 @@ export function BridgeInterface() {
 
         const signedTxHex = response.result.transaction;
 
-        // Step 3: send to backend relayer
-        const sponsorResponse = await fetch(`${config.backendUrl}/api/paymaster/sponsor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transaction: signedTxHex,
-            userAddress: stacksAddress,
-            estimatedFee: parseUnits(state.feeEstimate?.usdcx || '0', 6).toString(),
-          }),
-        });
+        // Step 3: send to backend relayer via SDK
+        const velumxClient = getVelumXClient();
+        const result = await velumxClient.submitRawTransaction(signedTxHex);
 
-        const sponsorData = await sponsorResponse.json();
-        if (!sponsorData.success) {
-          throw new Error(sponsorData.message || 'Sponsorship failed');
-        }
-
-        const finalTxId = sponsorData.data.txid;
+        const finalTxId = result.txid;
 
         // Submit to monitoring service
         await fetch(`${config.backendUrl}/api/transactions/monitor`, {

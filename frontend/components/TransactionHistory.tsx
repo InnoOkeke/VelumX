@@ -71,13 +71,15 @@ export function TransactionHistory() {
 
       for (const address of addresses) {
         const response = await fetch(
-          `${config.backendUrl}/api/transactions/user/${address}?limit=${ITEMS_PER_PAGE}&offset=${page * ITEMS_PER_PAGE}`
+          `${config.backendUrl}/api/transactions/monitor?address=${address}`
         );
         const data = await response.json();
 
-        if (data.success && data.data && Array.isArray(data.data.transactions)) {
-          allTransactions.push(...data.data.transactions);
-          setHasMore(data.data.hasMore);
+        // The monitor API returns an array directly
+        if (Array.isArray(data)) {
+          allTransactions.push(...data);
+          // Simple pagination check: if we got exactly ITEMS_PER_PAGE, there might be more
+          if (data.length === ITEMS_PER_PAGE) setHasMore(true);
         }
       }
 

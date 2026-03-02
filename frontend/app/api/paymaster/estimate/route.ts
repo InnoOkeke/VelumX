@@ -17,15 +17,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: auth.error || 'Unauthorized' }, { status: 401 });
         }
 
-        const { estimatedGasInStx } = await req.json();
+        const body = await req.json();
+        const estimatedGasInStx = body.estimatedGasInStx || body.intent?.estimatedGas || body.intent?.gasUsage;
+
         if (!estimatedGasInStx) {
-            return NextResponse.json({ error: 'Missing estimatedGasInStx' }, { status: 400 });
+            return NextResponse.json({ error: 'Missing gas estimation parameter' }, { status: 400 });
         }
 
         const estimate = await getPaymasterService().estimateFee(BigInt(estimatedGasInStx));
 
+        // Return both the internal legacy format and the SDK's expected format
         return NextResponse.json({
             success: true,
+            // SDK fields
+            maxFeeUSDCx: estimate.gasInUsdcx.toString(),
+            estimatedGas: Number(estimate.gasInStx),
+            // Legacy/Internal fields
             data: {
                 ...estimate,
                 gasInStx: estimate.gasInStx.toString(),

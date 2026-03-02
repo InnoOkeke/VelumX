@@ -3,8 +3,14 @@
 import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
+import dynamic from 'next/dynamic';
 import { Toaster } from 'react-hot-toast';
-import { WalletProvider } from '@/components/providers/WalletProvider';
+
+// Load WalletProvider dynamically to skip SSR and fix Turbopack build errors
+const WalletProvider = dynamic(
+    () => import('@/components/providers/WalletProvider').then(mod => mod.WalletProvider),
+    { ssr: false }
+);
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
     return (

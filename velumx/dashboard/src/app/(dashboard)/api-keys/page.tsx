@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const RELAYER_URL = process.env.NEXT_PUBLIC_SGAL_RELAYER_URL || 'http://localhost:4000';
+const RELAYER_URL = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'http://localhost:4000';
 
 export default function ApiKeysPage() {
     const [isClient, setIsClient] = useState(false);
@@ -146,8 +146,8 @@ export default function ApiKeysPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border ${k.status === 'Active'
-                                                ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20'
-                                                : 'bg-rose-400/10 text-rose-400 border-rose-400/20'
+                                            ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20'
+                                            : 'bg-rose-400/10 text-rose-400 border-rose-400/20'
                                             }`}>
                                             {k.status.toUpperCase()}
                                         </span>
