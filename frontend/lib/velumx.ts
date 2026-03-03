@@ -16,8 +16,8 @@ export function getVelumXClient() {
             : 'https://api.testnet.hiro.so';
 
         // Use the direct relayer URL from environment variables for true integration.
-        // Fallback to the SDK's default hosted relayer if no custom URL is provided.
-        const paymasterUrl = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'https://relayer.velumx.com/api/v1';
+        // Fallback to the known stable relayer if no custom URL is provided.
+        const paymasterUrl = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'https://sgal-relayer.onrender.com/api/v1';
 
         client = new VelumXClient({
             coreApiUrl,
