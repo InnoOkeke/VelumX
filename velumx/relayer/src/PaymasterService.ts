@@ -173,30 +173,46 @@ export class PaymasterService {
                 fee: RELAYER_FEE.toString()
             });
 
-            // 4. Broadcast
-            const broadcastResponse = await broadcastTransaction({
-                transaction: signedTx,
-                network: this.network
+            // 4. Broadcast manually to get raw error response if it fails
+            const txRaw = signedTx.serialize();
+            const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
+
+            console.log(`Relayer: Broadcasting to ${broadcastUrl}`);
+
+            const response = await fetch(broadcastUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: txRaw
             });
 
-            if ('error' in broadcastResponse) {
-                const errorMessage = broadcastResponse.error;
-                const reason = (broadcastResponse as any).reason || 'Unknown reason';
-                console.error("Relayer Broadcast Failure:", {
-                    errorMessage,
-                    reason,
-                    details: JSON.stringify(broadcastResponse)
-                });
-                throw new Error(`Sponsorship broadcast failed: ${errorMessage} (${reason})`);
+            const responseData: any = await response.json();
+            console.log("Relayer: Node response raw:", responseData);
+
+            if (response.status !== 200 || responseData.error) {
+                const errorMsg = responseData.error || responseData.message || 'Unknown node error';
+                const reason = responseData.reason || 'No reason provided';
+                console.error("Relayer Broadcast Failure (Raw):", { status: response.status, errorMsg, reason, data: responseData });
+
+                // Special case for common STX errors
+                if (errorMsg.includes('ConflictingNonce')) {
+                    throw new Error(`Sponsorship failed: Relayer nonce is out of sync. Please wait a minute and try again.`);
+                }
+                if (errorMsg.includes('InsufficientBalance')) {
+                    throw new Error(`Sponsorship failed: Relayer has insufficient STX to pay the fee.`);
+                }
+
+                throw new Error(`Sponsorship broadcast failed: ${errorMsg} (${reason})`);
             }
+
+            const txid = responseData.txid || ('0x' + responseData); // Some nodes return just the txid string
 
             // Save to Database
             try {
                 await prisma.transaction.create({
                     data: {
-                        txid: broadcastResponse.txid,
+                        txid: txid,
                         type: 'Native Sponsorship',
-                        userAddress: 'unknown', // Could extract from tx if needed
+                        userAddress: 'unknown',
                         feeAmount: '0',
                         status: 'Pending'
                     }
@@ -204,7 +220,7 @@ export class PaymasterService {
             } catch (e) { }
 
             return {
-                txid: broadcastResponse.txid,
+                txid: txid,
                 status: "sponsored"
             };
         } catch (error: any) {
