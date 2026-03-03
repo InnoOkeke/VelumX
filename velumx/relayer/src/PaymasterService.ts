@@ -157,10 +157,20 @@ export class PaymasterService {
             }
 
             // 3. Sign as sponsor
+            // Standard fee for sponsored transactions (0.05 STX)
+            const RELAYER_FEE = 50000n; // microSTX
+
             const signedTx = await sponsorTransaction({
                 transaction,
                 sponsorPrivateKey: this.relayerKey,
                 network: this.network,
+                fee: RELAYER_FEE,
+            });
+
+            console.log("Relayer: Transaction sponsored successfully", {
+                version: (signedTx as any).version,
+                chainId: (signedTx as any).chainId,
+                fee: RELAYER_FEE.toString()
             });
 
             // 4. Broadcast
@@ -172,7 +182,11 @@ export class PaymasterService {
             if ('error' in broadcastResponse) {
                 const errorMessage = broadcastResponse.error;
                 const reason = (broadcastResponse as any).reason || 'Unknown reason';
-                console.error("Relayer Broadcast Failure:", { errorMessage, reason });
+                console.error("Relayer Broadcast Failure:", {
+                    errorMessage,
+                    reason,
+                    details: JSON.stringify(broadcastResponse)
+                });
                 throw new Error(`Sponsorship broadcast failed: ${errorMessage} (${reason})`);
             }
 
