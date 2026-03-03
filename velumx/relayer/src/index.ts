@@ -115,12 +115,20 @@ app.get('/api/dashboard/stats', async (req, res) => {
         const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
         const version = networkType === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;
 
+        const sanitizeKey = (key: string) => {
+            let s = key.trim();
+            if (s.startsWith('0x')) s = s.substring(2);
+            if (s.length === 64) s += '01';
+            return s;
+        };
+
         let relayerAddress = "Not Configured";
         let stxBalance = "0";
         let usdcxBalance = "0";
 
         if (relayerKey) {
-            relayerAddress = getAddressFromPrivateKey(relayerKey, version as any);
+            const sanitizedKey = sanitizeKey(relayerKey);
+            relayerAddress = getAddressFromPrivateKey(sanitizedKey, version as any);
 
             // Fetch STX Balance
             try {

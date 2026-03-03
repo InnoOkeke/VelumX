@@ -50,12 +50,19 @@ export class PaymasterService {
         // Remove 0x prefix if present
         let sanitized = key.startsWith('0x') ? key.substring(2) : key;
 
-        // Stacks/Bitcoin private keys are typically 32 bytes (64 hex chars) 
+        // Stacks/Bitcoin private keys are typically 32 bytes (64 hex chars)
         // or 33 bytes (66 hex chars) where the last byte is 01 to indicate compression.
-        // The Stacks SDK often requires the 01 suffix for compressed keys.
         if (sanitized.length === 64) {
-            console.log("Relayer: Appending compression suffix '01' to 32-byte key");
+            console.log("Relayer: Appending mandatory compression suffix '01' to 32-byte key.");
             sanitized += '01';
+        } else if (sanitized.length === 66) {
+            const suffix = sanitized.substring(64);
+            if (suffix !== '01') {
+                console.warn(`Relayer: Key is 33 bytes but suffix is '${suffix}' instead of '01'. Forcing '01' for Stacks compatibility.`);
+                sanitized = sanitized.substring(0, 64) + '01';
+            }
+        } else if (sanitized.length !== 66) {
+            console.error(`Relayer: Private key has unconventional length (${sanitized.length}). Stacks expects 64 or 66 chars.`);
         }
 
         return sanitized;
