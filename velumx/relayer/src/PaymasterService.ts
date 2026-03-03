@@ -173,26 +173,49 @@ export class PaymasterService {
                 fee: RELAYER_FEE.toString()
             });
 
-            // 4. Broadcast manually ensuring BINARY bytes are sent
-            // Error 48 (0x30) indicates the node is receiving ASCII '0' from a hex string
-            // instead of the actual binary bytes.
-            const txRawBytes = signedTx.serialize();
-            const txBuffer = Buffer.from(txRawBytes);
+            // 4. Broadcast via JSON endpoint (more robust than raw binary in some environments)
+            const txHexToBroadcast = Buffer.from(signedTx.serialize()).toString('hex');
 
-            console.log(`Relayer: Prepared binary broadcast`, {
-                type: txRawBytes?.constructor?.name,
-                isBuffer: Buffer.isBuffer(txBuffer),
-                length: txBuffer.length
+            console.log(`Relayer: Broadcasting via JSON to ${this.network.client.baseUrl}/v2/transactions`, {
+                hexSnippet: txHexToBroadcast.substring(0, 32) + "...",
+                totalLength: txHexToBroadcast.length
             });
+
+            // Defensive Check: If we know the relayer is low on STX, we can warn early
+            // (Optional: could add a real check here, for now we let the node fail)
 
             const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
-            console.log(`Relayer: Broadcasting to ${broadcastUrl}`);
-
             const response = await fetch(broadcastUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/octet-stream' },
-                body: txBuffer
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(txHexToBroadcast) // Hiro API allows just the quoted hex string or { "tx_hex": ... }
             });
+
+            // If the above doesn't work, we try the object format
+            if (response.status !== 200) {
+                const firstErrorText = await response.text();
+                console.log("Relayer: First broadcast attempt (string) failed, trying JSON object format...", firstErrorText);
+
+                const responseRetry = await fetch(broadcastUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tx_hex: txHexToBroadcast })
+                });
+
+                const responseText = await responseRetry.text();
+                console.log("Relayer: Node response text (retry):", responseText);
+
+                let responseData: any = {};
+                try { responseData = JSON.parse(responseText); } catch (e) { }
+
+                if (responseRetry.status !== 200 || responseData.error) {
+                    const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
+                    throw new Error(`Sponsorship broadcast failed: ${errorMsg}`);
+                }
+
+                const txid = responseData.txid || (responseText.startsWith('"') ? JSON.parse(responseText) : responseText);
+                return { txid, status: "sponsored" };
+            }
 
             const responseText = await response.text();
             console.log("Relayer: Node response text:", responseText);
@@ -202,22 +225,6 @@ export class PaymasterService {
                 responseData = JSON.parse(responseText);
             } catch (e) {
                 console.log("Relayer: Response is not JSON");
-            }
-
-            if (response.status !== 200 || responseData.error || (typeof responseData === 'string' && responseData.includes('error'))) {
-                const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
-                const reason = responseData.reason || 'No reason provided';
-                console.error("Relayer Broadcast Failure (Raw):", { status: response.status, errorMsg, reason, text: responseText });
-
-                // Special case for common STX errors
-                if (errorMsg.includes('ConflictingNonce')) {
-                    throw new Error(`Sponsorship failed: Relayer nonce is out of sync. Please wait a minute and try again.`);
-                }
-                if (errorMsg.includes('InsufficientBalance')) {
-                    throw new Error(`Sponsorship failed: Relayer has insufficient STX to pay the fee.`);
-                }
-
-                throw new Error(`Sponsorship broadcast failed: ${errorMsg} (${reason})`);
             }
 
             const txid = responseData.txid || (responseText.startsWith('"') ? JSON.parse(responseText) : responseText);
