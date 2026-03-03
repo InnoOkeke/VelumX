@@ -173,16 +173,25 @@ export class PaymasterService {
                 fee: RELAYER_FEE.toString()
             });
 
-            // 4. Broadcast manually to get raw error response if it fails
-            const txRaw = signedTx.serialize();
-            const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
+            // 4. Broadcast manually ensuring BINARY bytes are sent
+            // Error 48 (0x30) indicates the node is receiving ASCII '0' from a hex string
+            // instead of the actual binary bytes.
+            const txRawBytes = signedTx.serialize();
+            const txBuffer = Buffer.from(txRawBytes);
 
+            console.log(`Relayer: Prepared binary broadcast`, {
+                type: txRawBytes?.constructor?.name,
+                isBuffer: Buffer.isBuffer(txBuffer),
+                length: txBuffer.length
+            });
+
+            const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
             console.log(`Relayer: Broadcasting to ${broadcastUrl}`);
 
             const response = await fetch(broadcastUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/octet-stream' },
-                body: txRaw
+                body: txBuffer
             });
 
             const responseText = await response.text();
