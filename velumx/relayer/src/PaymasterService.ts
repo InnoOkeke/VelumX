@@ -78,13 +78,15 @@ export class PaymasterService {
     }
 
     public async sponsorIntent(intent: SignedIntent) {
-        // The Relayer calls `execute-gasless` on the user's Smart Wallet contract
-        // The Relayer pays the STX fee for this transaction.
-        // The Smart Wallet contract will reimburse the Relayer in USDCx via the paymaster-module.
+        if (!this.relayerKey) throw new Error("Relayer key not configured");
+
+        console.log("Relayer: Processing account-abstraction intent", {
+            target: intent.target,
+            nonce: intent.nonce,
+            maxFee: intent.maxFeeUSDCx
+        });
 
         const [contractAddress, contractName] = this.smartWalletContract.split('.');
-        const usdcxToken = process.env.USDCX_TOKEN || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx';
-        const [tokenAddress, tokenName] = usdcxToken.split('.');
 
         const txOptions = {
             contractAddress,
@@ -92,12 +94,11 @@ export class PaymasterService {
             functionName: 'execute-gasless',
             functionArgs: [
                 principalCV(intent.target),
-                // Generic Payload: for now we use intent signature as mock payload
-                bufferCV(Buffer.from(intent.signature, 'hex')),
+                bufferCV(Buffer.alloc(0)), // Placeholder payload for v3
                 uintCV(intent.maxFeeUSDCx),
                 uintCV(intent.nonce),
                 bufferCV(Buffer.from(intent.signature, 'hex')),
-                principalCV(`${tokenAddress}.${tokenName}`) // token-trait
+                principalCV(process.env.USDCX_TOKEN || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
             ],
             senderKey: this.relayerKey,
             validateWithAbi: false,
@@ -106,33 +107,50 @@ export class PaymasterService {
             postConditionMode: PostConditionMode.Allow,
         };
 
-        const transaction = await makeContractCall(txOptions);
-        const broadcastResponse = await broadcastTransaction({ transaction, network: this.network });
-
-        if ('error' in broadcastResponse) {
-            throw new Error(`Broadcast failed: ${broadcastResponse.error} - ${Reflect.get(broadcastResponse, 'reason')}`);
-        }
-
-        // Save to Database for Dashboard Analytics
         try {
-            await prisma.transaction.create({
-                data: {
-                    txid: broadcastResponse.txid,
-                    type: 'Execute Intent',
-                    userAddress: intent.target,
-                    feeAmount: intent.maxFeeUSDCx.toString(),
-                    status: 'Pending'
-                }
-            });
-        } catch (dbError) {
-            console.error("Failed to save transaction to DB:", dbError);
-            // We don't throw here because the transaction was already broadcast successfully
-        }
+            const transaction = await makeContractCall(txOptions);
+            const txHex = Buffer.from(transaction.serialize()).toString('hex');
+            const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
 
-        return {
-            txid: broadcastResponse.txid,
-            status: "sponsored"
-        };
+            console.log(`Relayer: Broadcasting intent execution tx`, { txid: transaction.txid() });
+
+            const response = await fetch(broadcastUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tx_hex: txHex })
+            });
+
+            const responseText = await response.text();
+            let responseData: any = {};
+            try { responseData = JSON.parse(responseText); } catch (e) { }
+
+            if (response.status !== 200 || responseData.error) {
+                const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
+                throw new Error(`Intent broadcast failed: ${errorMsg}`);
+            }
+
+            const txid = (responseData.txid || responseText).replace(/"/g, '').replace('0x', '');
+
+            // Save to Database
+            try {
+                await prisma.transaction.create({
+                    data: {
+                        txid,
+                        type: 'Intent Sponsorship',
+                        userAddress: intent.target,
+                        feeAmount: intent.maxFeeUSDCx.toString(),
+                        status: 'Pending'
+                    }
+                });
+            } catch (dbError) {
+                console.error("Failed to save transaction to DB:", dbError);
+            }
+
+            return { txid, status: "sponsored" };
+        } catch (error: any) {
+            console.error("Relayer: Intent sponsorship error", error);
+            throw error;
+        }
     }
 
     /**
@@ -173,61 +191,26 @@ export class PaymasterService {
                 fee: RELAYER_FEE.toString()
             });
 
-            // 4. Broadcast via JSON endpoint (more robust than raw binary in some environments)
+            // 4. Broadcast via JSON object (Hiro API requirement)
             const txHexToBroadcast = Buffer.from(signedTx.serialize()).toString('hex');
-
-            console.log(`Relayer: Broadcasting via JSON to ${this.network.client.baseUrl}/v2/transactions`, {
-                hexSnippet: txHexToBroadcast.substring(0, 32) + "...",
-                totalLength: txHexToBroadcast.length
-            });
-
-            // Defensive Check: If we know the relayer is low on STX, we can warn early
-            // (Optional: could add a real check here, for now we let the node fail)
-
             const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
+
             const response = await fetch(broadcastUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(txHexToBroadcast) // Hiro API allows just the quoted hex string or { "tx_hex": ... }
+                body: JSON.stringify({ tx_hex: txHexToBroadcast })
             });
 
-            // If the above doesn't work, we try the object format
-            if (response.status !== 200) {
-                const firstErrorText = await response.text();
-                console.log("Relayer: First broadcast attempt (string) failed, trying JSON object format...", firstErrorText);
-
-                const responseRetry = await fetch(broadcastUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tx_hex: txHexToBroadcast })
-                });
-
-                const responseText = await responseRetry.text();
-                console.log("Relayer: Node response text (retry):", responseText);
-
-                let responseData: any = {};
-                try { responseData = JSON.parse(responseText); } catch (e) { }
-
-                if (responseRetry.status !== 200 || responseData.error) {
-                    const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
-                    throw new Error(`Sponsorship broadcast failed: ${errorMsg}`);
-                }
-
-                const txid = responseData.txid || (responseText.startsWith('"') ? JSON.parse(responseText) : responseText);
-                return { txid, status: "sponsored" };
-            }
-
             const responseText = await response.text();
-            console.log("Relayer: Node response text:", responseText);
-
             let responseData: any = {};
-            try {
-                responseData = JSON.parse(responseText);
-            } catch (e) {
-                console.log("Relayer: Response is not JSON");
+            try { responseData = JSON.parse(responseText); } catch (e) { }
+
+            if (response.status !== 200 || responseData.error) {
+                const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
+                throw new Error(`Broadcast failed: ${errorMsg}`);
             }
 
-            const txid = responseData.txid || (responseText.startsWith('"') ? JSON.parse(responseText) : responseText);
+            const txid = (responseData.txid || responseText).replace(/"/g, '').replace('0x', '');
 
             // Save to Database
             try {

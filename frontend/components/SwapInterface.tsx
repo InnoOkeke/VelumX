@@ -484,86 +484,29 @@ export function SwapInterface() {
       }
 
       if (useGasless) {
-        if (!makeUnsignedContractCall) throw new Error('SDK function makeUnsignedContractCall not available');
-        const publicKey = stacksPublicKey || (window as any).xverse?.stacks?.publicKey || (window as any).LeatherProvider?.publicKey || undefined;
+        const velumx = getVelumXClient();
+        if (!velumx) throw new Error('VelumX SDK client initialization failed');
 
-        // Create transaction options
-        const txOptions: any = {
-          contractAddress,
-          contractName,
+        // Step 1: Prepare Intent (Account Abstraction Model)
+        // Sign an intent describing the swap instead of a full transaction
+        const feeMicro = parseUnits(state.gasFeeUsdcx || '0.2', 6);
+        const nonceValue = Date.now() % 10000; // Placeholder nonce
+
+        const intent = {
+          target: `${contractAddress}.${contractName}`,
           functionName,
-          functionArgs,
-          network,
-          senderAddress: stacksAddress,
-          anchorMode: AnchorMode?.Any || 0,
-          postConditionMode: PostConditionMode?.Deny || 0x02, // Strict mode
-          postConditions, // Use generated post-conditions
-          sponsored: true,
-          fee: 0, // Explicitly set fee to 0 to bypass strict estimation for sponsored txs
+          args: functionArgs,
+          maxFeeUSDCx: feeMicro.toString(),
+          nonce: nonceValue,
         };
 
+        console.log('VelumX Swap: Preparing intent signature', intent);
 
-
-        if (publicKey) {
-          // Fix: Pass publicKey as hex string. The SDK handles string->bytes conversion internally 
-          // and this avoids 'Uint8Array expected' errors due to polyfill mismatches.
-          txOptions.publicKey = typeof publicKey === 'string' ? publicKey : bytesToHex(publicKey);
-        } else {
-          console.error('Gasless Swap Failed: Missing Public Key', {
-            stacksAddress,
-            walletStateKey: publicKey,
-            windowXverseKey: (window as any).xverse?.stacks?.publicKey,
-            windowLeatherKey: (window as any).LeatherProvider?.publicKey
-          });
-          throw new Error('Public key missing. Please disconnect and reconnect your Stacks wallet to enable gasless transactions.');
-        }
-
-        console.log('Stacks Swap Tx Params (Uint8Array Native):', {
-          pkType: txOptions.publicKey?.constructor?.name,
-          fee: txOptions.fee,
-        });
-
-        const tx = await makeUnsignedContractCall(txOptions);
-
-        // Defensive validation: ensure tx and serialize are present
-        if (!tx) {
-          console.error('makeContractCall returned falsy tx', { contractAddress, contractName, functionName, functionArgs });
-          throw new Error('Failed to build transaction');
-        }
-
-        // Force correct transaction version for Testnet (128 / 0x80)
-        // Stacks SDK v7 uses 'transactionVersion' for serialization
-        const txAny = tx as any;
-        txAny.transactionVersion = 128; // Standard Testnet version
-        txAny.version = 128;            // Legacy/Alias
-        if (txAny.chainId !== undefined) {
-          txAny.chainId = 0x80000000; // Testnet ChainId
-        }
-
-        if (typeof (tx as any).serializeBytes !== 'function') {
-          console.error('Transaction object is missing serializeBytes():', tx);
-          throw new Error('Transaction serialization not available');
-        }
-        const serialized = (tx as any).serializeBytes();
-        if (!serialized) {
-          console.error('serializeBytes() returned falsy value', { serialized, tx });
-          throw new Error('Transaction serialization failed');
-        }
-
-        const txHex = bytesToHex(serialized);
-        console.log('Serialized Transaction Hex:', txHex);
-        if (!txHex) throw new Error('Failed to convert transaction to hex');
-
-        // Step 2: Request user signature via wallet RPC (without broadcast)
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
           const win = window as any;
-
-          // Prefer modern specific providers to avoid deprecated generic 'StacksProvider'
           if (win.LeatherProvider) return win.LeatherProvider;
           if (win.XverseProvider) return win.XverseProvider;
-
-          // Robust provider detection (Xverse, Hiro, etc.)
           if (win.xverse?.stacks) return win.xverse.stacks;
           if (win.stx?.request) return win.stx;
           return win.StacksProvider || null;
@@ -574,43 +517,28 @@ export function SwapInterface() {
           throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
         }
 
-        const requestParams = {
-          transaction: txHex,
-          broadcast: false,
-          network: 'testnet',
+        // Request user to sign the intent message
+        const intentMessage = `VelumX Swap Intent\nFrom: ${state.inputAmount} ${state.inputToken?.symbol}\nTo: ${state.outputAmount} ${state.outputToken?.symbol}\nNonce: ${nonceValue}`;
+
+        const signResponse = await provider.request({
+          method: 'stx_signMessage',
+          params: {
+            message: intentMessage,
+            account: stacksAddress,
+          },
+        });
+
+        if (!signResponse || !signResponse.result || !signResponse.result.signature) {
+          throw new Error('Signature rejected or failed');
+        }
+
+        const signedIntent = {
+          ...intent,
+          signature: signResponse.result.signature,
         };
 
-        let response;
-        try {
-          // Try EIP-1193 style request
-          response = await provider.request({
-            method: 'stx_signTransaction',
-            params: requestParams
-          });
-        } catch (error: any) {
-          // Failover for Legacy Leather signature
-          // We must check both top-level code/message and nested JSON-RPC error object
-          const code = error?.code || error?.error?.code;
-          const message = error?.message || error?.error?.message;
-
-          if (code === -32601 || message?.includes('is not supported')) {
-            console.warn('Standard RPC request failed, trying legacy Leather signature...');
-            response = await provider.request('stx_signTransaction', requestParams);
-          } else {
-            throw error;
-          }
-        }
-
-        if (!response || !response.result || !response.result.transaction) {
-          throw new Error('Wallet failed to sign the transaction. Please try again.');
-        }
-
-        const signedTxHex = response.result.transaction;
-
-        // Step 3: send to backend relayer via SDK
-        const velumxClient = getVelumXClient();
-        const result = await velumxClient.submitRawTransaction(signedTxHex);
-
+        // Step 2: Submit to Relayer via VelumX SDK
+        const result = await velumx.submitIntent(signedIntent);
         sponsorData = { success: true, data: { txid: result.txid } };
       } else {
         // Standard flow using modern request API
