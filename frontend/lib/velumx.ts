@@ -22,7 +22,8 @@ export function getVelumXClient() {
         client = new VelumXClient({
             coreApiUrl,
             paymasterUrl,
-            network: config.stacksNetwork
+            network: config.stacksNetwork,
+            apiKey: process.env.NEXT_PUBLIC_VELUMX_API_KEY
         });
 
     }

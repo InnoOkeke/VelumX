@@ -19,9 +19,17 @@ const port = process.env.PORT || 4000;
 };
 
 app.use(cors({
-    origin: ['https://velum-x-ssum.vercel.app', 'http://localhost:3000'],
+    origin: (origin, callback) => {
+        // Allow all origins in development/preview to support Vercel dynamic URLs
+        // and local testing. In production, we can lock this down further if needed.
+        if (!origin || origin.includes('vercel.app') || origin.includes('localhost') || origin.includes('onrender.com')) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Fallback to true for simplicity in this integration phase
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
 }));
 app.use(express.json());
 
