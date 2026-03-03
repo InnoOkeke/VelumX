@@ -20,8 +20,7 @@ const prisma = new PrismaClient();
 // Simple interface matching the SDK
 interface SignedIntent {
     target: string;
-    functionName: string;
-    args: any[];
+    payload: string; // Packed transaction buffer
     maxFeeUSDCx: string | number;
     nonce: string | number;
     signature: string;

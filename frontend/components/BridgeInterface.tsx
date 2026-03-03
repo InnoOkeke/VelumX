@@ -466,29 +466,38 @@ export function BridgeInterface() {
         const velumx = getVelumXClient();
         if (!velumx) throw new Error('VelumX SDK client initialization failed');
 
-        // Step 1: Prepare Intent (Account Abstraction Model)
-        // Sign an intent describing the action instead of a full transaction
+        // Step 1: Discover Smart Wallet and Sync State
+        const { getSmartWalletAddress, getSmartWalletNonce } = await import('@/lib/stacks-wallet');
+
+        let smartWalletAddress = await getSmartWalletAddress(stacksAddress);
+        if (!smartWalletAddress) {
+          throw new Error('No Smart Wallet found for your account. Please register your wallet in the dashboard.');
+        }
+
+        const currentNonce = await getSmartWalletNonce(smartWalletAddress);
+        console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
+
+        // Step 2: Prepare Intent (v4 AA Model)
+        const { listCV, serializeCV } = await import('@stacks/transactions');
         const feeMicro = parseUnits(feeEstimateUsdcx, 6);
-        const nonceValue = Date.now() % 10000; // Placeholder nonce
+
+        // Encode payload (serialized list of arguments)
+        const payloadBuffer = serializeCV(listCV(functionArgs));
+        const payloadHex = Buffer.from(payloadBuffer).toString('hex');
 
         const intent = {
           target: `${contractAddress}.${contractName}`,
-          functionName,
-          args: functionArgs,
+          payload: payloadHex,
           maxFeeUSDCx: feeMicro.toString(),
-          nonce: nonceValue,
+          nonce: currentNonce,
         };
 
-        console.log('VelumX: Preparing intent signature', intent);
+        console.log('VelumX: Preparing SIP-018 intent (v4)', intent);
 
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
           const win = window as any;
-          if (win.LeatherProvider) return win.LeatherProvider;
-          if (win.XverseProvider) return win.XverseProvider;
-          if (win.xverse?.stacks) return win.xverse.stacks;
-          if (win.stx?.request) return win.stx;
-          return win.StacksProvider || null;
+          return win.LeatherProvider || win.XverseProvider || win.xverse?.stacks || win.stx || win.StacksProvider || null;
         };
 
         const provider = getProvider();
@@ -496,16 +505,30 @@ export function BridgeInterface() {
           throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
         }
 
-        // Request user to sign the intent message
-        const intentMessage = `VelumX Withdrawal Intent\nAmount: ${state.amount} USDCx\nRecipient: ${ethereumAddress}\nNonce: ${nonceValue}`;
-
-        const signResponse = await provider.request({
-          method: 'stx_signMessage',
-          params: {
-            message: intentMessage,
-            account: stacksAddress,
-          },
-        });
+        // SIP-018 Structured Data Signing
+        let signResponse;
+        try {
+          signResponse = await provider.request({
+            method: 'stx_signStructuredData',
+            params: {
+              domain: {
+                name: "SGAL-Smart-Wallet",
+                version: "1.0.0",
+                "chain-id": 2147483648, // Testnet
+              },
+              message: {
+                target: intent.target,
+                payload: `0x${payloadHex}`,
+                "max-fee-usdcx": intent.maxFeeUSDCx,
+                nonce: intent.nonce,
+              },
+              account: stacksAddress,
+            },
+          });
+        } catch (error: any) {
+          console.error('SIP-018 signing failed:', error);
+          throw new Error('Transaction signature rejected or not supported. Ensure your wallet is up to date.');
+        }
 
         if (!signResponse || !signResponse.result || !signResponse.result.signature) {
           throw new Error('Signature rejected or failed');
@@ -516,7 +539,7 @@ export function BridgeInterface() {
           signature: signResponse.result.signature,
         };
 
-        // Step 2: Submit to Relayer via VelumX SDK
+        // Step 3: Submit to Relayer via VelumX SDK
         const result = await velumx.submitIntent(signedIntent);
         const finalTxId = result.txid;
 

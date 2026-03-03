@@ -20,8 +20,11 @@ const mnemonic: string = mnemonicMatch[1];
 const network = STACKS_TESTNET;
 
 const contracts = [
-    { name: 'paymaster-module-v3', path: 'contracts/paymaster-module-v3.clar' },
-    { name: 'smart-wallet-v3', path: 'contracts/smart-wallet-v3.clar' },
+    { name: 'sip-010-trait-ft-standard-v5', path: 'contracts/traits/sip-010-trait-ft-standard-v5.clar' },
+    { name: 'paymaster-module-v4', path: 'contracts/paymaster-module-v4.clar' },
+    { name: 'wallet-factory-v3', path: 'contracts/wallet-factory-v3.clar' },
+    { name: 'relayer-registry-v3', path: 'contracts/relayer-registry-v3.clar' },
+    { name: 'smart-wallet-v4', path: 'contracts/smart-wallet-v4.clar' },
 ];
 
 async function deploy() {
@@ -65,10 +68,13 @@ async function deploy() {
             const broadcastResponse = await broadcastTransaction({ transaction, network });
 
             if ('error' in broadcastResponse) {
-                console.error(`Error broadcasting ${contract.name}: ${broadcastResponse.error}`);
-                if (broadcastResponse.reason) console.error(`Reason: ${broadcastResponse.reason}`);
-                // If it's a nonce issue, we might want to refresh, but for now we stop
-                break;
+                if (broadcastResponse.reason === 'ContractAlreadyExists') {
+                    console.log(`Skipping ${contract.name}: Already deployed.`);
+                } else {
+                    console.error(`Error broadcasting ${contract.name}: ${broadcastResponse.error}`);
+                    if (broadcastResponse.reason) console.error(`Reason: ${broadcastResponse.reason}`);
+                    break;
+                }
             } else {
                 console.log(`Successfully broadcasted ${contract.name}. TXID: ${broadcastResponse.txid}`);
                 nonce = nonce + 1n; // Increment nonce for next contract

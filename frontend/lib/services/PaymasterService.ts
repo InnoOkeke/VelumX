@@ -77,7 +77,7 @@ export class PaymasterService {
         };
     }
 
-    async sponsorTransaction(userTransaction: string | any, userAddress: string, estimatedFee: bigint): Promise<string> {
+    async sponsorTransaction(userTransaction: string | any, userAddress: string, estimatedFee: bigint, payload: string = "00"): Promise<string> {
         logger.info('Requesting Sponsorship via VelumX SDK', { userAddress, estimatedFee: estimatedFee.toString() });
 
         try {
@@ -88,13 +88,12 @@ export class PaymasterService {
                 logger.info('Detected Raw Stacks Transaction, using Native Sponsorship');
                 result = await this.velumxClient.submitRawTransaction(userTransaction);
             } else {
-                logger.info('Using Intent-based sponsorship');
+                logger.info('Using Intent-based sponsorship (v4)');
                 result = await this.velumxClient.submitIntent({
                     target: userAddress,
+                    payload: payload.startsWith('0x') ? payload.substring(2) : payload,
                     maxFeeUSDCx: estimatedFee.toString(),
-                    nonce: Date.now(),
-                    functionName: 'execute-gasless',
-                    args: [],
+                    nonce: Date.now(), // Fallback if not provided, though intent signing usually uses smart wallet nonce
                     signature: typeof userTransaction === 'string' ? userTransaction : '0'.repeat(128)
                 });
             }

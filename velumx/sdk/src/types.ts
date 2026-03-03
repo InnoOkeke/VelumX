@@ -2,8 +2,7 @@ import { principalCV, uintCV, stringAsciiCV, tupleCV, someCV, noneCV, ClarityVal
 
 export interface WalletIntent {
     target: string;
-    functionName: string;
-    args: ClarityValue[];
+    payload: string; // Hex string of the encoded transaction
     maxFeeUSDCx: string | number; // uint represented as string or number
     nonce: string | number;
     deadline?: string | number; // Future feature

@@ -6,7 +6,8 @@ import {
     stringAsciiCV,
     noneCV,
     someCV,
-    listCV
+    listCV,
+    bufferCV
 } from '@stacks/transactions';
 import { WalletIntent, SignedIntent } from './types';
 
@@ -32,16 +33,14 @@ export class IntentBuilder {
 
     /**
      * Formats the intent into a Clarity Tuple for signing
-     * Structure matches the Smart Wallet expectation
+     * Structure matches the Smart Wallet v4 expectation
      */
     private formatIntentMessage(intent: WalletIntent) {
         return tupleCV({
             target: principalCV(intent.target),
-            'function-name': stringAsciiCV(intent.functionName),
-            args: listCV(intent.args),
+            payload: bufferCV(Buffer.from(intent.payload.startsWith('0x') ? intent.payload.substring(2) : intent.payload, 'hex')),
             'max-fee-usdcx': uintCV(intent.maxFeeUSDCx),
-            nonce: uintCV(intent.nonce),
-            deadline: intent.deadline ? someCV(uintCV(intent.deadline)) : noneCV()
+            nonce: uintCV(intent.nonce)
         });
     }
 

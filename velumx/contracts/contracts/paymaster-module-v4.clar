@@ -52,7 +52,6 @@
     (treasury-fee (- computed-fee base-cost-usdcx))
   )
     (asserts! (<= computed-fee max-fee-usdcx) ERR-FEE-EXCEEDS-MAX)
-    ;; In v3, we are explicitly settling with the official USDCx if that's what's passed
     (try! (contract-call? token-trait transfer base-cost-usdcx tx-sender relayer none))
     (if (> treasury-fee u0)
         (try! (contract-call? token-trait transfer treasury-fee tx-sender (var-get treasury) none))

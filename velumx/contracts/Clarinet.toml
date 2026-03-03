@@ -5,33 +5,28 @@ authors = []
 telemetry = true
 cache_dir = "./.cache"
 
-[contracts.smart-wallet]
-path = "contracts/smart-wallet.clar"
+[contracts.smart-wallet-v4]
+path = "contracts/smart-wallet-v4.clar"
 clarity_version = 3
 epoch = 3.0
 
-[contracts.sip-010-trait-ft-standard]
-path = "contracts/traits/sip-010-trait-ft-standard.clar"
+[contracts.sip-010-trait-ft-standard-v5]
+path = "contracts/traits/sip-010-trait-ft-standard-v5.clar"
 clarity_version = 2
 epoch = 2.5
 
-[contracts.wallet-factory]
-path = "contracts/wallet-factory.clar"
+[contracts.wallet-factory-v3]
+path = "contracts/wallet-factory-v3.clar"
 clarity_version = 3
 epoch = 3.0
 
-[contracts.paymaster-module]
-path = "contracts/paymaster-module.clar"
+[contracts.paymaster-module-v4]
+path = "contracts/paymaster-module-v4.clar"
 clarity_version = 3
 epoch = 3.0
 
-[contracts.mock-token]
-path = "contracts/mock-token.clar"
-clarity_version = 3
-epoch = 3.0
-
-[contracts.relayer-registry]
-path = "contracts/relayer-registry.clar"
+[contracts.relayer-registry-v3]
+path = "contracts/relayer-registry-v3.clar"
 clarity_version = 3
 epoch = 3.0
 
