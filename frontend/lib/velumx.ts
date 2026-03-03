@@ -15,13 +15,16 @@ export function getVelumXClient() {
             ? 'https://api.mainnet.hiro.so'
             : 'https://api.testnet.hiro.so';
 
-        // Point to the internal /api/paymaster proxy
-        // The SDK will append /estimate and /broadcast
+        // Use the direct relayer URL from environment variables for true integration.
+        // Fallback to the SDK's default hosted relayer if no custom URL is provided.
+        const paymasterUrl = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'https://relayer.velumx.com/api/v1';
+
         client = new VelumXClient({
             coreApiUrl,
-            paymasterUrl: `${window.location.origin}/api/paymaster`,
+            paymasterUrl,
             network: config.stacksNetwork
         });
+
     }
     return client;
 }

@@ -1,0 +1,334 @@
+﻿node : ÔÜá Warning: 
+Next.js inferred your 
+workspace root, but it 
+may not be correct.
+At line:1 char:1
++ node -e "const s=requ
+ire('child_process');tr
+y{const 
+r=s.execSync('npx ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (ÔÜá Warning:    
+ Ne...not be correc    
+t.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+ We detected multiple 
+lockfiles and selected 
+the directory of c:\Use
+rs\IMAOBONG\VelumX\pack
+age-lock.json as the 
+root directory.
+ To silence this 
+warning, set 
+`turbopack.root` in 
+your Next.js config, 
+or consider removing 
+one of the lockfiles 
+if it's not needed.
+   See https://nextjs.o
+rg/docs/app/api-referen
+ce/config/next-config-j
+s/turbopack#root-direct
+ory for more 
+information.
+ Detected additional 
+lockfiles: 
+   * c:\Users\IMAOBONG\
+VelumX\velumx\dashboard
+\package-lock.json
+
+
+-----
+[1m[31mFATAL[39m[0m
+: An unexpected 
+Turbopack error 
+occurred. A panic log 
+has been written to C:\
+Users\IMAOBONG\AppData\
+Local\Temp\next-panic-8
+6a5631e02a53cd084517cbe
+105b45db.log.
+
+To help make Turbopack 
+better, report this 
+error by ]8;;https://g
+ithub.com/vercel/next.j
+s/discussions/new?categ
+ory=turbopack-error-rep
+ort&title=Turbopack%20E
+rror%3A%20Failed%20to%2
+0write%20app%20endpoint
+%20%2Ffavicon.ico%2Frou
+te&body=Turbopack%20ver
+sion%3A%20%6023c46498%6
+0%0ANext.js%20version%3
+A%20%600.0.0%60%0A%0AEr
+ror%20message%3A%0A%60%
+60%60%0AFailed%20to%20w
+rite%20app%20endpoint%2
+0%2Ffavicon.ico%2Froute
+%0A%0ACaused%20by%3A%0A
+-%20The%20packages%20sp
+ecified%20in%20the%20%2
+7transpilePackages%27%2
+0conflict%20with%20the%
+20%27serverExternalPack
+ages%27%3A%20%5B%22%40s
+tacks%2Fauth%22%2C%20%2
+2%40stacks%2Fconnect%22
+%5D%0A%0ADebug%20info%3
+A%0A-%20Execution%20of%
+20get_all_written_entry
+points_with_issues_oper
+ation%20failed%0A-%20Ex
+ecution%20of%20Entrypoi
+ntsOperation%3A%3Anew%2
+0failed%0A-%20Execution
+%20of%20all_entrypoints
+_write_to_disk_operatio
+n%20failed%0A-%20Execut
+ion%20of%20Project%3A%3
+Aemit_all_output_assets
+%20failed%0A-%20Executi
+on%20of%20%2Aemit_asset
+s%20failed%0A-%20Execut
+ion%20of%20all_assets_f
+rom_entries_operation%2
+0failed%0A-%20Execution
+%20of%20%2Aall_assets_f
+rom_entries%20failed%0A
+-%20Execution%20of%20ou
+tput_assets_operation%2
+0failed%0A-%20Execution
+%20of%20%3CAppEndpoint%
+20as%20Endpoint%3E%3A%3
+Aoutput%20failed%0A-%20
+Failed%20to%20write%20a
+pp%20endpoint%20%2Ffavi
+con.ico%2Froute%0A-%20E
+xecution%20of%20AppEndp
+oint%3A%3Aoutput%20fail
+ed%0A-%20Execution%20of
+%20AppEndpoint%3A%3Aapp
+_metadata_entry%20faile
+d%0A-%20Execution%20of%
+20%2Aget_app_metadata_r
+oute_entry%20failed%0A-
+%20Execution%20of%20App
+Project%3A%3Aroute_modu
+le_context%20failed%0A-
+%20Execution%20of%20App
+Project%3A%3Aecmascript
+_client_reference_trans
+ition%20failed%0A-%20Ex
+ecution%20of%20%2ANextE
+cmascriptClientReferenc
+eTransition%3A%3Anew%20
+failed%0A-%20Execution%
+20of%20AppProject%3A%3A
+ssr_transition%20failed
+%0A-%20Execution%20of%2
+0%2AFullContextTransiti
+on%3A%3Anew%20failed%0A
+-%20Execution%20of%20Ap
+pProject%3A%3Assr_modul
+e_context%20failed%0A-%
+20Execution%20of%20AppP
+roject%3A%3Ashared_tran
+sition%20failed%0A-%20E
+xecution%20of%20%2AFull
+ContextTransition%3A%3A
+new%20failed%0A-%20Exec
+ution%20of%20AppProject
+%3A%3Ashared_module_con
+text%20failed%0A-%20Exe
+cution%20of%20%2AModule
+AssetContext%3A%3Anew%2
+0failed%0A-%20Execution
+%20of%20get_server_reso
+lve_options_context%20f
+ailed%0A-%20The%20packa
+ges%20specified%20in%20
+the%20%27transpilePacka
+ges%27%20conflict%20wit
+h%20the%20%27serverExte
+rnalPackages%27%3A%20%5
+B%22%40stacks%2Fauth%22
+%2C%20%22%40stacks%2Fco
+nnect%22%5D%0A%60%60%60
+&labels=Turbopack,Turbo
+pack%20Panic%20Backtrac
+e\clicking 
+here.]8;;\
+-----
+
+
+> Build error occurred
+Error [TurbopackInterna
+lError]: Failed to 
+write app endpoint 
+/favicon.ico/route
+
+Caused by:
+- The packages 
+specified in the 
+'transpilePackages' 
+conflict with the 'serv
+erExternalPackages': 
+["@stacks/auth", 
+"@stacks/connect"]
+
+Debug info:
+- Execution of get_all_
+written_entrypoints_wit
+h_issues_operation 
+failed
+- Execution of Entrypoi
+ntsOperation::new 
+failed
+- Execution of all_entr
+ypoints_write_to_disk_o
+peration failed
+- Execution of Project:
+:emit_all_output_assets
+ failed
+- Execution of 
+*emit_assets failed
+- Execution of all_asse
+ts_from_entries_operati
+on failed
+- Execution of *all_ass
+ets_from_entries failed
+- Execution of output_a
+ssets_operation failed
+- Execution of 
+<AppEndpoint as 
+Endpoint>::output 
+failed
+- Failed to write app 
+endpoint 
+/favicon.ico/route
+- Execution of 
+AppEndpoint::output 
+failed
+- Execution of AppEndpo
+int::app_metadata_entry
+ failed
+- Execution of *get_app
+_metadata_route_entry 
+failed
+- Execution of AppProje
+ct::route_module_contex
+t failed
+- Execution of AppProje
+ct::ecmascript_client_r
+eference_transition 
+failed
+- Execution of *NextEcm
+ascriptClientReferenceT
+ransition::new failed
+- Execution of AppProje
+ct::ssr_transition 
+failed
+- Execution of *FullCon
+textTransition::new 
+failed
+- Execution of AppProje
+ct::ssr_module_context 
+failed
+- Execution of AppProje
+ct::shared_transition 
+failed
+- Execution of *FullCon
+textTransition::new 
+failed
+- Execution of AppProje
+ct::shared_module_conte
+xt failed
+- Execution of *ModuleA
+ssetContext::new failed
+- Execution of get_serv
+er_resolve_options_cont
+ext failed
+- The packages 
+specified in the 
+'transpilePackages' 
+conflict with the 'serv
+erExternalPackages': 
+["@stacks/auth", 
+"@stacks/connect"]
+    at <unknown> (Turbo
+packInternalError: 
+Failed to write app 
+endpoint 
+/favicon.ico/route) {
+  type: 'TurbopackInter
+nalError',
+  location: undefined
+}
+STDOUT: Ôû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+
+STDERR: ÔÜá Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of c:\Users\IMAOBONG\VelumX\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * c:\Users\IMAOBONG\VelumX\velumx\dashboard\package-lock.json
+
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\IMAOBONG\AppData\Local\Temp\next-panic-86a5631e02a53cd084517cbe105b45db.log.
+
+To help make Turbopack better, report this error by ]8;;https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Ffavicon.ico%2Froute&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Ffavicon.ico%2Froute%0A%0ACaused%20by%3A%0A-%20The%20packages%20specified%20in%20the%20%27transpilePackages%27%20conflict%20with%20the%20%27serverExternalPackages%27%3A%20%5B%22%40stacks%2Fauth%22%2C%20%22%40stacks%2Fconnect%22%5D%0A%0ADebug%20info%3A%0A-%20Execution%20of%20get_all_written_entrypoints_with_issues_operation%20failed%0A-%20Execution%20of%20EntrypointsOperation%3A%3Anew%20failed%0A-%20Execution%20of%20all_entrypoints_write_to_disk_operation%20failed%0A-%20Execution%20of%20Project%3A%3Aemit_all_output_assets%20failed%0A-%20Execution%20of%20%2Aemit_assets%20failed%0A-%20Execution%20of%20all_assets_from_entries_operation%20failed%0A-%20Execution%20of%20%2Aall_assets_from_entries%20failed%0A-%20Execution%20of%20output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Ffavicon.ico%2Froute%0A-%20Execution%20of%20AppEndpoint%3A%3Aoutput%20failed%0A-%20Execution%20of%20AppEndpoint%3A%3Aapp_metadata_entry%20failed%0A-%20Execution%20of%20%2Aget_app_metadata_route_entry%20failed%0A-%20Execution%20of%20AppProject%3A%3Aroute_module_context%20failed%0A-%20Execution%20of%20AppProject%3A%3Aecmascript_client_reference_transition%20failed%0A-%20Execution%20of%20%2ANextEcmascriptClientReferenceTransition%3A%3Anew%20failed%0A-%20Execution%20of%20AppProject%3A%3Assr_transition%20failed%0A-%20Execution%20of%20%2AFullContextTransition%3A%3Anew%20failed%0A-%20Execution%20of%20AppProject%3A%3Assr_module_context%20failed%0A-%20Execution%20of%20AppProject%3A%3Ashared_transition%20failed%0A-%20Execution%20of%20%2AFullContextTransition%3A%3Anew%20failed%0A-%20Execution%20of%20AppProject%3A%3Ashared_module_context%20failed%0A-%20Execution%20of%20%2AModuleAssetContext%3A%3Anew%20failed%0A-%20Execution%20of%20get_server_resolve_options_context%20failed%0A-%20The%20packages%20specified%20in%20the%20%27transpilePackages%27%20conflict%20with%20the%20%27serverExternalPackages%27%3A%20%5B%22%40stacks%2Fauth%22%2C%20%22%40stacks%2Fconnect%22%5D%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace\clicking here.]8;;\
+-----
+
+
+> Build error occurred
+Error [TurbopackInternalError]: Failed to write app endpoint /favicon.ico/route
+
+Caused by:
+- The packages specified in the 'transpilePackages' conflict with the 'serverExternalPackages': ["@stacks/auth", "@stacks/connect"]
+
+Debug info:
+- Execution of get_all_written_entrypoints_with_issues_operation failed
+- Execution of EntrypointsOperation::new failed
+- Execution of all_entrypoints_write_to_disk_operation failed
+- Execution of Project::emit_all_output_assets failed
+- Execution of *emit_assets failed
+- Execution of all_assets_from_entries_operation failed
+- Execution of *all_assets_from_entries failed
+- Execution of output_assets_operation failed
+- Execution of <AppEndpoint as Endpoint>::output failed
+- Failed to write app endpoint /favicon.ico/route
+- Execution of AppEndpoint::output failed
+- Execution of AppEndpoint::app_metadata_entry failed
+- Execution of *get_app_metadata_route_entry failed
+- Execution of AppProject::route_module_context failed
+- Execution of AppProject::ecmascript_client_reference_transition failed
+- Execution of *NextEcmascriptClientReferenceTransition::new failed
+- Execution of AppProject::ssr_transition failed
+- Execution of *FullContextTransition::new failed
+- Execution of AppProject::ssr_module_context failed
+- Execution of AppProject::shared_transition failed
+- Execution of *FullContextTransition::new failed
+- Execution of AppProject::shared_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_server_resolve_options_context failed
+- The packages specified in the 'transpilePackages' conflict with the 'serverExternalPackages': ["@stacks/auth", "@stacks/connect"]
+    at <unknown> (TurbopackInternalError: Failed to write app endpoint /favicon.ico/route) {
+  type: 'TurbopackInternalError',
+  location: undefined
+}
+

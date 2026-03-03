@@ -1,31 +1,35 @@
 'use client';
 
-import React, { useState, useEffect, ReactNode } from 'react';
-import { AppConfig, UserSession, showConnect } from '@stacks/connect';
+import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { WalletContext } from './WalletContext';
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [userData, setUserData] = useState<any | null>(null);
     const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
-    const [userSession, setUserSession] = useState<UserSession | null>(null);
+    const [userSession, setUserSession] = useState<any | null>(null);
 
     useEffect(() => {
-        const appConfig = new AppConfig(['store_write', 'publish_data']);
-        const session = new UserSession({ appConfig });
-        setUserSession(session);
+        // Lazy-load @stacks/connect at runtime to avoid Turbopack
+        // module factory errors during SSR/build
+        import('@stacks/connect').then(({ AppConfig, UserSession }) => {
+            const appConfig = new AppConfig(['store_write', 'publish_data']);
+            const session = new UserSession({ appConfig });
+            setUserSession(session);
 
-        if (session.isUserSignedIn()) {
-            setUserData(session.loadUserData());
-        }
+            if (session.isUserSignedIn()) {
+                setUserData(session.loadUserData());
+            }
+        });
     }, []);
 
-    const login = async () => {
+    const login = useCallback(async () => {
         if (!userSession) return;
 
         console.log("WalletProvider: Login triggered.");
+        const { showConnect } = await import('@stacks/connect');
         showConnect({
             appDetails: {
-                name: 'SGAL Dashboard',
+                name: 'VelumX Dashboard',
                 icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
             },
             userSession,
@@ -37,13 +41,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 console.log("WalletProvider: Authentication cancelled.");
             }
         });
-    };
+    }, [userSession]);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         if (!userSession) return;
         userSession.signUserOut();
         setUserData(null);
-    };
+    }, [userSession]);
 
     const stxAddress = network === 'testnet'
         ? userData?.profile?.stxAddress?.testnet

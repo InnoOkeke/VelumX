@@ -126,28 +126,23 @@ export function BridgeInterface() {
     if (!state.gaslessMode || state.direction !== 'stacks-to-eth') return;
 
     try {
-      const response = await fetch(`${config.backendUrl}/api/paymaster/estimate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estimatedGasInStx: '100000', // Estimated gas cost in microSTX
-        }),
+      const velumxClient = getVelumXClient();
+      const estimate = await velumxClient.estimateFee({
+        estimatedGas: 100000 // Standard estimate for withdrawal
       });
 
-      const data = await response.json();
-      if (data.success) {
-        setState(prev => ({
-          ...prev,
-          feeEstimate: {
-            stx: formatUnits(BigInt(data.data.gasInStx), 6),
-            usdcx: formatUnits(BigInt(data.data.gasInUsdcx), 6),
-          },
-        }));
-      }
+      setState(prev => ({
+        ...prev,
+        feeEstimate: {
+          stx: formatUnits(BigInt(estimate.estimatedGas), 6), // In microSTX
+          usdcx: formatUnits(BigInt(estimate.maxFeeUSDCx), 6),
+        },
+      }));
     } catch (error) {
-      console.error('Failed to fetch fee estimate:', error);
+      console.error('Failed to fetch fee estimate via VelumX SDK:', error);
     }
   };
+
 
   // Fetch fee estimate when gasless mode, direction, or connection changes
   useEffect(() => {
