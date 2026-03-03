@@ -185,13 +185,20 @@ export class PaymasterService {
                 body: txRaw
             });
 
-            const responseData: any = await response.json();
-            console.log("Relayer: Node response raw:", responseData);
+            const responseText = await response.text();
+            console.log("Relayer: Node response text:", responseText);
 
-            if (response.status !== 200 || responseData.error) {
-                const errorMsg = responseData.error || responseData.message || 'Unknown node error';
+            let responseData: any = {};
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (e) {
+                console.log("Relayer: Response is not JSON");
+            }
+
+            if (response.status !== 200 || responseData.error || (typeof responseData === 'string' && responseData.includes('error'))) {
+                const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
                 const reason = responseData.reason || 'No reason provided';
-                console.error("Relayer Broadcast Failure (Raw):", { status: response.status, errorMsg, reason, data: responseData });
+                console.error("Relayer Broadcast Failure (Raw):", { status: response.status, errorMsg, reason, text: responseText });
 
                 // Special case for common STX errors
                 if (errorMsg.includes('ConflictingNonce')) {
@@ -204,7 +211,7 @@ export class PaymasterService {
                 throw new Error(`Sponsorship broadcast failed: ${errorMsg} (${reason})`);
             }
 
-            const txid = responseData.txid || ('0x' + responseData); // Some nodes return just the txid string
+            const txid = responseData.txid || (responseText.startsWith('"') ? JSON.parse(responseText) : responseText);
 
             // Save to Database
             try {
