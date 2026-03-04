@@ -23,9 +23,12 @@ export async function getSmartWalletAddress(ownerAddress: string): Promise<strin
 
     try {
         const result = await fetchCallReadOnlyFunction(options);
-        if (result.type === 9) { // Optional Some
-            const value = result.value;
-            return cvToString(value);
+        console.log('VelumX Smart Wallet Fetch Result:', result);
+        if (result.type === 'some' || result.type === 'optionalSome' || result.type === 9) {
+            const value = result.value || (result as any).data;
+            const address = cvToString(value);
+            console.log('VelumX Smart Wallet Address resolved to:', address);
+            return address;
         }
         return null;
     } catch (error) {
@@ -54,8 +57,8 @@ export async function getSmartWalletNonce(walletAddress: string): Promise<number
 
     try {
         const result = await fetchCallReadOnlyFunction(options);
-        if (result.type === 10) { // Response Ok
-            const value = result.value;
+        if (result.type === 'ok' || result.type === 'responseOk' || result.type === 10) {
+            const value = result.value || (result as any).data;
             return Number((value as any).value || value);
         }
         return 0;
