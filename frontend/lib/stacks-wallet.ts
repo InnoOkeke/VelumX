@@ -8,7 +8,7 @@ import { getConfig } from './config';
 export async function getSmartWalletAddress(ownerAddress: string): Promise<string | null> {
     const config = getConfig();
     const network = await getNetworkInstance();
-    const { callReadOnlyFunction } = await getStacksTransactions();
+    const { fetchCallReadOnlyFunction } = await getStacksTransactions();
 
     const [contractAddress, contractName] = config.stacksWalletFactoryAddress.split('.');
 
@@ -22,7 +22,7 @@ export async function getSmartWalletAddress(ownerAddress: string): Promise<strin
     };
 
     try {
-        const result = await callReadOnlyFunction(options);
+        const result = await fetchCallReadOnlyFunction(options);
         if (result.type === 9) { // Optional Some
             const value = result.value;
             return cvToString(value);
@@ -39,7 +39,7 @@ export async function getSmartWalletAddress(ownerAddress: string): Promise<strin
  */
 export async function getSmartWalletNonce(walletAddress: string): Promise<number> {
     const network = await getNetworkInstance();
-    const { callReadOnlyFunction } = await getStacksTransactions();
+    const { fetchCallReadOnlyFunction } = await getStacksTransactions();
 
     const [contractAddress, contractName] = walletAddress.split('.');
 
@@ -53,7 +53,7 @@ export async function getSmartWalletNonce(walletAddress: string): Promise<number
     };
 
     try {
-        const result = await callReadOnlyFunction(options);
+        const result = await fetchCallReadOnlyFunction(options);
         if (result.type === 10) { // Response Ok
             const value = result.value;
             return Number((value as any).value || value);
