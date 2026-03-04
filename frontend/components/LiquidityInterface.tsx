@@ -10,7 +10,7 @@ import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
 import { Plus, Minus, Loader2, Info, Search, X, BarChart3, Settings, Droplets, Zap, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
-import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '../lib/stacks-loader';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '../lib/stacks-loader';
 import { PoolAnalytics as PoolAnalyticsComp } from './PoolAnalytics';
 import { PositionDashboard } from './PositionDashboard';
 import { AddLiquidityForm } from './ui/AddLiquidityForm';
@@ -448,7 +448,7 @@ export function LiquidityInterface() {
           Cl.principal(a),
           Cl.principal(b),
         ],
-        network: new networkModule.StacksTestnet(),
+        network: await getNetworkInstance(),
         senderAddress: stacksAddress,
       });
 
@@ -474,7 +474,7 @@ export function LiquidityInterface() {
             Cl.principal(b),
             Cl.principal(stacksAddress),
           ],
-          network: new networkModule.StacksTestnet(),
+          network: await getNetworkInstance(),
           senderAddress: stacksAddress,
         });
 
@@ -534,7 +534,7 @@ export function LiquidityInterface() {
           transactions.Cl.principal(state.tokenA.address),
           transactions.Cl.principal(state.tokenB.address),
         ],
-        network: new networkModule.StacksTestnet(),
+        network: await getNetworkInstance(),
         senderAddress: stacksAddress || contractAddress,
       });
 
@@ -729,7 +729,7 @@ export function LiquidityInterface() {
           Cl.principal(a),
           Cl.principal(b),
         ],
-        network: new networkModule.StacksTestnet(),
+        network: await getNetworkInstance(),
         senderAddress: stacksAddress,
       });
 

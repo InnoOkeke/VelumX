@@ -10,7 +10,7 @@ import { useWallet } from '@/lib/hooks/useWallet';
 import { useConfig, getConfig } from '@/lib/config';
 import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
-import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect } from '@/lib/stacks-loader';
+import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
 import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
 import { getVelumXClient } from '@/lib/velumx';
 import { TokenInput } from './ui/TokenInput';
@@ -271,46 +271,7 @@ export function SwapInterface() {
 
       if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
 
-      // Use StacksTestnet class if available to ensure correct internal defaults
-      let network;
-      try {
-        if (networkModule.StacksTestnet) {
-          network = new networkModule.StacksTestnet();
-          // Override URLs
-          network.client = {
-            baseUrl: 'https://api.testnet.hiro.so',
-            fetch: (url: any, init: any) => fetch(url, init),
-          };
-          network.bnsLookupUrl = 'https://api.testnet.hiro.so';
-          // Force Testnet version
-          network.transactionVersion = 128;
-          network.version = 128;
-        }
-      } catch (e) {
-        console.warn('Failed to instantiate StacksTestnet, using fallback', e);
-      }
-
-      if (!network) {
-        // Fallback: Verified StacksNetwork interface from @stacks/network v7.3.1
-        network = {
-          chainId: 0x80000000,
-          transactionVersion: 128, // 0x80 (Testnet)
-          peerNetworkId: 0x80000000,
-          magicBytes: 'T2',
-          bootAddress: 'ST3NBRSFKX0GM5NPS696X053153116C97F09804',
-          addressVersion: {
-            singleSig: 26, // 'P'
-            multiSig: 21,  // 'M'
-          },
-          client: {
-            baseUrl: 'https://api.testnet.hiro.so',
-            fetch: (url: any, init: any) => fetch(url, init),
-          },
-          isMainnet: () => false,
-          version: 128,
-          bnsLookupUrl: 'https://api.testnet.hiro.so',
-        };
-      }
+      const network = await getNetworkInstance();
 
       console.log('Network Config Enforced:', {
         version: network.version,

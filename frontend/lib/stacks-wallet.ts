@@ -1,5 +1,5 @@
 import { Cl, cvToString, ReadOnlyFunctionOptions } from '@stacks/transactions';
-import { getStacksNetwork, getStacksTransactions } from './stacks-loader';
+import { getNetworkInstance, getStacksTransactions } from './stacks-loader';
 import { getConfig } from './config';
 
 /**
@@ -7,7 +7,7 @@ import { getConfig } from './config';
  */
 export async function getSmartWalletAddress(ownerAddress: string): Promise<string | null> {
     const config = getConfig();
-    const network = await getStacksNetwork(); // Loader is async
+    const network = await getNetworkInstance();
     const { callReadOnlyFunction } = await getStacksTransactions();
 
     const [contractAddress, contractName] = config.stacksWalletFactoryAddress.split('.');
@@ -38,7 +38,7 @@ export async function getSmartWalletAddress(ownerAddress: string): Promise<strin
  * Fetches the current nonce for a smart wallet
  */
 export async function getSmartWalletNonce(walletAddress: string): Promise<number> {
-    const network = await getStacksNetwork();
+    const network = await getNetworkInstance();
     const { callReadOnlyFunction } = await getStacksTransactions();
 
     const [contractAddress, contractName] = walletAddress.split('.');

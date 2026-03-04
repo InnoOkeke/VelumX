@@ -104,6 +104,45 @@ export const getStacksNetwork = async (): Promise<any> => {
     }
 };
 
+/**
+ * Robustly instantiates a Stacks Network instance
+ */
+export const getNetworkInstance = async (isMainnet = false): Promise<any> => {
+    const networkModule = await getStacksNetwork();
+    if (!networkModule) return null;
+
+    try {
+        const NetworkClass = isMainnet ? networkModule.StacksMainnet : networkModule.StacksTestnet;
+        const network = new NetworkClass();
+
+        // Standard configuration for VelumX
+        network.client = {
+            baseUrl: isMainnet ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so',
+            fetch: (url: any, init: any) => fetch(url, init),
+        };
+        network.bnsLookupUrl = isMainnet ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so';
+
+        // Versioning (Testnet = 128, Mainnet = 0/1)
+        const version = isMainnet ? 1 : 128;
+        network.transactionVersion = version;
+        network.version = version;
+
+        return network;
+    } catch (e) {
+        console.warn('Failed to instantiate Stacks network, using fallback', e);
+        // Minimal fallback object if class instantiation fails
+        return {
+            chainId: isMainnet ? 0x00000001 : 0x80000000,
+            transactionVersion: isMainnet ? 1 : 128,
+            isMainnet: () => isMainnet,
+            client: {
+                baseUrl: isMainnet ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so',
+                fetch: (url: any, init: any) => fetch(url, init),
+            }
+        };
+    }
+};
+
 // Helper to get @stacks/common safely
 export const getStacksCommon = async (): Promise<any> => {
     if (typeof window === 'undefined') return null;
