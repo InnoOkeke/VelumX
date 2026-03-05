@@ -23,8 +23,8 @@ export async function getSmartWalletAddress(ownerAddress: string): Promise<strin
 
     try {
         const result = await fetchCallReadOnlyFunction(options);
-        console.log('VelumX Smart Wallet Fetch Result:', result);
-        if (result.type === 'some' || result.type === 'optionalSome' || result.type === 9) {
+        console.log('VelumX Smart Wallet Fetch Result:', JSON.stringify(result, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
+        if (result.type === 'some' || result.type === 'optionalSome' || result.type === 9 || result.type === 'optional') {
             const value = result.value || (result as any).data;
             const address = cvToString(value);
             console.log('VelumX Smart Wallet Address resolved to:', address);
