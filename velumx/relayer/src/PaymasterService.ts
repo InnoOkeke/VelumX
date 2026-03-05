@@ -108,27 +108,14 @@ export class PaymasterService {
 
         try {
             const transaction = await makeContractCall(txOptions);
-            const txHex = Buffer.from(transaction.serialize()).toString('hex');
-            const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
+            const response = await broadcastTransaction({ transaction, network: this.network });
 
-            console.log(`Relayer: Broadcasting intent execution tx`, { txid: transaction.txid() });
-
-            const response = await fetch(broadcastUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tx_hex: txHex })
-            });
-
-            const responseText = await response.text();
-            let responseData: any = {};
-            try { responseData = JSON.parse(responseText); } catch (e) { }
-
-            if (response.status !== 200 || responseData.error) {
-                const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
+            if ('error' in response) {
+                const errorMsg = response.reason || (response as any).message || JSON.stringify(response);
                 throw new Error(`Intent broadcast failed: ${errorMsg}`);
             }
 
-            const txid = (responseData.txid || responseText).replace(/"/g, '').replace('0x', '');
+            const txid = response.txid;
 
             // Save to Database
             try {
@@ -190,26 +177,15 @@ export class PaymasterService {
                 fee: RELAYER_FEE.toString()
             });
 
-            // 4. Broadcast via JSON object (Hiro API requirement)
-            const txHexToBroadcast = Buffer.from(signedTx.serialize()).toString('hex');
-            const broadcastUrl = `${this.network.client.baseUrl}/v2/transactions`;
+            // 4. Broadcast using Stacks.js utility
+            const response = await broadcastTransaction({ transaction: signedTx, network: this.network });
 
-            const response = await fetch(broadcastUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tx_hex: txHexToBroadcast })
-            });
-
-            const responseText = await response.text();
-            let responseData: any = {};
-            try { responseData = JSON.parse(responseText); } catch (e) { }
-
-            if (response.status !== 200 || responseData.error) {
-                const errorMsg = responseData.error || responseData.message || responseText || 'Unknown node error';
+            if ('error' in response) {
+                const errorMsg = response.reason || (response as any).message || JSON.stringify(response);
                 throw new Error(`Broadcast failed: ${errorMsg}`);
             }
 
-            const txid = (responseData.txid || responseText).replace(/"/g, '').replace('0x', '');
+            const txid = response.txid;
 
             // Save to Database
             try {
