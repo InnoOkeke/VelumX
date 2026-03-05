@@ -13,6 +13,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
 import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
 import { getVelumXClient } from '@/lib/velumx';
+import { registerSmartWallet } from '@/lib/registration';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -49,6 +50,7 @@ interface SwapState {
   gasFeeUsdcx: string;
   slippage: number;
   showSettings: boolean;
+  isRegistering: boolean;
 }
 
 // Default tokens for testnet
@@ -105,6 +107,7 @@ export function SwapInterface() {
     gasFeeUsdcx: '0.2',
     slippage: 0.5,
     showSettings: false,
+    isRegistering: false,
   });
 
   // Initialize tokens from config
@@ -222,6 +225,26 @@ export function SwapInterface() {
   }, [state.inputToken, state.outputToken, state.inputAmount, state.gaslessMode, fetchFeeEstimate]);
 
 
+
+  const handleRegisterWallet = async () => {
+    if (!stacksAddress) return;
+    setState(prev => ({ ...prev, isRegistering: true, error: null }));
+    try {
+      const result = await registerSmartWallet(stacksAddress);
+      if (result) {
+        setState(prev => ({
+          ...prev,
+          isRegistering: false,
+          success: `Registration submitted! TX: ${result.txid}. Please wait for confirmation.`,
+          error: null
+        }));
+      } else {
+        setState(prev => ({ ...prev, isRegistering: false }));
+      }
+    } catch (error: any) {
+      setState(prev => ({ ...prev, isRegistering: false, error: error.message }));
+    }
+  };
 
   const switchTokens = () => {
     setState(prev => ({
@@ -728,6 +751,14 @@ export function SwapInterface() {
                 await recoverPublicKey();
               }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
                 Verify Wallet (Enable Gasless)
+              </span>
+            ) : state.error?.includes('No Smart Wallet found') ? (
+              <span onClick={(e) => {
+                e.preventDefault();
+                handleRegisterWallet();
+              }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
+                {state.isRegistering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5" />}
+                {state.isRegistering ? 'Registering...' : 'Register Smart Wallet'}
               </span>
             ) : (
               <>
