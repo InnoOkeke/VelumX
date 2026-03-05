@@ -476,7 +476,7 @@ export function SwapInterface() {
 
         let smartWalletAddress = await getSmartWalletAddress(stacksAddress);
         if (!smartWalletAddress) {
-          throw new Error('No Smart Wallet found for your account. Please register your wallet in the dashboard.');
+          throw new Error('No Smart Wallet found. Please click "Register Smart Wallet" below to setup your account.');
         }
 
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
@@ -757,8 +757,8 @@ export function SwapInterface() {
                 e.preventDefault();
                 handleRegisterWallet();
               }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
-                {state.isRegistering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5" />}
-                {state.isRegistering ? 'Registering...' : 'Register Smart Wallet'}
+                {state.isRegistering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5 text-green-400" />}
+                {state.isRegistering ? 'Registering...' : 'Register Smart Wallet (Sponsored)'}
               </span>
             ) : (
               <>

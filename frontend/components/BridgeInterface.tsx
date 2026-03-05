@@ -455,7 +455,7 @@ export function BridgeInterface() {
 
         let smartWalletAddress = await getSmartWalletAddress(stacksAddress);
         if (!smartWalletAddress) {
-          throw new Error('No Smart Wallet found for your account. Please register your wallet in the dashboard.');
+          throw new Error('No Smart Wallet found. Please click the "Register Smart Wallet" button below.');
         }
 
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
