@@ -489,69 +489,31 @@ export function BridgeInterface() {
           throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
         }
 
-        // SIP-018 Structured Data Signing via @stacks/connect
-        // @stacks/connect bundles v6 internally which uses numeric ClarityType enum
-        // Our v7 @stacks/transactions uses string types, so we must patch them
+        // SIP-018 Structured Data Signing
+        // We bypass @stacks/connect because it validates our v7 ClarityValues against its internal v6 types
         const { tupleCV, stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
-        const connectLib = await getStacksConnect() as any;
 
-        // v6 ClarityType numeric values that @stacks/connect expects
-        const CV_TYPE_MAP: Record<string, number> = {
-          'tuple': 12, 'ascii': 13, 'uint': 1, 'int': 0,
-          'principal': 5, 'contractPrincipal': 6, 'standardPrincipal': 5, 'contract': 6,
-          'buffer': 2, 'bool-true': 3, 'bool-false': 4, 'optional': 9,
-          'optionalSome': 9, 'optionalNone': 10, 'list': 11, 'utf8': 14,
-          'responseOk': 7, 'responseErr': 8, 'ok': 7, 'err': 8, 'some': 9, 'none': 10,
-        };
-
-        function patchCVTypes(cv: any): any {
-          if (!cv || typeof cv !== 'object') return cv;
-          if (typeof cv.type === 'string' && cv.type in CV_TYPE_MAP) {
-            cv.type = CV_TYPE_MAP[cv.type];
-          }
-          // Patch nested values
-          if (cv.value && typeof cv.value === 'object' && !ArrayBuffer.isView(cv.value)) {
-            if (cv.value.type !== undefined) {
-              patchCVTypes(cv.value);
-            } else {
-              // Tuple data entries
-              Object.values(cv.value).forEach((v: any) => patchCVTypes(v));
-            }
-          }
-          if (cv.data && typeof cv.data === 'object') {
-            Object.values(cv.data).forEach((v: any) => patchCVTypes(v));
-          }
-          return cv;
-        }
-
-        const domainCV = patchCVTypes(tupleCV({
+        const domainCV = tupleCV({
           name: stringAsciiCV("SGAL-Smart-Wallet"),
           version: stringAsciiCV("1.0.0"),
           "chain-id": uintCV(2147483648),
-        }));
+        });
 
-        const messageCV = patchCVTypes(tupleCV({
+        const messageCV = tupleCV({
           target: principalCV(intent.target),
           payload: bufferCV(common.hexToBytes(payloadHex)),
           "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
           nonce: uintCV(intent.nonce),
-        }));
+        });
+
+        const domainHex = Buffer.from(serializeCV(domainCV)).toString('hex');
+        const messageHex = Buffer.from(serializeCV(messageCV)).toString('hex');
 
         let signResponse: any;
         try {
-          signResponse = await new Promise((resolve, reject) => {
-            connectLib.openStructuredDataSignatureRequestPopup({
-              domain: domainCV,
-              message: messageCV,
-              network,
-              onFinish: (data: any) => {
-                console.log('SIP-018 signature received:', data);
-                resolve(data);
-              },
-              onCancel: () => {
-                reject(new Error('User cancelled the signing request'));
-              },
-            });
+          signResponse = await provider.request('stx_signStructuredMessage', {
+            domain: domainHex,
+            message: messageHex,
           });
         } catch (error: any) {
           console.error('SIP-018 signing failed:', error);
@@ -562,7 +524,7 @@ export function BridgeInterface() {
           throw new Error('Signature rejected or failed');
         }
 
-        // openStructuredDataSignatureRequestPopup returns { signature, publicKey } directly
+        // Handle both Leather ({signature:...}) and raw JSON-RPC format ({result: {signature:...}})
         const signature = signResponse.signature || signResponse.result?.signature;
         if (!signature) {
           throw new Error('No signature returned from wallet');
