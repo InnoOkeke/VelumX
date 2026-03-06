@@ -490,20 +490,22 @@ export function BridgeInterface() {
         }
 
         // SIP-018 Structured Data Signing via @stacks/connect
-        const { Cl: ClSigning } = await import('@stacks/transactions');
+        // Use tupleCV/stringAsciiCV/uintCV (numeric ClarityType) instead of Cl.tuple (string types)
+        // because @stacks/connect validates domain.type === ClarityType.Tuple (numeric)
+        const { tupleCV, stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
         const connectLib = await getStacksConnect() as any;
 
-        const domainCV = ClSigning.tuple({
-          name: ClSigning.stringAscii("SGAL-Smart-Wallet"),
-          version: ClSigning.stringAscii("1.0.0"),
-          "chain-id": ClSigning.uint(2147483648),
+        const domainCV = tupleCV({
+          name: stringAsciiCV("SGAL-Smart-Wallet"),
+          version: stringAsciiCV("1.0.0"),
+          "chain-id": uintCV(2147483648),
         });
 
-        const messageCV = ClSigning.tuple({
-          target: ClSigning.principal(intent.target),
-          payload: ClSigning.buffer(common.hexToBytes(payloadHex)),
-          "max-fee-usdcx": ClSigning.uint(intent.maxFeeUSDCx),
-          nonce: ClSigning.uint(intent.nonce),
+        const messageCV = tupleCV({
+          target: principalCV(intent.target),
+          payload: bufferCV(common.hexToBytes(payloadHex)),
+          "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
+          nonce: uintCV(intent.nonce),
         });
 
         let signResponse: any;
