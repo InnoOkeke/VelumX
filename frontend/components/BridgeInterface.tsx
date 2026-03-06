@@ -489,48 +489,57 @@ export function BridgeInterface() {
           throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
         }
 
-        // SIP-018 Structured Data Signing
-        // Leather/Xverse expect serialized Clarity Value hex for domain and message
-        const { Cl: ClSigning, serializeCV: serializeCVSigning } = await import('@stacks/transactions');
+        // SIP-018 Structured Data Signing via @stacks/connect
+        const { Cl: ClSigning } = await import('@stacks/transactions');
+        const connectLib = await getStacksConnect() as any;
 
-        const domainTuple = ClSigning.tuple({
+        const domainCV = ClSigning.tuple({
           name: ClSigning.stringAscii("SGAL-Smart-Wallet"),
           version: ClSigning.stringAscii("1.0.0"),
           "chain-id": ClSigning.uint(2147483648),
         });
 
-        const messageTuple = ClSigning.tuple({
+        const messageCV = ClSigning.tuple({
           target: ClSigning.principal(intent.target),
           payload: ClSigning.buffer(common.hexToBytes(payloadHex)),
           "max-fee-usdcx": ClSigning.uint(intent.maxFeeUSDCx),
           nonce: ClSigning.uint(intent.nonce),
         });
 
-        const domainHex = Buffer.from(serializeCVSigning(domainTuple)).toString('hex');
-        const messageHex = Buffer.from(serializeCVSigning(messageTuple)).toString('hex');
-
-        let signResponse;
+        let signResponse: any;
         try {
-          signResponse = await provider.request({
-            method: 'stx_signStructuredMessage',
-            params: {
-              domain: domainHex,
-              message: messageHex,
-              network: 'testnet',
-            },
+          signResponse = await new Promise((resolve, reject) => {
+            connectLib.openStructuredDataSignatureRequestPopup({
+              domain: domainCV,
+              message: messageCV,
+              network,
+              onFinish: (data: any) => {
+                console.log('SIP-018 signature received:', data);
+                resolve(data);
+              },
+              onCancel: () => {
+                reject(new Error('User cancelled the signing request'));
+              },
+            });
           });
         } catch (error: any) {
           console.error('SIP-018 signing failed:', error);
           throw new Error('Transaction signature rejected or not supported. Ensure your wallet is up to date.');
         }
 
-        if (!signResponse || !signResponse.result || !signResponse.result.signature) {
+        if (!signResponse) {
           throw new Error('Signature rejected or failed');
+        }
+
+        // openStructuredDataSignatureRequestPopup returns { signature, publicKey } directly
+        const signature = signResponse.signature || signResponse.result?.signature;
+        if (!signature) {
+          throw new Error('No signature returned from wallet');
         }
 
         const signedIntent = {
           ...intent,
-          signature: signResponse.result.signature,
+          signature,
         };
 
         // Step 3: Submit to Relayer via VelumX SDK
