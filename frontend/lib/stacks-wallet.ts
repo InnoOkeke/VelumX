@@ -51,17 +51,37 @@ export async function getSmartWalletNonce(walletAddress: string): Promise<number
         contractName,
         functionName: 'get-nonce',
         functionArgs: [],
-        senderAddress: walletAddress,
+        senderAddress: contractAddress, // Use deployer address as sender for read-only calls
         network,
     };
 
     try {
         const result = await fetchCallReadOnlyFunction(options);
-        if (result.type === 'ok' || result.type === 'responseOk' || result.type === 10) {
-            const value = result.value || (result as any).data;
-            return Number((value as any).value || value);
+        console.log('VelumX Smart Wallet Nonce Raw Result:', JSON.stringify(result, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
+
+        // Extract the nonce value from potentially nested Clarity types
+        // Contract returns: (ok uint) which can be represented as:
+        // { type: 'ok'/'responseOk'/7, value: { type: 'uint'/1, value: bigint|string } }
+        let extracted: any = result;
+
+        // Unwrap ok/response wrapper
+        if (extracted.type === 'ok' || extracted.type === 'responseOk' || extracted.type === 7 || extracted.type === 10) {
+            extracted = extracted.value || (extracted as any).data;
         }
-        return 0;
+
+        // Now extract the uint value
+        if (extracted && typeof extracted === 'object') {
+            // Could be { type: 'uint', value: 0n } or { type: 1, value: '0' }
+            const rawVal = extracted.value !== undefined ? extracted.value : extracted;
+            const parsed = Number(rawVal);
+            console.log('VelumX Smart Wallet Nonce parsed:', parsed);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+
+        // Direct numeric value
+        const directParsed = Number(extracted);
+        console.log('VelumX Smart Wallet Nonce (direct):', directParsed);
+        return isNaN(directParsed) ? 0 : directParsed;
     } catch (error) {
         console.error('Error fetching nonce from smart wallet:', error);
         return 0;
