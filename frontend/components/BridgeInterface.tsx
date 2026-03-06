@@ -490,23 +490,33 @@ export function BridgeInterface() {
         }
 
         // SIP-018 Structured Data Signing
+        // Leather/Xverse expect serialized Clarity Value hex for domain and message
+        const { Cl: ClSigning, serializeCV: serializeCVSigning } = await import('@stacks/transactions');
+
+        const domainTuple = ClSigning.tuple({
+          name: ClSigning.stringAscii("SGAL-Smart-Wallet"),
+          version: ClSigning.stringAscii("1.0.0"),
+          "chain-id": ClSigning.uint(2147483648),
+        });
+
+        const messageTuple = ClSigning.tuple({
+          target: ClSigning.principal(intent.target),
+          payload: ClSigning.buffer(common.hexToBytes(payloadHex)),
+          "max-fee-usdcx": ClSigning.uint(intent.maxFeeUSDCx),
+          nonce: ClSigning.uint(intent.nonce),
+        });
+
+        const domainHex = Buffer.from(serializeCVSigning(domainTuple)).toString('hex');
+        const messageHex = Buffer.from(serializeCVSigning(messageTuple)).toString('hex');
+
         let signResponse;
         try {
           signResponse = await provider.request({
-            method: 'stx_signStructuredData',
+            method: 'stx_signStructuredMessage',
             params: {
-              domain: {
-                name: "SGAL-Smart-Wallet",
-                version: "1.0.0",
-                "chain-id": 2147483648, // Testnet
-              },
-              message: {
-                target: intent.target,
-                payload: `0x${payloadHex}`,
-                "max-fee-usdcx": intent.maxFeeUSDCx,
-                nonce: intent.nonce,
-              },
-              account: stacksAddress,
+              domain: domainHex,
+              message: messageHex,
+              network: 'testnet',
             },
           });
         } catch (error: any) {
