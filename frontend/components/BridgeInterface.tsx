@@ -490,23 +490,52 @@ export function BridgeInterface() {
         }
 
         // SIP-018 Structured Data Signing via @stacks/connect
-        // Use tupleCV/stringAsciiCV/uintCV (numeric ClarityType) instead of Cl.tuple (string types)
-        // because @stacks/connect validates domain.type === ClarityType.Tuple (numeric)
+        // @stacks/connect bundles v6 internally which uses numeric ClarityType enum
+        // Our v7 @stacks/transactions uses string types, so we must patch them
         const { tupleCV, stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
         const connectLib = await getStacksConnect() as any;
 
-        const domainCV = tupleCV({
+        // v6 ClarityType numeric values that @stacks/connect expects
+        const CV_TYPE_MAP: Record<string, number> = {
+          'tuple': 12, 'ascii': 13, 'uint': 1, 'int': 0,
+          'principal': 5, 'contractPrincipal': 6, 'standardPrincipal': 5, 'contract': 6,
+          'buffer': 2, 'bool-true': 3, 'bool-false': 4, 'optional': 9,
+          'optionalSome': 9, 'optionalNone': 10, 'list': 11, 'utf8': 14,
+          'responseOk': 7, 'responseErr': 8, 'ok': 7, 'err': 8, 'some': 9, 'none': 10,
+        };
+
+        function patchCVTypes(cv: any): any {
+          if (!cv || typeof cv !== 'object') return cv;
+          if (typeof cv.type === 'string' && cv.type in CV_TYPE_MAP) {
+            cv.type = CV_TYPE_MAP[cv.type];
+          }
+          // Patch nested values
+          if (cv.value && typeof cv.value === 'object' && !ArrayBuffer.isView(cv.value)) {
+            if (cv.value.type !== undefined) {
+              patchCVTypes(cv.value);
+            } else {
+              // Tuple data entries
+              Object.values(cv.value).forEach((v: any) => patchCVTypes(v));
+            }
+          }
+          if (cv.data && typeof cv.data === 'object') {
+            Object.values(cv.data).forEach((v: any) => patchCVTypes(v));
+          }
+          return cv;
+        }
+
+        const domainCV = patchCVTypes(tupleCV({
           name: stringAsciiCV("SGAL-Smart-Wallet"),
           version: stringAsciiCV("1.0.0"),
           "chain-id": uintCV(2147483648),
-        });
+        }));
 
-        const messageCV = tupleCV({
+        const messageCV = patchCVTypes(tupleCV({
           target: principalCV(intent.target),
           payload: bufferCV(common.hexToBytes(payloadHex)),
           "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
           nonce: uintCV(intent.nonce),
-        });
+        }));
 
         let signResponse: any;
         try {
