@@ -506,8 +506,11 @@ export function BridgeInterface() {
           nonce: uintCV(intent.nonce),
         });
 
-        const domainHex = Buffer.from(serializeCV(domainCV)).toString('hex');
-        const messageHex = Buffer.from(serializeCV(messageCV)).toString('hex');
+        // Leather wallet requires the '0x' prefix to recognize these strings as hex,
+        // otherwise it treats them as ASCII strings and throws 'Cannot recognize Clarity Type: 48'
+        // (48 being the ASCII code for '0').
+        const domainHex = `0x${Buffer.from(serializeCV(domainCV)).toString('hex')}`;
+        const messageHex = `0x${Buffer.from(serializeCV(messageCV)).toString('hex')}`;
 
         let signResponse: any;
         try {
