@@ -93,7 +93,7 @@ export class PaymasterService {
             functionName: 'execute-gasless',
             functionArgs: [
                 principalCV(intent.target),
-                bufferCV(Buffer.alloc(0)), // Placeholder payload for v3
+                bufferCV(Buffer.from(intent.payload, 'hex')), // Actual user signed payload
                 uintCV(intent.maxFeeUSDCx),
                 uintCV(intent.nonce),
                 bufferCV(Buffer.from(intent.signature, 'hex')),
