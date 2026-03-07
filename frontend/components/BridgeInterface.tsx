@@ -506,17 +506,17 @@ export function BridgeInterface() {
           nonce: uintCV(intent.nonce),
         });
 
-        // Leather wallet's stx_signStructuredMessage expects hex-encoded serialized Clarity values
-        // WITHOUT the '0x' prefix. Including '0x' causes the wallet to read byte 0x30 (ASCII '0')
-        // as the Clarity type, triggering: "Cannot recognize Clarity Type: 48"
-        const domainHex = Buffer.from(serializeCV(domainCV)).toString('hex');
-        const messageHex = Buffer.from(serializeCV(messageCV)).toString('hex');
+        // Leather wallet's stx_signStructuredMessage expects raw ClarityValue objects,
+        // not hex-encoded strings. A hex string causes it to read '0x' or the first
+        // hex char (e.g. ASCII '0' = 48) as the Clarity type, throwing an error.
+        // const domainHex = Buffer.from(serializeCV(domainCV)).toString('hex');
+        // const messageHex = Buffer.from(serializeCV(messageCV)).toString('hex');
 
         let signResponse: any;
         try {
           signResponse = await provider.request('stx_signStructuredMessage', {
-            domain: domainHex,
-            message: messageHex,
+            domain: domainCV,
+            message: messageCV,
           });
         } catch (error: any) {
           console.error('SIP-018 signing failed:', error);
