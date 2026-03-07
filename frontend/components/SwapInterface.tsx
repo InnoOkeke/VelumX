@@ -528,15 +528,15 @@ export function SwapInterface() {
           nonce: uintCV(intent.nonce),
         });
 
-        // Leather wallet's stx_signStructuredMessage expects raw ClarityValue objects,
-        // not hex-encoded strings. A hex string causes it to read '0x' or the first
-        // hex char (e.g. ASCII '0' = 48) as the Clarity type, throwing an error.
-        // const domainHex = Buffer.from(serializeCV(domainCV)).toString('hex');
-        // const messageHex = Buffer.from(serializeCV(messageCV)).toString('hex');
+        // We must use the Stacks Connect request API wrapper to ensure proper serialization.
+        // Bypassing it and calling provider.request directly leads to BigInt JSON serialization
+        // errors (Could not serialize message) or hex parsing errors (Clarity Type 48).
+        const connect = await getStacksConnect() as any;
+        if (!connect || !connect.request) throw new Error('Stacks request API not available');
 
         let signResponse: any;
         try {
-          signResponse = await provider.request('stx_signStructuredMessage', {
+          signResponse = await connect.request('stx_signStructuredMessage', {
             domain: domainCV,
             message: messageCV,
           });
