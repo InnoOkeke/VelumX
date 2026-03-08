@@ -482,12 +482,18 @@ export function SwapInterface() {
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
         console.log('VelumX Swap: Detected Smart Wallet', { smartWalletAddress, currentNonce });
 
-        // Step 2: Prepare Intent (v6 AA Model)
-        const { listCV, serializeCV } = await import('@stacks/transactions');
+        // Step 2: Prepare Intent (v7 Audited Model)
+        const { tupleCV, serializeCV } = await import('@stacks/transactions');
         const feeMicro = parseUnits(state.gasFeeUsdcx || '0.2', 6);
 
-        // Encode payload (serialized list of arguments)
-        const payloadBuffer = serializeCV(listCV(functionArgs));
+        // Encode payload as a Tuple for the v7 Smart Wallet Dispatcher
+        const payloadBuffer = serializeCV(tupleCV({
+          tokenIn: Cl.principal(state.inputToken!.address),
+          tokenOut: Cl.principal(state.outputToken!.address),
+          amountIn: Cl.uint(amountInMicro.toString()),
+          minOut: Cl.uint(minAmountOutMicro.toString()),
+          fee: Cl.uint(feeMicro.toString())
+        }));
         const payloadHex = Buffer.from(payloadBuffer).toString('hex');
 
         const intent = {
@@ -497,7 +503,7 @@ export function SwapInterface() {
           nonce: currentNonce,
         };
 
-        console.log('VelumX Swap: Preparing SIP-018 intent (v6)', intent);
+        console.log('VelumX Swap: Preparing SIP-018 intent (v7)', intent);
 
         const getProvider = () => {
           if (typeof window === 'undefined') return null;

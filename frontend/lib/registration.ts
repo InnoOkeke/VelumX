@@ -30,7 +30,7 @@ export async function registerSmartWallet(ownerAddress: string): Promise<{ txid:
             network,
             sponsored: true,
             onFinish: async (data: any) => {
-                console.log('Registration transaction signed:', data);
+                console.log('VelumX: Registration transaction signed (v8 suite):', data);
 
                 try {
                     const velumx = getVelumXClient();

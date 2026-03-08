@@ -390,9 +390,7 @@ export function BridgeInterface() {
       });
 
       const amountInMicroUsdc = parseUnits(state.amount, 6);
-      const recipientBytes = ethereumAddress.startsWith('0x')
-        ? common.hexToBytes(ethereumAddress.substring(2))
-        : common.hexToBytes(ethereumAddress);
+      const recipientBytes = encodeEthereumAddress(ethereumAddress);
 
       if (!recipientBytes || recipientBytes.length === 0) {
         throw new Error('Failed to encode recipient address');
@@ -461,12 +459,17 @@ export function BridgeInterface() {
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
         console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
 
-        // Step 2: Prepare Intent (v6 AA Model)
-        const { listCV, serializeCV } = await import('@stacks/transactions');
+        // Step 2: Prepare Intent (v7 Audited Model)
+        const { tupleCV, serializeCV } = await import('@stacks/transactions');
         const feeMicro = parseUnits(feeEstimateUsdcx, 6);
 
-        // Encode payload (serialized list of arguments)
-        const payloadBuffer = serializeCV(listCV(functionArgs));
+        // Encode payload as a Tuple for the v7 Smart Wallet Dispatcher
+        // Field names must match smart-wallet-v7.clar EXACTLY
+        const payloadBuffer = serializeCV(tupleCV({
+          amount: Cl.uint(amountInMicroUsdc.toString()),
+          fee: Cl.uint(feeMicro.toString()),
+          recipient: Cl.buffer(recipientBytes)
+        }));
         const payloadHex = Buffer.from(payloadBuffer).toString('hex');
 
         const intent = {
@@ -476,7 +479,7 @@ export function BridgeInterface() {
           nonce: currentNonce,
         };
 
-        console.log('VelumX: Preparing SIP-018 intent (v6)', intent);
+        console.log('VelumX: Preparing SIP-018 intent (v7)', intent);
 
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
