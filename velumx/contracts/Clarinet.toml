@@ -5,6 +5,16 @@ authors = []
 telemetry = true
 cache_dir = "./.cache"
 
+[contracts.smart-wallet-v6]
+path = "contracts/smart-wallet-v6.clar"
+clarity_version = 3
+epoch = 3.0
+
+[contracts.smart-wallet-v5]
+path = "contracts/smart-wallet-v5.clar"
+clarity_version = 3
+epoch = 3.0
+
 [contracts.smart-wallet-v4]
 path = "contracts/smart-wallet-v4.clar"
 clarity_version = 3
@@ -17,6 +27,16 @@ epoch = 2.5
 
 [contracts.wallet-factory-v3]
 path = "contracts/wallet-factory-v3.clar"
+clarity_version = 3
+epoch = 3.0
+
+[contracts.paymaster-module-v6]
+path = "contracts/paymaster-module-v6.clar"
+clarity_version = 3
+epoch = 3.0
+
+[contracts.paymaster-module-v5]
+path = "contracts/paymaster-module-v5.clar"
 clarity_version = 3
 epoch = 3.0
 

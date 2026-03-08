@@ -67,6 +67,8 @@
     (try! (settle-fee token-trait u5000 fee-max (var-get treasury)))
     
     ;; Then call the protocol burn
-    (contract-call? 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1 burn amount contract-caller recipient)
+    ;; Protocol burn signature: (burn (amount uint) (nonce-or-fee uint) (recipient (buff 32)))
+    ;; We pass u0 for the second argument as seen in the frontend logic
+    (contract-call? 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1 burn amount u0 recipient)
   )
 )

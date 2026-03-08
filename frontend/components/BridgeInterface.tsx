@@ -461,7 +461,7 @@ export function BridgeInterface() {
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
         console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
 
-        // Step 2: Prepare Intent (v4 AA Model)
+        // Step 2: Prepare Intent (v6 AA Model)
         const { listCV, serializeCV } = await import('@stacks/transactions');
         const feeMicro = parseUnits(feeEstimateUsdcx, 6);
 
@@ -476,7 +476,7 @@ export function BridgeInterface() {
           nonce: currentNonce,
         };
 
-        console.log('VelumX: Preparing SIP-018 intent (v4)', intent);
+        console.log('VelumX: Preparing SIP-018 intent (v6)', intent);
 
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
@@ -542,7 +542,8 @@ export function BridgeInterface() {
         const result = await velumx.submitIntent(signedIntent);
         const finalTxId = result.txid;
 
-        // Submit to monitoring service
+        // Submit to monitoring service (Bypassed: Vercel does not have a Prisma DB attached - Option B)
+        /*
         await fetch(`${config.backendUrl}/api/transactions/monitor`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -561,6 +562,7 @@ export function BridgeInterface() {
             gasFeeInUsdcx: state.feeEstimate?.usdcx,
           }),
         });
+        */
       } else {
         // Standard flow using modern request API
         const connect = await getStacksConnect() as any;
@@ -589,7 +591,8 @@ export function BridgeInterface() {
 
         const finalTxId = response?.result?.txid;
         if (finalTxId) {
-          // Submit to monitoring service
+          // Submit to monitoring service (Bypassed: Vercel does not have a Prisma DB attached - Option B)
+          /*
           await fetch(`${config.backendUrl}/api/transactions/monitor`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -607,6 +610,7 @@ export function BridgeInterface() {
               isGasless: false,
             }),
           });
+          */
         }
       }
 

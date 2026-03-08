@@ -50,15 +50,14 @@
     (asserts! (is-eq nonce-input current-nonce) ERR-INVALID-NONCE)
     (asserts! (verify-sip018-intent message-hash signature) ERR-INVALID-SIGNATURE)
     
-    ;; Settle fee with paymaster-module-v4
-    ;; This will now correctly deduct USDCx from this contract (contract-caller in paymaster)
-    (try! (contract-call? 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v4 settle-fee token-trait u5000 max-fee tx-sender))
+    ;; Settle fee with paymaster-module-v5
+    (try! (contract-call? 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v5 settle-fee token-trait u5000 max-fee tx-sender))
     
     ;; Execution Dispatcher
     ;; If target is the paymaster, we treat this as a specialized bridge withdrawal
-    (if (is-eq target 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v4)
-        (print { event: "v4-bridge-withdrawal-execution", target: target, payload: payload })
-        (print { event: "v4-generic-execution-triggered", target: target, payload: payload })
+    (if (is-eq target 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v5)
+        (print { event: "v5-bridge-withdrawal-execution", target: target, payload: payload })
+        (print { event: "v5-generic-execution-triggered", target: target, payload: payload })
     )
 
     (var-set nonce (+ current-nonce u1))
