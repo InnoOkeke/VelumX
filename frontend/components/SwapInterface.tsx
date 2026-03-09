@@ -534,30 +534,30 @@ export function SwapInterface() {
         });
 
         // We must use the Stacks Connect request API wrapper to ensure proper serialization.
-        // Bypassing it and calling provider.request directly leads to BigInt JSON serialization
-        // errors (Could not serialize message) or hex parsing errors (Clarity Type 48).
         const connect = await getStacksConnect() as any;
-        if (!connect || !connect.request) throw new Error('Stacks request API not available');
+        if (!connect || !connect.showSignStructuredMessage) throw new Error('Stacks request API not available');
 
-        let signResponse: any;
+        let signature: string | undefined;
         try {
-          signResponse = await connect.request('stx_signStructuredMessage', {
-            domain: domainCV,
-            message: messageCV,
+          signature = await new Promise<string>((resolve, reject) => {
+            connect.showSignStructuredMessage({
+              domain: domainCV,
+              message: messageCV,
+              onFinish: (data: any) => {
+                resolve(data.signature || data.result?.signature || data);
+              },
+              onCancel: () => {
+                reject(new Error('User cancelled signature prompt'));
+              }
+            });
           });
         } catch (error: any) {
-          console.error('Swap SIP-018 signing failed:', error);
-          throw new Error('Transaction signature rejected or not supported. Ensure your wallet is up to date.');
+          console.error('SIP-018 signing error or cancellation:', error);
+          throw new Error('Transaction signature rejected or cancelled.');
         }
 
-        if (!signResponse) {
-          throw new Error('Signature rejected or failed');
-        }
-
-        // Handle both Leather ({signature:...}) and raw JSON-RPC format ({result: {signature:...}})
-        const signature = signResponse.signature || signResponse.result?.signature;
-        if (!signature) {
-          throw new Error('No signature returned from wallet');
+        if (!signature || typeof signature !== 'string') {
+          throw new Error('No valid signature returned from wallet');
         }
 
         const signedIntent = {
