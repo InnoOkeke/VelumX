@@ -516,7 +516,7 @@ export function SwapInterface() {
         }
 
         // SIP-018 Structured Data Signing
-        // We bypass @stacks/connect because it validates our v7 ClarityValues against its internal v6 types
+        // We bypass @stacks/connect because it validates our v10 ClarityValues against its internal v6 types
         const { stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
         const signingCommon = await getStacksCommon() as any;
 
