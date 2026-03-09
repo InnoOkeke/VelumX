@@ -465,12 +465,11 @@ export function BridgeInterface() {
 
         // Encode payload as a Tuple for the v7 Smart Wallet Dispatcher
         // Field names must match smart-wallet-v7.clar EXACTLY
-        const payloadBuffer = serializeCV(tupleCV({
+        const payloadHex = serializeCV(tupleCV({
           amount: Cl.uint(amountInMicroUsdc.toString()),
           fee: Cl.uint(feeMicro.toString()),
           recipient: Cl.buffer(recipientBytes)
         }));
-        const payloadHex = Buffer.from(payloadBuffer).toString('hex');
 
         const intent = {
           target: `${contractAddress}.${contractName}`,

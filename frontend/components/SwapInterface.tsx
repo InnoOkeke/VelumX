@@ -487,14 +487,13 @@ export function SwapInterface() {
         const feeMicro = parseUnits(state.gasFeeUsdcx || '0.2', 6);
 
         // Encode payload as a Tuple for the v7 Smart Wallet Dispatcher
-        const payloadBuffer = serializeCV(tupleCV({
+        const payloadHex = serializeCV(tupleCV({
           tokenIn: Cl.principal(state.inputToken!.address),
           tokenOut: Cl.principal(state.outputToken!.address),
           amountIn: Cl.uint(amountInMicro.toString()),
           minOut: Cl.uint(minAmountOutMicro.toString()),
           fee: Cl.uint(feeMicro.toString())
         }));
-        const payloadHex = Buffer.from(payloadBuffer).toString('hex');
 
         const intent = {
           target: `${contractAddress}.${contractName}`,
