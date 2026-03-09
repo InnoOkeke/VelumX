@@ -33,7 +33,7 @@ export class IntentBuilder {
 
     /**
      * Formats the intent into a Clarity Tuple for signing
-     * Structure matches the Smart Wallet v4 expectation
+     * Structure matches the Smart Wallet v10 expectation
      */
     private formatIntentMessage(intent: WalletIntent) {
         return tupleCV({

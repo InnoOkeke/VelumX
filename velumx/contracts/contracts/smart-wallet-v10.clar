@@ -3,7 +3,8 @@
 (define-constant ERR-NOT-AUTHORIZED (err u100))
 (define-constant ERR-INVALID-SIGNATURE (err u101))
 (define-constant ERR-INVALID-NONCE (err u102))
-(define-constant ERR-TX-FAILED (err u103))
+(define-constant ERR-DECODE-FAILED (err u103))
+(define-constant ERR-TX-FAILED (err u104))
 
 (define-data-var wallet-owner principal tx-sender)
 (define-data-var nonce uint u0)
@@ -14,10 +15,6 @@
   version: "1.0.0",
   chain-id: u2147483648
 }))))
-
-(define-private (is-owner)
-  (is-eq tx-sender (var-get wallet-owner))
-)
 
 ;; SIP-018 verification helper
 (define-private (verify-sip018-intent (message-hash (buff 32)) (signature (buff 65)))
@@ -39,7 +36,6 @@
     (token-trait <sip-010-trait>))
   (let (
     (current-nonce (var-get nonce))
-    ;; The message tuple must match EXACTLY what is signed in the SDK (IntentBuilder.ts)
     (message-hash (sha256 (unwrap-panic (to-consensus-buff? {
         target: target,
         payload: payload,
@@ -50,14 +46,23 @@
     (asserts! (is-eq nonce-input current-nonce) ERR-INVALID-NONCE)
     (asserts! (verify-sip018-intent message-hash signature) ERR-INVALID-SIGNATURE)
     
-    ;; Settle fee with paymaster-module-v6
-    (try! (contract-call? 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v6 settle-fee token-trait u5000 max-fee tx-sender))
+    ;; 1. Settle fee FIRST (entry point logic)
+    (try! (contract-call? .paymaster-module-v10 settle-fee token-trait u5000 max-fee tx-sender))
     
-    ;; Execution Dispatcher
-    ;; If target is the paymaster, we treat this as a specialized bridge withdrawal
-    (if (is-eq target 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v6)
-        (print { event: "v6-bridge-withdrawal-execution", target: target, payload: payload })
-        (print { event: "v6-generic-execution-triggered", target: target, payload: payload })
+    ;; 2. Execution Dispatcher
+    ;; ALL branches MUST return same type (response bool uint) or just (ok bool)
+    (try! 
+      (if (is-eq target .paymaster-module-v10)
+          ;; Branch A: Bridge (Response: (response bool uint))
+          (let ((args (unwrap! (from-consensus-buff? { amount: uint, fee: uint, recipient: (buff 32) } payload) ERR-DECODE-FAILED)))
+              (as-contract (contract-call? .paymaster-module-v10 withdraw-gasless (get amount args) (get recipient args)))
+          )
+          ;; Branch B: Fallback (Must also return (response bool uint))
+          (begin
+             (print { event: "v7-generic-execution", target: target, payload: payload })
+             (ok true)
+          )
+      )
     )
 
     (var-set nonce (+ current-nonce u1))

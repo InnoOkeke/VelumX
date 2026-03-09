@@ -61,14 +61,10 @@
   )
 )
 
-(define-public (withdraw-gasless (amount uint) (fee-max uint) (recipient (buff 32)) (token-trait <sip-010-trait>))
+;; withdrawal function called by the smart wallet dispatcher
+(define-public (withdraw-gasless (amount uint) (recipient (buff 32)))
   (begin
-    ;; First settle the fee from the caller
-    (try! (settle-fee token-trait u5000 fee-max (var-get treasury)))
-    
-    ;; Then call the protocol burn
-    ;; Protocol burn signature: (burn (amount uint) (nonce-or-fee uint) (recipient (buff 32)))
-    ;; We pass u0 for the second argument as seen in the frontend logic
+    ;; Fee is already settled by the smart wallet entry point
     (contract-call? 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1 burn amount u0 recipient)
   )
 )

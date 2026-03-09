@@ -85,7 +85,14 @@ export class PaymasterService {
             maxFee: intent.maxFeeUSDCx
         });
 
-        const [contractAddress, contractName] = this.smartWalletContract.split('.');
+        let [contractAddress, contractName] = this.smartWalletContract.split('.');
+        
+        // If relative (e.g. .smart-wallet-v7), derive address from relayer key
+        if (!contractAddress && this.relayerKey) {
+            const { getAddressFromPrivateKey } = await import('@stacks/transactions');
+            const version = process.env.NETWORK === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;
+            contractAddress = getAddressFromPrivateKey(this.relayerKey, version as any);
+        }
 
         const txOptions = {
             contractAddress,

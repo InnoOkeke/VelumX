@@ -5,9 +5,9 @@
 
 (define-public (register-wallet (wallet principal))
   (let ((caller tx-sender))
-    (asserts! (is-none (map-get? user-wallets caller)) ERR-WALLET-EXISTS)
+    ;; Factory v6 allows migration/updates
     (map-set user-wallets caller wallet)
-    (print { event: "wallet-v3-registered", owner: caller, wallet: wallet })
+    (print { event: "wallet-v6-registered", owner: caller, wallet: wallet })
     (ok true)
   )
 )

@@ -21,14 +21,10 @@ const network = STACKS_TESTNET;
 
 const contracts = [
     { name: 'sip-010-trait-ft-standard-v5', path: 'contracts/traits/sip-010-trait-ft-standard-v5.clar' },
-    { name: 'paymaster-module-v4', path: 'contracts/paymaster-module-v4.clar' },
-    { name: 'paymaster-module-v5', path: 'contracts/paymaster-module-v5.clar' },
-    { name: 'paymaster-module-v6', path: 'contracts/paymaster-module-v6.clar' },
-    { name: 'wallet-factory-v3', path: 'contracts/wallet-factory-v3.clar' },
+    { name: 'paymaster-module-v10', path: 'contracts/paymaster-module-v10.clar' },
+    { name: 'wallet-factory-v6', path: 'contracts/wallet-factory-v6.clar' },
     { name: 'relayer-registry-v3', path: 'contracts/relayer-registry-v3.clar' },
-    { name: 'smart-wallet-v4', path: 'contracts/smart-wallet-v4.clar' },
-    { name: 'smart-wallet-v5', path: 'contracts/smart-wallet-v5.clar' },
-    { name: 'smart-wallet-v6', path: 'contracts/smart-wallet-v6.clar' },
+    { name: 'smart-wallet-v10', path: 'contracts/smart-wallet-v10.clar' },
 ];
 
 async function deploy() {
