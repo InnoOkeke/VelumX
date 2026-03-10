@@ -82,7 +82,14 @@ export class FundConsolidator {
           network,
           sponsored: true,
           onFinish: (data: any) => {
-            resolve({ txid: data.txid });
+            console.log('Transfer onFinish data:', data);
+            const txid = data?.txid || data?.txId || data?.result?.txid;
+            if (txid) {
+              resolve({ txid });
+            } else {
+              console.warn('No txid in transfer response:', data);
+              resolve({ txid: 'pending' });
+            }
           },
           onCancel: () => {
             resolve(null);
@@ -139,7 +146,11 @@ export class FundConsolidator {
 
     // Don't wait for confirmation - the transaction will be processed before the bridge tx
     // Just give it a moment to propagate
-    onProgress?.(`Transfer submitted (TX: ${txid.substring(0, 10)}...). Continuing...`);
+    if (txid) {
+      onProgress?.(`Transfer submitted (TX: ${txid.substring(0, 10)}...). Continuing...`);
+    } else {
+      onProgress?.('Transfer submitted. Continuing...');
+    }
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     onProgress?.('Proceeding with transaction...');
