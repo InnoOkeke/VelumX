@@ -7,6 +7,7 @@ import { getStacksTransactions, getStacksConnect, getNetworkInstance } from '../
 import { getConfig } from '../config';
 import { parseUnits, formatUnits } from 'viem';
 import { Cl } from '@stacks/transactions';
+import { getVelumXClient } from '../velumx';
 
 export class FundConsolidator {
   private config = getConfig();
@@ -68,7 +69,7 @@ export class FundConsolidator {
 
       onProgress?.('Waiting for transfer approval...');
 
-      const result = await new Promise<{ txid: string } | null>((resolve, reject) => {
+      const result = await new Promise<{ txid?: string; txRaw?: string } | null>((resolve, reject) => {
         connectLib.openContractCall({
           contractAddress,
           contractName,
@@ -83,13 +84,7 @@ export class FundConsolidator {
           sponsored: true,
           onFinish: (data: any) => {
             console.log('Transfer onFinish data:', data);
-            const txid = data?.txid || data?.txId || data?.result?.txid;
-            if (txid) {
-              resolve({ txid });
-            } else {
-              console.warn('No txid in transfer response:', data);
-              resolve({ txid: 'pending' });
-            }
+            resolve(data);
           },
           onCancel: () => {
             resolve(null);
@@ -101,9 +96,27 @@ export class FundConsolidator {
         throw new Error('Transfer was cancelled');
       }
 
-      onProgress?.('Transfer submitted!');
+      onProgress?.('Broadcasting transfer...');
 
-      return result.txid;
+      // If we have txRaw but no txid, we need to broadcast it
+      if (result.txRaw && !result.txid) {
+        const velumx = getVelumXClient();
+        const broadcastResult = await velumx.submitRawTransaction(result.txRaw);
+        console.log('Transfer broadcast result:', broadcastResult);
+        onProgress?.('Transfer submitted!');
+        return broadcastResult.txid;
+      }
+
+      // Otherwise use the txid from the response
+      const txid = result.txid || (result as any).txId || (result as any).result?.txid;
+      if (txid) {
+        onProgress?.('Transfer submitted!');
+        return txid;
+      }
+
+      console.warn('No txid in transfer response:', result);
+      onProgress?.('Transfer submitted!');
+      return 'pending';
     } catch (error) {
       console.error('Transfer error:', error);
       throw error;
