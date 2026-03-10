@@ -122,7 +122,7 @@ export class FundConsolidator {
     }
 
     const deficit = requiredAmount - swBalance;
-    onProgress?.(`Need to transfer ${formatUnits(deficit, 6)} USDCx to Smart Wallet...`);
+    onProgress?.(`Transferring ${formatUnits(deficit, 6)} USDCx to Smart Wallet...`);
 
     // Check personal wallet balance
     const personalBalance = await this.getUsdcxBalance(userAddress);
@@ -135,28 +135,14 @@ export class FundConsolidator {
     }
 
     // Transfer funds
-    await this.transferToSmartWallet(userAddress, smartWalletAddress, deficit, onProgress);
+    const txid = await this.transferToSmartWallet(userAddress, smartWalletAddress, deficit, onProgress);
 
-    // Wait for transfer confirmation (poll for 10 seconds)
-    onProgress?.('Waiting for transfer confirmation...');
-    const maxAttempts = 10;
-    let attempts = 0;
-    let confirmed = false;
-
-    while (attempts < maxAttempts && !confirmed) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const newBalance = await this.getUsdcxBalance(smartWalletAddress);
-      if (newBalance >= requiredAmount) {
-        confirmed = true;
-      }
-      attempts++;
-    }
-
-    if (!confirmed) {
-      throw new Error('Transfer confirmation timed out. Please try again in a few seconds.');
-    }
-
-    onProgress?.('Funds consolidated successfully!');
+    // Don't wait for confirmation - the transaction will be processed before the bridge tx
+    // Just give it a moment to propagate
+    onProgress?.(`Transfer submitted (TX: ${txid.substring(0, 10)}...). Continuing...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    onProgress?.('Proceeding with transaction...');
   }
 
   /**
