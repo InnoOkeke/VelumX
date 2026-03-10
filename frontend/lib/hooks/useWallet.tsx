@@ -32,6 +32,7 @@ export interface WalletState {
   stacksConnected: boolean;
   stacksWalletType: StacksWalletType | null;
   balances: WalletBalances;
+  smartWalletBalances: WalletBalances;
   isConnecting: boolean;
   isFetchingBalances: boolean;
 }
@@ -83,6 +84,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     stacksConnected: false,
     stacksWalletType: null,
     balances: { eth: '0', usdc: '0', stx: '0', usdcx: '0', vex: '0' },
+    smartWalletBalances: { eth: '0', usdc: '0', stx: '0', usdcx: '0', vex: '0' },
     isConnecting: false,
     isFetchingBalances: false,
   });
@@ -135,51 +137,61 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [config.ethereumUsdcAddress, config.ethereumRpcUrl]);
 
-  // Fetch Stacks balances
+  // Fetch Stacks balances for both personal and smart wallet
   const fetchStacksBalances = useCallback(async (address: string) => {
     if (!address) return;
     try {
       const apiUrl = 'https://api.testnet.hiro.so';
+      
+      // 1. Fetch personal balances
       const response = await fetch(`${apiUrl}/extended/v1/address/${address}/balances`);
+      
+      // 2. Fetch smart wallet balances if possible
+      const { getSmartWalletAddress } = await import('../stacks-wallet');
+      const smartWalletAddress = await getSmartWalletAddress(address);
+      
+      let swResponse = null;
+      if (smartWalletAddress) {
+        swResponse = await fetch(`${apiUrl}/extended/v1/address/${smartWalletAddress}/balances`);
+      }
 
-      let stxBalance = BigInt(0);
-      let usdcxBalance = BigInt(0);
-      let vexBalance = BigInt(0);
-
-      if (response.ok) {
-        const data = await response.json();
-        stxBalance = BigInt(data.stx?.balance || 0);
+      const parseBalances = (data: any) => {
+        const stx = BigInt(data.stx?.balance || 0);
         const fungibleTokens = data.fungible_tokens || {};
         const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksUsdcxAddress));
-        usdcxBalance = usdcxKey ? BigInt(fungibleTokens[usdcxKey].balance) : BigInt(0);
+        const usdcx = usdcxKey ? BigInt(fungibleTokens[usdcxKey].balance) : BigInt(0);
         const vexKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksVexAddress));
-        vexBalance = vexKey ? BigInt(fungibleTokens[vexKey].balance) : BigInt(0);
-      } else {
-        // If 404 or other error, assume new account with 0 balance
-        console.warn(`Stacks balance fetch returned ${response.status} for ${address}, assuming 0 balance`);
+        const vex = vexKey ? BigInt(fungibleTokens[vexKey].balance) : BigInt(0);
+        return { stx, usdcx, vex };
+      };
+
+      let personal = { stx: BigInt(0), usdcx: BigInt(0), vex: BigInt(0) };
+      if (response.ok) {
+        personal = parseBalances(await response.json());
+      }
+
+      let smart = { stx: BigInt(0), usdcx: BigInt(0), vex: BigInt(0) };
+      if (swResponse && swResponse.ok) {
+        smart = parseBalances(await swResponse.json());
       }
 
       setState(prev => ({
         ...prev,
         balances: {
           ...prev.balances,
-          stx: formatUnits(stxBalance, TOKEN_DECIMALS.stx),
-          usdcx: formatUnits(usdcxBalance, TOKEN_DECIMALS.usdcx),
-          vex: formatUnits(vexBalance, TOKEN_DECIMALS.usdcx),
+          stx: formatUnits(personal.stx, TOKEN_DECIMALS.stx),
+          usdcx: formatUnits(personal.usdcx, TOKEN_DECIMALS.usdcx),
+          vex: formatUnits(personal.vex, TOKEN_DECIMALS.usdcx),
         },
+        smartWalletBalances: {
+          ...prev.smartWalletBalances,
+          stx: formatUnits(smart.stx, TOKEN_DECIMALS.stx),
+          usdcx: formatUnits(smart.usdcx, TOKEN_DECIMALS.usdcx),
+          vex: formatUnits(smart.vex, TOKEN_DECIMALS.usdcx),
+        }
       }));
     } catch (error) {
       console.error('Failed to fetch Stacks balances:', error);
-      // Even on error, ensure we don't leave the UI in a broken state
-      setState(prev => ({
-        ...prev,
-        balances: {
-          ...prev.balances,
-          stx: prev.balances.stx || '0',
-          usdcx: prev.balances.usdcx || '0',
-          vex: prev.balances.vex || '0',
-        },
-      }));
     }
   }, [config.stacksUsdcxAddress, config.stacksVexAddress]);
 
@@ -206,7 +218,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Persistence
   useEffect(() => {
-    const { balances, isConnecting, isFetchingBalances, ...toPersist } = state;
+    const { balances, smartWalletBalances, isConnecting, isFetchingBalances, ...toPersist } = state;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
   }, [state]);
 
@@ -346,7 +358,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       stacksAddress: null,
       stacksConnected: false,
       stacksWalletType: null,
-      balances: { ...prev.balances, stx: '0', usdcx: '0' }
+      balances: { ...prev.balances, stx: '0', usdcx: '0' },
+      smartWalletBalances: { ...prev.smartWalletBalances, stx: '0', usdcx: '0' }
     }));
   }, []);
 

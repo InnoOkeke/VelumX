@@ -41,9 +41,11 @@ export function BridgeInterface() {
     stacksConnected,
     ethereumChainId,
     balances,
+    smartWalletBalances, // Added smartWalletBalances
     fetchBalances,
     isFetchingBalances,
     switchEthereumNetwork,
+    connectEthereum, // Added connectEthereum
     stacksPublicKey,
     recoverPublicKey,
   } = useWallet();
@@ -115,9 +117,10 @@ export function BridgeInterface() {
       if (numAmount < MIN_BRIDGE_OUT) {
         return `Minimum withdrawal is ${MIN_BRIDGE_OUT} USDCx (covers bridge fees)`;
       }
-      const usdcxBalance = parseFloat(balances.usdcx);
-      if (numAmount > usdcxBalance) {
-        return 'Insufficient USDCx balance';
+      // Sum of both personal and smart wallet balances for withdrawal check
+      const totalUsdcx = parseFloat(balances.usdcx) + parseFloat(smartWalletBalances.usdcx);
+      if (numAmount > totalUsdcx) {
+        return 'Insufficient total USDCx balance';
       }
     }
 
@@ -453,7 +456,6 @@ export function BridgeInterface() {
         const velumx = getVelumXClient();
         if (!velumx) throw new Error('VelumX SDK client initialization failed');
 
-        // Step 1: Discover Smart Wallet and Sync State
         const { getSmartWalletAddress, getSmartWalletNonce } = await import('@/lib/stacks-wallet');
 
         let smartWalletAddress = await getSmartWalletAddress(stacksAddress);
@@ -461,12 +463,54 @@ export function BridgeInterface() {
           throw new Error('No Smart Wallet found. Please click the "Register Smart Wallet" button below.');
         }
 
+        const feeMicro = parseUnits(feeEstimateUsdcx, 6);
+        const totalNeeded = amountInMicroUsdc + feeMicro;
+        
+        // Step 1: Check if Smart Wallet has funds. If not, transfer from personal.
+        const swBalanceMicro = parseUnits(smartWalletBalances.usdcx, 6);
+        
+        if (swBalanceMicro < totalNeeded) {
+          console.log('Smart Wallet funds insufficient. Initiating transfer from personal address.');
+          
+          // Check if personal has it
+          const personalBalanceMicro = parseUnits(balances.usdcx, 6);
+          if (personalBalanceMicro < (totalNeeded - swBalanceMicro)) {
+             throw new Error(`Insufficient funds. You need ${formatUnits(totalNeeded, 6)} USDCx including fees.`);
+          }
+
+          // Trigger Sponsored Transfer
+          const transferResult = await new Promise<any>((resolve, reject) => {
+            connect.showContractCall({
+              contractAddress: config.stacksUsdcxAddress.split('.')[0],
+              contractName: config.stacksUsdcxAddress.split('.')[1],
+              functionName: 'transfer',
+              functionArgs: [
+                Cl.uint((totalNeeded - swBalanceMicro).toString()),
+                Cl.standardPrincipal(stacksAddress),
+                Cl.standardPrincipal(smartWalletAddress),
+                Cl.none()
+              ],
+              sponsored: true,
+              network: 'testnet',
+              onFinish: (data: any) => resolve(data),
+              onCancel: () => reject(new Error('Transfer to Smart Wallet cancelled'))
+            });
+          });
+
+          console.log('Transfer submitted:', transferResult.txid);
+          setState(prev => ({ 
+            ...prev, 
+            success: `Funds moving to Smart Wallet (TX: ${transferResult.txid}). Please wait a few seconds and try the bridge step!`,
+            isProcessing: false 
+          }));
+          return; // Exit and let user click again or wait
+        }
+
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
         console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
 
-        // Step 2: Prepare Intent (v10 Model)
+        // Step 2: Prepare Intent (v11 Model)
         const { tupleCV, serializeCV } = await import('@stacks/transactions');
-        const feeMicro = parseUnits(feeEstimateUsdcx, 6);
 
         // Encode payload as a Tuple for the v10 Smart Wallet Dispatcher
         // Field names must match smart-wallet-v10.clar EXACTLY
@@ -698,23 +742,44 @@ export function BridgeInterface() {
           backgroundColor: 'var(--bg-surface)'
         }}>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>From</span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Balance: {isFetchingBalances ? (
-                  <Loader2 className="inline w-3 h-3 animate-spin ml-1" />
-                ) : (
-                  <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(sourceBalance).toFixed(4)}</span>
-                )} {sourceToken}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                {state.direction === 'stacks-to-eth' ? 'Wallet Balance' : 'Balance'}
               </span>
-              <button
-                onClick={handleRefreshBalances}
-                disabled={isFetchingBalances}
-                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-                title={`Last updated ${getTimeAgo(lastBalanceUpdate)}`}
-              >
-                <RefreshCw className={`w-3 h-3 ${isFetchingBalances ? 'animate-spin' : ''}`} style={{ color: 'var(--text-secondary)' }} />
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {isFetchingBalances ? (
+                    <Loader2 className="inline w-3 h-3 animate-spin" />
+                  ) : (
+                    <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{parseFloat(sourceBalance).toFixed(4)}</span>
+                  )} {sourceToken}
+                </span>
+                <button
+                  onClick={handleRefreshBalances}
+                  disabled={isFetchingBalances}
+                  className="p-0.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  title={`Last updated ${getTimeAgo(lastBalanceUpdate)}`}
+                >
+                  <RefreshCw className={`w-2.5 h-2.5 ${isFetchingBalances ? 'animate-spin' : ''}`} style={{ color: 'var(--text-secondary)' }} />
+                </button>
+              </div>
+              
+              {state.direction === 'stacks-to-eth' && state.gaslessMode && (
+                <>
+                  <span className="text-[10px] font-bold uppercase tracking-wider mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    Smart Wallet Balance
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {isFetchingBalances ? (
+                      <Loader2 className="inline w-3 h-3 animate-spin" />
+                    ) : (
+                      <span className="font-mono font-semibold text-purple-600 dark:text-purple-400">
+                        {parseFloat(smartWalletBalances.usdcx).toFixed(4)}
+                      </span>
+                    )} USDCx
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -884,21 +949,36 @@ export function BridgeInterface() {
         {/* Bridge Button */}
         <button
           onClick={handleBridge}
-          disabled={!isConnected || state.isProcessing || !state.amount}
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98] light:ghost-button light:text-purple-700"
+          disabled={!isConnected || state.isProcessing || !state.amount || !!validateAmount(state.amount)}
+          className="w-full py-5 rounded-2xl font-bold text-lg transition-all vellum-shadow disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1 active:translate-y-0"
+          style={{
+            background: state.isProcessing ? 'var(--bg-card)' : 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)',
+            color: 'white',
+            border: state.isProcessing ? '1px solid var(--border-color)' : 'none'
+          }}
         >
           {state.isProcessing ? (
-            <>
+            <div className="flex items-center justify-center gap-2">
               <Loader2 className="w-5 h-5 animate-spin" />
-              Processing...
-            </>
+              <span>Processing...</span>
+            </div>
           ) : !isConnected ? (
             'Connect Both Wallets'
           ) : (
-            <>
-              <ArrowDownUp className="w-5 h-5" />
-              Bridge {sourceToken}
-            </>
+            (() => {
+              if (state.direction === 'stacks-to-eth' && state.gaslessMode) {
+                const totalNeeded = state.amount ? parseUnits(state.amount, 6) + parseUnits(state.feeEstimate?.usdcx || '0', 6) : BigInt(0);
+                const swBalance = parseUnits(smartWalletBalances.usdcx, 6);
+                if (state.amount && swBalance < totalNeeded) return '1. Move Funds to Smart Wallet';
+                return '2. Initiate Bridge Out';
+              }
+              return (
+                <div className="flex items-center justify-center gap-2">
+                  <ArrowDownUp className="w-5 h-5" />
+                  <span>Bridge {sourceToken}</span>
+                </div>
+              );
+            })()
           )}
         </button>
 
