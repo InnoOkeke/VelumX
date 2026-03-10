@@ -570,8 +570,6 @@ export function BridgeInterface() {
           nonce: uintCV(intent.nonce),
         });
 
-        // We must use the Stacks Connect request API wrapper to ensure proper serialization.
-        const connect = await getStacksConnect() as any;
         if (!connect || !connect.showSignStructuredMessage) throw new Error('Stacks request API not available');
 
         let signature: string | undefined;
@@ -628,8 +626,6 @@ export function BridgeInterface() {
         });
         */
       } else {
-        // Standard flow using modern request API
-        const connect = await getStacksConnect() as any;
         if (!connect || !connect.request) throw new Error('Stacks request API not available');
 
         console.log('Stacks Bridge Standard Tx Params (request API):', {
