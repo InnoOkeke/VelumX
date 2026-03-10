@@ -17,7 +17,14 @@ import { getStacksTransactions } from '../stacks-loader';
 export async function encodeStacksAddress(address: string): Promise<Hex> {
   const transactions = await getStacksTransactions() as any;
   if (!transactions) throw new Error('Stacks library not available');
-  const stacksAddr = transactions.createAddress(address);
+  
+  // Handle contract principals (e.g., "address.contract-name")
+  // The bridge protocol (circle/xreserve) only supports standard principals (version + hash160)
+  // in its fixed 32-byte recipient field. If a contract principal is provided, 
+  // we must use the base address part.
+  const baseAddress = address.includes('.') ? address.split('.')[0] : address;
+  
+  const stacksAddr = transactions.createAddress(baseAddress);
   const buffer = new Uint8Array(32);
 
   // 11 zero bytes (padding)
