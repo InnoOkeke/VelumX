@@ -15,7 +15,6 @@ import { Shield, ArrowRight, Loader2, Unplug, RefreshCw, ArrowDownUp, Zap, Alert
 import { encodeStacksAddress, bytesToHex, encodeEthereumAddress as encodeEthereumAddressUtil } from '@/lib/utils/address-encoding';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
 import { getVelumXClient } from '@/lib/velumx';
-import { registerSmartWallet } from '@/lib/registration';
 
 type BridgeDirection = 'eth-to-stacks' | 'stacks-to-eth';
 
@@ -340,26 +339,6 @@ export function BridgeInterface() {
     }
   };
 
-  const handleRegisterWallet = async () => {
-    if (!stacksAddress) return;
-    setState(prev => ({ ...prev, isRegistering: true, error: null }));
-    try {
-      const result = await registerSmartWallet(stacksAddress);
-      if (result) {
-        setState(prev => ({
-          ...prev,
-          isRegistering: false,
-          success: `Registration submitted! TX: ${result.txid}. Please wait for confirmation.`,
-          error: null
-        }));
-      } else {
-        setState(prev => ({ ...prev, isRegistering: false }));
-      }
-    } catch (error: any) {
-      setState(prev => ({ ...prev, isRegistering: false, error: error.message }));
-    }
-  };
-
   // Handle Stacks to Ethereum withdrawal
   const handleStacksToEth = async () => {
     if (!ethereumAddress || !stacksAddress) {
@@ -678,21 +657,9 @@ export function BridgeInterface() {
 
         {/* Error Message */}
         {state.error && (
-          <div className="flex flex-col gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-600 dark:text-red-400 font-bold">{state.error}</p>
-            </div>
-            {state.error.includes('No Smart Wallet found') && (
-              <button
-                onClick={handleRegisterWallet}
-                disabled={state.isRegistering}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                {state.isRegistering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                {state.isRegistering ? 'Registering...' : 'Register Smart Wallet Now'}
-              </button>
-            )}
+          <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 dark:text-red-400 font-bold">{state.error}</p>
           </div>
         )}
 

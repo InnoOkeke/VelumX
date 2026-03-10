@@ -1,5 +1,5 @@
 /**
- * Simple Gasless Bridge Helper
+ * Simple Gasless Swap Helper
  * Uses Stacks-native sponsored transactions with simple-paymaster-v1
  */
 
@@ -9,41 +9,43 @@ import { getConfig } from '../config';
 import { parseUnits } from 'viem';
 import { getVelumXClient } from '../velumx';
 
-export interface SimpleGaslessBridgeParams {
+export interface SimpleGaslessSwapParams {
   userAddress: string;
-  amount: string;  // Amount in human-readable format (e.g., "10.5")
-  recipientAddress: string;  // Ethereum address
+  tokenIn: string;  // Token contract address (e.g., "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.token-wstx")
+  tokenOut: string; // Token contract address
+  amountIn: string; // Amount in human-readable format
+  minOut: string;   // Minimum output amount
   onProgress?: (step: string) => void;
 }
 
 /**
- * Execute gasless bridge withdrawal using simple-paymaster
+ * Execute gasless swap using simple-paymaster
  * User pays gas fees in USDCx, relayer sponsors STX
  */
-export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgeParams): Promise<string> {
-  const { userAddress, amount, recipientAddress, onProgress } = params;
+export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams): Promise<string> {
+  const { userAddress, tokenIn, tokenOut, amountIn, minOut, onProgress } = params;
   const config = getConfig();
   const velumx = getVelumXClient();
   
-  // Convert amount to micro units (6 decimals)
-  const amountInMicro = parseUnits(amount, 6);
+  // Convert amounts to micro units (6 decimals)
+  const amountInMicro = parseUnits(amountIn, 6);
+  const minOutMicro = parseUnits(minOut, 6);
   
   // Get fee estimate
   onProgress?.('Calculating fees...');
-  const estimate = await velumx.estimateFee({ estimatedGas: 100000 });
+  const estimate = await velumx.estimateFee({ estimatedGas: 150000 });
   const feeInMicro = BigInt(estimate.maxFeeUSDCx);
   
-  console.log('Simple Bridge Details:', {
-    amount: amountInMicro.toString(),
-    fee: feeInMicro.toString(),
-    recipient: recipientAddress
+  console.log('Simple Swap Details:', {
+    tokenIn,
+    tokenOut,
+    amountIn: amountInMicro.toString(),
+    minOut: minOutMicro.toString(),
+    fee: feeInMicro.toString()
   });
   
-  // Encode Ethereum address to bytes32
-  const recipientBytes = encodeEthereumAddress(recipientAddress);
-  
-  // Get relayer address from config or use default
-  const relayerAddress = 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'; // Relayer address
+  // Get relayer address
+  const relayerAddress = 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P';
   
   onProgress?.('Preparing transaction...');
   
@@ -51,25 +53,27 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   const network = await getNetworkInstance();
   const [contractAddress, contractName] = config.stacksPaymasterAddress.split('.');
   
-  // Call bridge-gasless with sponsored=true
+  // Call swap-gasless with sponsored=true
   const result = await new Promise<{ txid?: string; txRaw?: string } | null>((resolve, reject) => {
     connect.openContractCall({
       contractAddress,
       contractName,
-      functionName: 'bridge-gasless',
+      functionName: 'swap-gasless',
       functionArgs: [
+        Cl.principal(tokenIn),
+        Cl.principal(tokenOut),
         Cl.uint(amountInMicro.toString()),
-        Cl.buffer(recipientBytes),
+        Cl.uint(minOutMicro.toString()),
         Cl.uint(feeInMicro.toString()),
         Cl.principal(relayerAddress),
         Cl.principal(config.stacksUsdcxAddress)
       ],
       network,
-      sponsored: true, // This is the key - Stacks native sponsorship
+      sponsored: true, // Stacks native sponsorship
       postConditionMode: 'allow',
       postConditions: [],
       onFinish: (data: any) => {
-        console.log('Bridge onFinish data:', data);
+        console.log('Swap onFinish data:', data);
         resolve(data);
       },
       onCancel: () => {
@@ -87,18 +91,18 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   // If we have txRaw, broadcast it via relayer
   if (result.txRaw) {
     const broadcastResult = await velumx.submitRawTransaction(result.txRaw);
-    console.log('Bridge broadcast result:', broadcastResult);
+    console.log('Swap broadcast result:', broadcastResult);
     
-    // Save transaction to history
+    // Save transaction to history (using withdrawal type for now as schema doesn't have swap)
     await saveTransactionToHistory({
-      type: 'withdrawal',
+      type: 'withdrawal', // Using withdrawal as placeholder
       sourceTxHash: broadcastResult.txid,
       sourceChain: 'stacks',
-      destinationChain: 'ethereum',
-      amount,
+      destinationChain: 'stacks',
+      amount: amountIn,
       stacksAddress: userAddress,
-      ethereumAddress: recipientAddress,
-      status: 'pending'
+      status: 'pending',
+      currentStep: `swap:${tokenIn.split('.').pop()}->${tokenOut.split('.').pop()}`
     });
     
     return broadcastResult.txid;
@@ -107,16 +111,16 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   // Otherwise use the txid from the response
   const txid = result.txid || (result as any).txId || (result as any).result?.txid;
   if (txid) {
-    // Save transaction to history
+    // Save transaction to history (using withdrawal type for now as schema doesn't have swap)
     await saveTransactionToHistory({
-      type: 'withdrawal',
+      type: 'withdrawal', // Using withdrawal as placeholder
       sourceTxHash: txid,
       sourceChain: 'stacks',
-      destinationChain: 'ethereum',
-      amount,
+      destinationChain: 'stacks',
+      amount: amountIn,
       stacksAddress: userAddress,
-      ethereumAddress: recipientAddress,
-      status: 'pending'
+      status: 'pending',
+      currentStep: `swap:${tokenIn.split('.').pop()}->${tokenOut.split('.').pop()}`
     });
     
     return txid;
@@ -139,23 +143,4 @@ async function saveTransactionToHistory(transaction: any): Promise<void> {
     console.error('Failed to save transaction to history:', error);
     // Don't throw - transaction already succeeded
   }
-}
-
-/**
- * Encode Ethereum address to bytes32 for Stacks contract
- */
-function encodeEthereumAddress(address: string): Uint8Array {
-  // Remove 0x prefix if present
-  const hex = address.startsWith('0x') ? address.slice(2) : address;
-  
-  // Ethereum addresses are 20 bytes, pad to 32 bytes
-  const paddedHex = hex.padStart(64, '0');
-  
-  // Convert to Uint8Array
-  const bytes = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    bytes[i] = parseInt(paddedHex.substring(i * 2, i * 2 + 2), 16);
-  }
-  
-  return bytes;
 }

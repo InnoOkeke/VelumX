@@ -20,24 +20,23 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
-// Define BridgeTransaction type locally
+// Define BridgeTransaction type to match Prisma schema
 interface BridgeTransaction {
   id: string;
-  type: 'deposit' | 'withdrawal' | 'swap' | 'add-liquidity' | 'remove-liquidity';
+  type: 'deposit' | 'withdrawal';
   sourceTxHash: string;
   destinationTxHash?: string;
   sourceChain: string;
   destinationChain: string;
   amount: string;
-  sender: string;
-  recipient: string;
+  stacksAddress: string;
+  ethereumAddress?: string;
   status: string;
-  timestamp: number;
-  inputToken?: string;
-  outputToken?: string;
+  createdAt: Date | number;
+  currentStep?: string;
 }
 
-type FilterType = 'all' | 'deposit' | 'withdrawal' | 'swap' | 'liquidity';
+type FilterType = 'all' | 'deposit' | 'withdrawal';
 type SortType = 'newest' | 'oldest' | 'amount';
 
 export function TransactionHistory() {
@@ -113,17 +112,19 @@ export function TransactionHistory() {
   // Filter transactions
   const filteredTransactions = transactions.filter(tx => {
     if (filter === 'all') return true;
-    if (filter === 'liquidity') return tx.type === 'add-liquidity' || tx.type === 'remove-liquidity';
     return tx.type === filter;
   });
 
   // Sort transactions
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    const aTime = typeof a.createdAt === 'number' ? a.createdAt : new Date(a.createdAt).getTime();
+    const bTime = typeof b.createdAt === 'number' ? b.createdAt : new Date(b.createdAt).getTime();
+    
     switch (sort) {
       case 'newest':
-        return b.timestamp - a.timestamp;
+        return bTime - aTime;
       case 'oldest':
-        return a.timestamp - b.timestamp;
+        return aTime - bTime;
       case 'amount':
         return parseFloat(b.amount) - parseFloat(a.amount);
       default:
@@ -209,7 +210,7 @@ export function TransactionHistory() {
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Filter:</span>
           </div>
           <div className="flex gap-2">
-            {(['all', 'deposit', 'withdrawal', 'swap', 'liquidity'] as FilterType[]).map((f) => (
+            {(['all', 'deposit', 'withdrawal'] as FilterType[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -294,29 +295,27 @@ export function TransactionHistory() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          {tx.type === 'deposit' ? 'Bridge In' :
-                            tx.type === 'withdrawal' ? 'Bridge Out' :
-                              tx.type === 'swap' ? 'Swap' :
-                                tx.type === 'add-liquidity' ? 'Add Liquidity' : 'Remove Liquidity'}
+                          {tx.type === 'deposit' ? 'Bridge In' : 
+                           tx.currentStep?.startsWith('swap:') ? 'Swap' : 'Bridge Out'}
                         </span>
                         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                           {tx.type === 'deposit' ? 'ETH → STX' :
-                            tx.type === 'withdrawal' ? 'STX → ETH' :
-                              tx.type === 'swap' ? `${tx.inputToken} → ${tx.outputToken}` :
-                                tx.type === 'add-liquidity' ? `${tx.inputToken}/${tx.outputToken}` : 'LP Token'}
+                           tx.currentStep?.startsWith('swap:') ? tx.currentStep.replace('swap:', '') : 'STX → ETH'}
                         </span>
                       </div>
                       <div className="text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
                         <div>
-                          From: <span className="font-mono">{formatAddress(tx.sender)}</span>
+                          Stacks: <span className="font-mono">{formatAddress(tx.stacksAddress)}</span>
                         </div>
-                        <div>
-                          To: <span className="font-mono">{formatAddress(tx.recipient)}</span>
-                        </div>
+                        {tx.ethereumAddress && (
+                          <div>
+                            Ethereum: <span className="font-mono">{formatAddress(tx.ethereumAddress)}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
-                          <span>{new Date(tx.timestamp).toLocaleDateString()}</span>
+                          <span>{new Date(tx.createdAt).toLocaleDateString()}</span>
                           <span style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>•</span>
-                          <span>{new Date(tx.timestamp).toLocaleTimeString()}</span>
+                          <span>{new Date(tx.createdAt).toLocaleTimeString()}</span>
                         </div>
                       </div>
                     </div>
@@ -325,10 +324,7 @@ export function TransactionHistory() {
                   {/* Right Side */}
                   <div className="text-right">
                     <div className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                      {tx.amount} {tx.type === 'deposit' ? 'USDC' :
-                        tx.type === 'withdrawal' ? 'USDCx' :
-                          tx.type === 'swap' ? tx.inputToken :
-                            tx.type === 'add-liquidity' ? tx.inputToken : 'LP'}
+                      {tx.amount} {tx.type === 'deposit' ? 'USDC' : 'USDCx'}
                     </div>
                     <div className={`text-sm font-semibold capitalize ${getStatusColor(tx.status)}`}>
                       {tx.status.replace('_', ' ')}

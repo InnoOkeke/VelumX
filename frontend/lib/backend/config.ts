@@ -21,7 +21,6 @@ export interface BackendConfig {
     attestationPollInterval: number;
     maxRetries: number;
     transactionTimeout: number;
-    paymasterMarkup: number;
     maxRequestsPerMinute: number;
     velumxRelayerUrl: string;
     velumxApiKey: string;
@@ -79,7 +78,7 @@ export function getBackendConfig(): BackendConfig {
         ethereumXReserveAddress: process.env.ETHEREUM_XRESERVE_ADDRESS || '0x008888878f94C0d87defdf0B07f46B93C1934442',
         stacksUsdcxAddress: process.env.STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
         stacksUsdcxProtocolAddress: process.env.STACKS_USDCX_PROTOCOL_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1',
-        stacksPaymasterAddress: process.env.STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-v9',
+        stacksPaymasterAddress: process.env.STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1',
         stacksSwapContractAddress: process.env.STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx',
         stacksVexAddress: process.env.STACKS_VEX_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
         circleApiKey: process.env.CIRCLE_API_KEY,
@@ -90,7 +89,6 @@ export function getBackendConfig(): BackendConfig {
         attestationPollInterval: parseNumber(process.env.ATTESTATION_POLL_INTERVAL, 30000),
         maxRetries: parseNumber(process.env.MAX_RETRIES, 3),
         transactionTimeout: parseNumber(process.env.TRANSACTION_TIMEOUT, 3600000),
-        paymasterMarkup: parseNumber(process.env.PAYMASTER_MARKUP, 5),
         maxRequestsPerMinute: parseNumber(process.env.MAX_REQUESTS_PER_MINUTE, 100),
         velumxRelayerUrl: process.env.VELUMX_RELAYER_URL || placeholder,
         velumxApiKey: process.env.VELUMX_API_KEY || '',

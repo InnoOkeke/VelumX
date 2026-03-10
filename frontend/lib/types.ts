@@ -20,9 +20,6 @@ export interface FrontendConfig {
   stacksUsdcxAddress: string;
   stacksUsdcxProtocolAddress: string;
   stacksPaymasterAddress: string;
-  stacksSmartWalletAddress: string;
-  stacksWalletFactoryAddress: string;
-  stacksRelayerRegistryAddress: string;
   stacksSwapContractAddress: string;
   stacksVexAddress: string;
 

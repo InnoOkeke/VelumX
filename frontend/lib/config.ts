@@ -24,16 +24,11 @@ export function getConfig(): FrontendConfig {
     stacksUsdcxAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
     stacksUsdcxProtocolAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1',
     
-    // Simple Paymaster (New Stacks-Native Approach)
+    // Simple Paymaster (Stacks-Native Sponsored Transactions)
     stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1',
     
-    // Legacy Smart Wallet contracts (deprecated - kept for backward compatibility)
-    stacksSmartWalletAddress: process.env.NEXT_PUBLIC_STACKS_SMART_WALLET_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.smart-wallet-v11',
-    stacksWalletFactoryAddress: process.env.NEXT_PUBLIC_STACKS_WALLET_FACTORY_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.wallet-factory-v8',
-    stacksRelayerRegistryAddress: process.env.NEXT_PUBLIC_STACKS_RELAYER_REGISTRY_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.relayer-registry-v3',
-    
     // DEX contracts
-    stacksSwapContractAddress: process.env.NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v3',
+    stacksSwapContractAddress: process.env.NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx',
     stacksVexAddress: process.env.NEXT_PUBLIC_STACKS_VEX_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
 
     // Domain IDs (Stacks USDCx bridging)

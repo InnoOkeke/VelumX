@@ -13,7 +13,6 @@ import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
 import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
 import { getVelumXClient } from '@/lib/velumx';
-import { registerSmartWallet } from '@/lib/registration';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -226,25 +225,6 @@ export function SwapInterface() {
 
 
 
-  const handleRegisterWallet = async () => {
-    if (!stacksAddress) return;
-    setState(prev => ({ ...prev, isRegistering: true, error: null }));
-    try {
-      const result = await registerSmartWallet(stacksAddress);
-      if (result) {
-        setState(prev => ({
-          ...prev,
-          isRegistering: false,
-          success: `Registration submitted! TX: ${result.txid}. Please wait for confirmation.`,
-          error: null
-        }));
-      } else {
-        setState(prev => ({ ...prev, isRegistering: false }));
-      }
-    } catch (error: any) {
-      setState(prev => ({ ...prev, isRegistering: false, error: error.message }));
-    }
-  };
 
   const switchTokens = () => {
     setState(prev => ({
@@ -279,25 +259,17 @@ export function SwapInterface() {
       const useGasless = state.gaslessMode;
 
       if (useGasless) {
-        // Use the seamless gasless service
-        const { executeGaslessSwap } = await import('@/lib/helpers/gasless-swap');
+        // Use the simple gasless service with sponsored transactions
+        const { executeSimpleGaslessSwap } = await import('@/lib/helpers/simple-gasless-swap');
         
         const minAmountOut = (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6);
         
-        const txid = await executeGaslessSwap({
+        const txid = await executeSimpleGaslessSwap({
           userAddress: stacksAddress,
-          inputToken: {
-            symbol: state.inputToken.symbol,
-            address: state.inputToken.address,
-            decimals: state.inputToken.decimals
-          },
-          outputToken: {
-            symbol: state.outputToken.symbol,
-            address: state.outputToken.address,
-            decimals: state.outputToken.decimals
-          },
-          inputAmount: state.inputAmount,
-          minOutputAmount: minAmountOut,
+          tokenIn: state.inputToken.address,
+          tokenOut: state.outputToken.address,
+          amountIn: state.inputAmount,
+          minOut: minAmountOut,
           onProgress: (step) => {
             setState(prev => ({ ...prev, success: step }));
           }
@@ -564,14 +536,6 @@ export function SwapInterface() {
                 await recoverPublicKey();
               }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
                 Verify Wallet (Enable Gasless)
-              </span>
-            ) : state.error?.includes('No Smart Wallet found') ? (
-              <span onClick={(e) => {
-                e.preventDefault();
-                handleRegisterWallet();
-              }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
-                {state.isRegistering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5 text-green-400" />}
-                {state.isRegistering ? 'Registering...' : 'Register Smart Wallet (Sponsored)'}
               </span>
             ) : (
               <>

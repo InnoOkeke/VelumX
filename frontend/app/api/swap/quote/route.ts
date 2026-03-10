@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-// import { getSwapService } from '@/lib/services/SwapService';
+import { getSwapService } from '@/lib/services/SwapService';
 import { logger } from '@/lib/backend/logger';
 
 export const dynamic = 'force-dynamic';
@@ -12,8 +12,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // const quote = await getSwapService().getQuote(inputToken, outputToken, inputAmount);
-        const quote = { inputAmount, outputAmount: '0', priceImpact: 0, estimatedFee: '0', path: [] };
+        const quote = await getSwapService().getQuote(inputToken, outputToken, inputAmount);
 
         return NextResponse.json({
             success: true,
