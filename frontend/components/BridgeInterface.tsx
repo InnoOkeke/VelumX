@@ -257,7 +257,12 @@ export function BridgeInterface() {
       }
 
       // Step 3: Deposit to xReserve (Stacks official bridge)
-      const recipientBytes32 = await encodeStacksAddress(stacksAddress);
+      const { getSmartWalletAddress } = await import('@/lib/stacks-wallet');
+      const smartWalletAddress = await getSmartWalletAddress(stacksAddress);
+      
+      // Use smart wallet as recipient if we want to use gasless withdrawals effectively
+      const effectiveRecipient = smartWalletAddress || stacksAddress;
+      const recipientBytes32 = await encodeStacksAddress(effectiveRecipient);
 
       const depositHash = await walletClient.writeContract({
         address: config.ethereumXReserveAddress as `0x${string}`,
@@ -299,7 +304,7 @@ export function BridgeInterface() {
           destinationChain: 'stacks',
           amount: state.amount,
           sender: ethereumAddress,
-          recipient: stacksAddress,
+          recipient: smartWalletAddress && state.gaslessMode ? smartWalletAddress : stacksAddress,
           ethereumAddress,
           stacksAddress,
           status: 'pending',
@@ -505,7 +510,7 @@ export function BridgeInterface() {
         const { stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
 
         const domainCV = tupleCV({
-          name: stringAsciiCV("SGAL-Smart-Wallet"),
+          name: stringAsciiCV("VelumX-Smart-Wallet"),
           version: stringAsciiCV("1.0.0"),
           "chain-id": uintCV(2147483648),
         });

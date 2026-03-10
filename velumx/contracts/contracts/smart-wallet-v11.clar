@@ -29,7 +29,7 @@
         ;; 2. Signer is registered as the owner of this contract in the factory
         (match signer
             ok-signer (let (
-                (factory-wallet (contract-call? .wallet-factory-v7 get-wallet ok-signer))
+                (factory-wallet (contract-call? .wallet-factory-v8 get-wallet ok-signer))
             )
                 (is-eq factory-wallet (some (as-contract tx-sender)))
             )
@@ -70,7 +70,7 @@
           )
           ;; Branch B: Fallback (Must also return (response bool uint))
           (begin
-             (print { event: "v7-generic-execution", target: target, payload: payload })
+             (print { event: "v11-generic-execution", target: target, payload: payload })
              (ok true)
           )
       )

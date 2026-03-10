@@ -86,8 +86,8 @@ export class PaymasterService {
         });
 
         let [contractAddress, contractName] = this.smartWalletContract.split('.');
-        
-        // If relative (e.g. .smart-wallet-v7), derive address from relayer key
+
+        // If relative (e.g. .smart-wallet-v10), derive address from relayer key
         if (!contractAddress && this.relayerKey) {
             const { getAddressFromPrivateKey } = await import('@stacks/transactions');
             const version = process.env.NETWORK === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;

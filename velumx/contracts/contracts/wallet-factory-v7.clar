@@ -5,9 +5,9 @@
 
 (define-public (register-wallet (wallet principal))
   (let ((caller tx-sender))
-    ;; Factory v6 allows migration/updates
+    ;; Factory v7 allows migration/updates
     (map-set user-wallets caller wallet)
-    (print { event: "wallet-v6-registered", owner: caller, wallet: wallet })
+    (print { event: "wallet-v7-registered", owner: caller, wallet: wallet })
     (ok true)
   )
 )
