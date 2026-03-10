@@ -459,7 +459,7 @@ export function BridgeInterface() {
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
         console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
 
-        // Step 2: Prepare Intent (v7 Audited Model)
+        // Step 2: Prepare Intent (v10 Model)
         const { tupleCV, serializeCV } = await import('@stacks/transactions');
         const feeMicro = parseUnits(feeEstimateUsdcx, 6);
 
@@ -478,7 +478,7 @@ export function BridgeInterface() {
           nonce: currentNonce,
         };
 
-        console.log('VelumX: Preparing SIP-018 intent (v7)', intent);
+        console.log('VelumX: Preparing SIP-018 intent (v10)', intent);
 
         const getProvider = () => {
           if (typeof window === 'undefined') return null;
@@ -503,7 +503,7 @@ export function BridgeInterface() {
 
         const messageCV = tupleCV({
           target: principalCV(intent.target),
-          payload: bufferCV(common.hexToBytes(payloadHex)),
+          payload: bufferCV(payloadHex),
           "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
           nonce: uintCV(intent.nonce),
         });
