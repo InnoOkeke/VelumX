@@ -378,7 +378,20 @@ export function BridgeInterface() {
     try {
       // Common Stacks libraries
       const transactions = await getStacksTransactions() as any;
-      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc } = transactions;
+      const { 
+        AnchorMode, 
+        PostConditionMode, 
+        makeContractCall, 
+        makeUnsignedContractCall, 
+        Cl, 
+        Pc,
+        serializeCV,
+        tupleCV,
+        stringAsciiCV,
+        uintCV,
+        principalCV,
+        bufferCV
+      } = transactions;
       const networkModule = await getStacksNetwork() as any;
       const common = await getStacksCommon() as any;
       const connect = await getStacksConnect() as any;
@@ -482,8 +495,8 @@ export function BridgeInterface() {
               functionName: 'transfer',
               functionArgs: [
                 Cl.uint((totalNeeded - swBalanceMicro).toString()),
-                Cl.standardPrincipal(stacksAddress),
-                Cl.standardPrincipal(smartWalletAddress),
+                Cl.principal(stacksAddress),
+                Cl.principal(smartWalletAddress),
                 Cl.none()
               ],
               sponsored: true,
@@ -504,9 +517,6 @@ export function BridgeInterface() {
 
         const currentNonce = await getSmartWalletNonce(smartWalletAddress);
         console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
-
-        // Step 2: Prepare Intent (v11 Model)
-        const { tupleCV, serializeCV } = await import('@stacks/transactions');
 
         // Encode payload as a Tuple for the v10 Smart Wallet Dispatcher
         // Field names must match smart-wallet-v10.clar EXACTLY
@@ -546,8 +556,6 @@ export function BridgeInterface() {
         }
 
         // SIP-018 Structured Data Signing
-        // We bypass @stacks/connect because it validates our v10 ClarityValues against its internal v6 types
-        const { stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
 
         const domainCV = tupleCV({
           name: stringAsciiCV("VelumX-Smart-Wallet"),
