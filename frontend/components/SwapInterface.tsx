@@ -275,310 +275,131 @@ export function SwapInterface() {
 
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
-    let sponsorData: any = null;
-
     try {
-      const transactions = await getStacksTransactions() as any;
-      console.log('Loaded Stacks Transactions:', {
-        keys: Object.keys(transactions || {}),
-        hasMakeStandard: !!transactions?.makeStandardFungiblePostCondition,
-        hasCreateAsset: !!transactions?.createAssetInfo
-      });
-
-      const { AnchorMode, PostConditionMode, makeContractCall, makeUnsignedContractCall, Cl, Pc, FungibleConditionCode }: any = transactions;
-      const networkModule = await getStacksNetwork() as any;
-      const common = await getStacksCommon() as any;
-      const connect = await getStacksConnect() as any;
-
-      if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
-
-      if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
-
-      const network = await getNetworkInstance();
-
-      console.log('Network Config Enforced:', {
-        version: network.version,
-        baseVersion: networkModule.StacksTestnet ? new networkModule.StacksTestnet().version : 'N/A'
-      });
-
-      const amountInMicro = parseUnits(state.inputAmount, state.inputToken!.decimals);
-      // Defensive check for output amount
-      const outAmtProp = state.outputAmount || '0';
-      const minAmountOutMicro = parseUnits(
-        (parseFloat(outAmtProp) * (1 - state.slippage / 100)).toFixed(6),
-        state.outputToken!.decimals
-      );
-
-      const isInputStx = state.inputToken!.symbol === 'STX';
-      const isOutputStx = state.outputToken!.symbol === 'STX';
       const useGasless = state.gaslessMode;
 
-      const [contractAddress, contractName] = (useGasless
-        ? config.stacksPaymasterAddress
-        : config.stacksSwapContractAddress).split('.');
-
-      // Helper to parse token address (format: contractAddress.contractName)
-      const parseTokenAddress = (tokenAddr: string) => {
-        const [addr, name] = tokenAddr.split('.');
-        return { address: addr, name };
-      };
-
-      const getCP = (addr: string) => {
-        const parts = addr.split('.');
-        if (parts.length !== 2) throw new Error(`Invalid contract principal: ${addr}`);
-        return Cl.contractPrincipal(parts[0], parts[1]);
-      };
-
-      let functionName = 'swap';
-      let functionArgs = [];
-      const gasFeeMicro = parseUnits(state.gasFeeUsdcx || '1.0', 6);
-
-      if (isInputStx) {
-        functionName = useGasless ? 'swap-stx-to-token-gasless' : 'swap-stx-to-token';
-        // contractAddress is defined above
-        functionArgs = [
-          getCP(state.outputToken!.address),
-          Cl.uint(amountInMicro.toString()),
-          Cl.uint(minAmountOutMicro.toString()),
-        ];
-        if (useGasless) functionArgs.push(Cl.uint(gasFeeMicro.toString()));
-      } else if (isOutputStx) {
-        functionName = useGasless ? 'swap-token-to-stx-gasless' : 'swap-token-to-stx';
-        functionArgs = [
-          getCP(state.inputToken!.address),
-          Cl.uint(amountInMicro.toString()),
-          Cl.uint(minAmountOutMicro.toString()),
-        ];
-        if (useGasless) functionArgs.push(Cl.uint(gasFeeMicro.toString()));
-      } else if (useGasless) {
-        functionName = 'swap-gasless';
-        functionArgs = [
-          getCP(state.inputToken!.address),
-          getCP(state.outputToken!.address),
-          Cl.uint(amountInMicro.toString()),
-          Cl.uint(minAmountOutMicro.toString()),
-          Cl.uint(gasFeeMicro.toString()),
-        ];
-      } else {
-        functionName = 'swap';
-        functionArgs = [
-          getCP(state.inputToken!.address),
-          getCP(state.outputToken!.address),
-          Cl.uint(amountInMicro.toString()),
-          Cl.uint(minAmountOutMicro.toString()),
-        ];
-      }
-
-      console.log('Stacks Swap Tx Params (Modern Cl):', {
-        contractAddress,
-        contractName,
-        functionName,
-        functionArgsLength: functionArgs.length,
-        // Debug argument types
-        argTypes: functionArgs.map((arg: any) => typeof arg),
-        // Inspect principals if possible
-        inputTokenAddr: state.inputToken?.address,
-        outputTokenAddr: state.outputToken?.address,
-        network: !!network,
-        AnchorMode: !!AnchorMode,
-        PostConditionMode: !!PostConditionMode,
-        ClAvailable: !!Cl
-      });
-
-      if (functionArgs.some((arg: any) => !arg)) {
-        throw new Error('Transaction arguments encoding failed');
-      }
-
-      const postConditions = [];
-
-      // Helper to create safe fungible post-condition
-      const createSafePostCondition = (address: string, amount: bigint, assetAddress: string, assetName: string) => {
-        if (amount === BigInt(0)) return null;
-
-        // Use Pc builder which is available in v7.3.1
-        // Match BridgeInterface logic: pass full contract address and asset name
-        return Pc.principal(address)
-          .willSendEq(amount)
-          .ft(assetAddress, assetName);
-      };
-
-      // Constraint 1: User sends input token
-      if (isInputStx) {
-        postConditions.push(
-          Pc.principal(stacksAddress).willSendEq(amountInMicro).ustx()
-        );
-      } else {
-        // Use explicit asset name if available, otherwise fallback to contract name
-        const { name: contractName } = parseTokenAddress(state.inputToken.address);
-        const assetAddress = state.inputToken.address;
-        const assetName = state.inputToken.assetName || contractName;
-
-        const pc = createSafePostCondition(stacksAddress!, amountInMicro, assetAddress, assetName);
-        if (pc) postConditions.push(pc);
-      }
-
-      // Constraint 3: User sends USDCx fee if gasless
       if (useGasless) {
-        const usdcxFullAddress = config.stacksUsdcxAddress;
-        const usdcxAssetName = 'usdcx';
+        // Use the seamless gasless service
+        const { executeGaslessSwap } = await import('@/lib/helpers/gasless-swap');
+        
+        const minAmountOut = (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6);
+        
+        const txid = await executeGaslessSwap({
+          userAddress: stacksAddress,
+          inputToken: {
+            symbol: state.inputToken.symbol,
+            address: state.inputToken.address,
+            decimals: state.inputToken.decimals
+          },
+          outputToken: {
+            symbol: state.outputToken.symbol,
+            address: state.outputToken.address,
+            decimals: state.outputToken.decimals
+          },
+          inputAmount: state.inputAmount,
+          minOutputAmount: minAmountOut,
+          onProgress: (step) => {
+            setState(prev => ({ ...prev, success: step }));
+          }
+        });
 
-        // If input token is also USDCx, we must COMBINE the post-conditions
-        if (state.inputToken!.address === usdcxFullAddress) {
-          // Remove the previous USDCx post-condition (it was added in Constraint 1)
-          if (postConditions.length > 0) postConditions.pop();
-
-          const totalUsdcx = amountInMicro + gasFeeMicro;
-          console.log(`Combining USDCx post-condition: ${amountInMicro} (swap) + ${gasFeeMicro} (fee) = ${totalUsdcx}`);
-
-          const pc = createSafePostCondition(stacksAddress!, totalUsdcx, usdcxFullAddress, usdcxAssetName);
-          if (pc) postConditions.push(pc);
-        } else {
-          // Input is NOT USDCx, so just add the fee post-condition
-          const pc = createSafePostCondition(stacksAddress!, gasFeeMicro, usdcxFullAddress, usdcxAssetName);
-          if (pc) postConditions.push(pc);
-        }
-      }
-
-      console.log('Final PostConditions (JSON):', JSON.stringify(postConditions, (key, value) =>
-        typeof value === 'bigint' ? value.toString() : value
-        , 2));
-
-      // Constraint 2: Contract sends output token (optional but good for safety)
-      // We know the contract address.
-      // Note: Contract principal in post-conditions must use the contract that is SENDING.
-      // If the swap contract holds the tokens, it sends.
-      // If it's a paymaster, maybe it doesn't hold them?
-      // Assuming AMM pool holds funds.
-
-      // In gasless mode, tokens are sent by the swap contract, not the paymaster.
-      const poolPrincipal = Pc.principal(config.stacksSwapContractAddress);
-
-      if (isOutputStx) {
-        postConditions.push(
-          poolPrincipal.willSendGte(minAmountOutMicro).ustx()
-        );
-      } else {
-        const assetAddress = state.outputToken.address;
-        const { name: contractName } = parseTokenAddress(assetAddress);
-        const assetName = state.outputToken.assetName || contractName;
-
-        postConditions.push(
-          poolPrincipal.willSendGte(minAmountOutMicro).ft(assetAddress, assetName)
-        );
-      }
-
-      if (useGasless) {
-        const velumx = getVelumXClient();
-        if (!velumx) throw new Error('VelumX SDK client initialization failed');
-
-        // Step 1: Discover Smart Wallet and Sync State
-        const { getSmartWalletAddress, getSmartWalletNonce } = await import('@/lib/stacks-wallet');
-
-        let smartWalletAddress = await getSmartWalletAddress(stacksAddress);
-        if (!smartWalletAddress) {
-          throw new Error('No Smart Wallet found. Please click "Register Smart Wallet" below to setup your account.');
-        }
-
-        const currentNonce = await getSmartWalletNonce(smartWalletAddress);
-        console.log('VelumX Swap: Detected Smart Wallet', { smartWalletAddress, currentNonce });
-
-        // Step 2: Prepare Intent (v7 Audited Model)
-        const { tupleCV, serializeCV } = await import('@stacks/transactions');
-        const feeMicro = parseUnits(state.gasFeeUsdcx || '0.2', 6);
-
-        // Encode payload as a Tuple for the v7 Smart Wallet Dispatcher
-        const payloadHex = serializeCV(tupleCV({
-          tokenIn: Cl.principal(state.inputToken!.address),
-          tokenOut: Cl.principal(state.outputToken!.address),
-          amountIn: Cl.uint(amountInMicro.toString()),
-          minOut: Cl.uint(minAmountOutMicro.toString()),
-          fee: Cl.uint(feeMicro.toString())
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          success: `Swap successful! TX: ${txid}. You will receive approximately ${state.outputAmount} ${state.outputToken?.symbol}`,
+          inputAmount: '',
+          outputAmount: '',
+          quote: null,
         }));
-
-        const intent = {
-          target: `${contractAddress}.${contractName}`,
-          payload: payloadHex,
-          maxFeeUSDCx: feeMicro.toString(),
-          nonce: currentNonce,
-        };
-
-        console.log('VelumX Swap: Preparing SIP-018 intent (v7)', intent);
-
-        const getProvider = () => {
-          if (typeof window === 'undefined') return null;
-          const win = window as any;
-          return win.LeatherProvider || win.XverseProvider || win.xverse?.stacks || win.stx || win.StacksProvider || null;
-        };
-
-        const provider = getProvider();
-        if (!provider || typeof provider.request !== 'function') {
-          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
-        }
-
-        // SIP-018 Structured Data Signing
-        // We bypass @stacks/connect because it validates our v10 ClarityValues against its internal v6 types
-        const { stringAsciiCV, uintCV, principalCV, bufferCV } = await import('@stacks/transactions');
-        const signingCommon = await getStacksCommon() as any;
-
-        const domainCV = tupleCV({
-          name: stringAsciiCV("SGAL-Smart-Wallet"),
-          version: stringAsciiCV("1.0.0"),
-          "chain-id": uintCV(2147483648),
-        });
-
-        const messageCV = tupleCV({
-          target: principalCV(intent.target),
-          payload: bufferCV(signingCommon.hexToBytes(intent.payload)),
-          "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
-          nonce: uintCV(intent.nonce),
-        });
-
-        // We must use the Stacks Connect request API wrapper to ensure proper serialization.
-        const connect = await getStacksConnect() as any;
-        if (!connect || !connect.showSignStructuredMessage) throw new Error('Stacks request API not available');
-
-        let signature: string | undefined;
-        try {
-          signature = await new Promise<string>((resolve, reject) => {
-            connect.showSignStructuredMessage({
-              domain: domainCV,
-              message: messageCV,
-              onFinish: (data: any) => {
-                resolve(data.signature || data.result?.signature || data);
-              },
-              onCancel: () => {
-                reject(new Error('User cancelled signature prompt'));
-              }
-            });
-          });
-        } catch (error: any) {
-          console.error('SIP-018 signing error or cancellation:', error);
-          throw new Error('Transaction signature rejected or cancelled.');
-        }
-
-        if (!signature || typeof signature !== 'string') {
-          throw new Error('No valid signature returned from wallet');
-        }
-
-        const signedIntent = {
-          ...intent,
-          signature,
-        };
-
-        // Step 2: Submit to Relayer via VelumX SDK
-        const result = await velumx.submitIntent(signedIntent);
-        sponsorData = { success: true, data: { txid: result.txid } };
       } else {
-        // Standard flow using modern request API
+        // Standard non-gasless swap (requires STX for gas)
+        const transactions = await getStacksTransactions() as any;
+        const { Cl, Pc } = transactions;
         const connect = await getStacksConnect() as any;
-        if (!connect || !connect.request) throw new Error('Stacks request API not available');
+        const network = await getNetworkInstance();
 
-        console.log('Stacks Swap Standard Tx Params (request API):', {
-          contract: `${contractAddress}.${contractName}`,
-          functionName,
-          functionArgsLength: functionArgs.length,
-          network: 'testnet'
-        });
+        const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
+        const minAmountOutMicro = parseUnits(
+          (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
+          state.outputToken.decimals
+        );
+
+        const isInputStx = state.inputToken.symbol === 'STX';
+        const isOutputStx = state.outputToken.symbol === 'STX';
+
+        const [contractAddress, contractName] = config.stacksSwapContractAddress.split('.');
+
+        const getCP = (addr: string) => {
+          const parts = addr.split('.');
+          if (parts.length !== 2) throw new Error(`Invalid contract principal: ${addr}`);
+          return Cl.contractPrincipal(parts[0], parts[1]);
+        };
+
+        let functionName = 'swap';
+        let functionArgs = [];
+
+        if (isInputStx) {
+          functionName = 'swap-stx-to-token';
+          functionArgs = [
+            getCP(state.outputToken.address),
+            Cl.uint(amountInMicro.toString()),
+            Cl.uint(minAmountOutMicro.toString()),
+          ];
+        } else if (isOutputStx) {
+          functionName = 'swap-token-to-stx';
+          functionArgs = [
+            getCP(state.inputToken.address),
+            Cl.uint(amountInMicro.toString()),
+            Cl.uint(minAmountOutMicro.toString()),
+          ];
+        } else {
+          functionName = 'swap';
+          functionArgs = [
+            getCP(state.inputToken.address),
+            getCP(state.outputToken.address),
+            Cl.uint(amountInMicro.toString()),
+            Cl.uint(minAmountOutMicro.toString()),
+          ];
+        }
+
+        const postConditions = [];
+
+        // User sends input token
+        if (isInputStx) {
+          postConditions.push(
+            Pc.principal(stacksAddress).willSendEq(amountInMicro).ustx()
+          );
+        } else {
+          const parseTokenAddress = (tokenAddr: string) => {
+            const [addr, name] = tokenAddr.split('.');
+            return { address: addr, name };
+          };
+          const { name: contractName } = parseTokenAddress(state.inputToken.address);
+          const assetName = state.inputToken.assetName || contractName;
+          postConditions.push(
+            Pc.principal(stacksAddress)
+              .willSendEq(amountInMicro)
+              .ft(state.inputToken.address, assetName)
+          );
+        }
+
+        // Contract sends output token
+        const poolPrincipal = Pc.principal(config.stacksSwapContractAddress);
+        if (isOutputStx) {
+          postConditions.push(
+            poolPrincipal.willSendGte(minAmountOutMicro).ustx()
+          );
+        } else {
+          const parseTokenAddress = (tokenAddr: string) => {
+            const [addr, name] = tokenAddr.split('.');
+            return { address: addr, name };
+          };
+          const { name: contractName } = parseTokenAddress(state.outputToken.address);
+          const assetName = state.outputToken.assetName || contractName;
+          postConditions.push(
+            poolPrincipal.willSendGte(minAmountOutMicro).ft(state.outputToken.address, assetName)
+          );
+        }
 
         await connect.request('stx_callContract', {
           contract: `${contractAddress}.${contractName}`,
@@ -587,51 +408,22 @@ export function SwapInterface() {
           network: 'testnet',
           anchorMode: 'any',
           postConditionMode: 'deny',
-          postConditions: postConditions, // Pass the same safety constraints
+          postConditions,
           appDetails: {
             name: 'VelumX DEX',
             icon: typeof window !== 'undefined' ? window.location.origin + '/favicon.ico' : '',
           },
         });
-      }
 
-      // Record transaction in history
-      try {
-        await fetch(`${config.backendUrl}/api/transactions/monitor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: `swap-${Date.now()}`,
-            type: 'swap',
-            sourceTxHash: (sponsorData as any)?.txid || 'pending',
-            sourceChain: 'stacks',
-            destinationChain: 'stacks',
-            amount: state.inputAmount,
-            stacksAddress: stacksAddress,
-            inputToken: state.inputToken?.symbol,
-            outputToken: state.outputToken?.symbol,
-            status: 'complete', // Swaps are considered complete once submitted as they are single-chain
-            currentStep: 'swap',
-            timestamp: Date.now(),
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            retryCount: 0,
-            isGasless: state.gaslessMode,
-          }),
-        });
-      } catch (monitorError) {
-        console.error('Failed to report transaction to monitor:', monitorError);
-        // Don't fail the UI if monitoring reporting fails
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          success: `Swap successful! You will receive approximately ${state.outputAmount} ${state.outputToken?.symbol}`,
+          inputAmount: '',
+          outputAmount: '',
+          quote: null,
+        }));
       }
-
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        success: `Swap successful! You will receive approximately ${state.outputAmount} ${state.outputToken?.symbol}`,
-        inputAmount: '',
-        outputAmount: '',
-        quote: null,
-      }));
 
       // Refresh balances after successful transaction
       if (fetchBalances) {

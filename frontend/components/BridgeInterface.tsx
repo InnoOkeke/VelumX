@@ -376,269 +376,53 @@ export function BridgeInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
-      // Common Stacks libraries
-      const transactions = await getStacksTransactions() as any;
-      const { 
-        AnchorMode, 
-        PostConditionMode, 
-        makeContractCall, 
-        makeUnsignedContractCall, 
-        Cl, 
-        Pc,
-        serializeCV,
-        tupleCV,
-        stringAsciiCV,
-        uintCV,
-        principalCV,
-        bufferCV
-      } = transactions;
-      const networkModule = await getStacksNetwork() as any;
-      const common = await getStacksCommon() as any;
-      const connect = await getStacksConnect() as any;
-
-      if (!transactions || !networkModule || !common || !connect) throw new Error('Stacks libraries not loaded');
-      if (!Cl) throw new Error('Stacks Cl API not available in current SDK version');
-
-      const network = await getNetworkInstance();
-
-      console.log('Network Config Enforced:', {
-        version: network.version,
-        baseVersion: networkModule.StacksTestnet ? new networkModule.StacksTestnet().version : 'N/A'
-      });
-
-      const amountInMicroUsdc = parseUnits(state.amount, 6);
-      const recipientBytes = encodeEthereumAddress(ethereumAddress);
-
-      if (!recipientBytes || recipientBytes.length === 0) {
-        throw new Error('Failed to encode recipient address');
-      }
-
       const useGasless = state.gaslessMode;
 
-      // Determine which contract and function to call
-      const contractParts = (useGasless
-        ? config.stacksPaymasterAddress
-        : config.stacksUsdcxProtocolAddress).split('.');
-
-      if (contractParts.length !== 2) {
-        throw new Error('Invalid bridge contract configuration');
-      }
-
-      const contractAddress = contractParts[0];
-      const contractName = contractParts[1];
-      const functionName = useGasless ? 'withdraw-gasless' : 'burn';
-
-      if (useGasless && !state.feeEstimate) {
-        throw new Error('Fee estimate not available. Cannot proceed with gasless transaction.');
-      }
-
-      const feeEstimateUsdcx = state.feeEstimate?.usdcx || '0';
-      const functionArgs = useGasless
-        ? [
-          Cl.uint(amountInMicroUsdc.toString()),
-          Cl.uint(parseUnits(feeEstimateUsdcx, 6).toString()),
-          Cl.buffer(recipientBytes),
-        ]
-        : [
-          Cl.uint(amountInMicroUsdc.toString()),
-          Cl.uint("0"), // native-domain: 0 for Ethereum
-          Cl.buffer(recipientBytes),
-        ];
-
-      console.log('Stacks Bridge Tx Params (Modern Cl):', {
-        contractAddress,
-        contractName,
-        functionName,
-        functionArgsLength: functionArgs.length,
-        recipientBytesLen: recipientBytes.length,
-        network: !!network,
-        AnchorMode: !!AnchorMode,
-        PostConditionMode: !!PostConditionMode,
-        ClAvailable: !!Cl
-      });
-
-      if (functionArgs.some(arg => !arg)) {
-        throw new Error('Transaction arguments encoding failed');
-      }
-
       if (useGasless) {
-        const velumx = getVelumXClient();
-        if (!velumx) throw new Error('VelumX SDK client initialization failed');
-
-        const { getSmartWalletAddress, getSmartWalletNonce } = await import('@/lib/stacks-wallet');
-
-        let smartWalletAddress = await getSmartWalletAddress(stacksAddress);
-        if (!smartWalletAddress) {
-          throw new Error('No Smart Wallet found. Please click the "Register Smart Wallet" button below.');
-        }
-
-        const feeMicro = parseUnits(feeEstimateUsdcx, 6);
-        const totalNeeded = amountInMicroUsdc + feeMicro;
+        // Use the seamless gasless service
+        const { executeGaslessBridge } = await import('@/lib/helpers/gasless-bridge');
         
-        // Step 1: Check if Smart Wallet has funds. If not, transfer from personal.
-        const swBalanceMicro = parseUnits(smartWalletBalances.usdcx, 6);
-        
-        if (swBalanceMicro < totalNeeded) {
-          console.log('Smart Wallet funds insufficient. Initiating transfer from personal address.');
-          
-          // Check if personal has it
-          const personalBalanceMicro = parseUnits(balances.usdcx, 6);
-          if (personalBalanceMicro < (totalNeeded - swBalanceMicro)) {
-             throw new Error(`Insufficient funds. You need ${formatUnits(totalNeeded, 6)} USDCx including fees.`);
+        const txid = await executeGaslessBridge({
+          userAddress: stacksAddress,
+          amount: state.amount,
+          recipientAddress: ethereumAddress,
+          onProgress: (step) => {
+            setState(prev => ({ ...prev, success: step }));
           }
-
-          // Trigger Sponsored Transfer
-          const transferResult = await new Promise<any>((resolve, reject) => {
-            connect.showContractCall({
-              contractAddress: config.stacksUsdcxAddress.split('.')[0],
-              contractName: config.stacksUsdcxAddress.split('.')[1],
-              functionName: 'transfer',
-              functionArgs: [
-                Cl.uint((totalNeeded - swBalanceMicro).toString()),
-                Cl.principal(stacksAddress),
-                Cl.principal(smartWalletAddress),
-                Cl.none()
-              ],
-              sponsored: true,
-              network: 'testnet',
-              onFinish: (data: any) => resolve(data),
-              onCancel: () => reject(new Error('Transfer to Smart Wallet cancelled'))
-            });
-          });
-
-          console.log('Transfer submitted:', transferResult.txid);
-          setState(prev => ({ 
-            ...prev, 
-            success: `Funds moving to Smart Wallet (TX: ${transferResult.txid}). Please wait a few seconds and try the bridge step!`,
-            isProcessing: false 
-          }));
-          return; // Exit and let user click again or wait
-        }
-
-        const currentNonce = await getSmartWalletNonce(smartWalletAddress);
-        console.log('VelumX: Detected Smart Wallet', { smartWalletAddress, currentNonce });
-
-        // Encode payload as a Tuple for the v10 Smart Wallet Dispatcher
-        // Field names must match smart-wallet-v10.clar EXACTLY
-        const serializedPayload = serializeCV(tupleCV({
-          amount: Cl.uint(amountInMicroUsdc.toString()),
-          fee: Cl.uint(feeMicro.toString()),
-          recipient: Cl.buffer(recipientBytes)
-        })) as any;
-
-        // Ensure we have bytes for signing and hex for the relayer
-        const payloadBytes: Uint8Array = typeof serializedPayload === 'string' 
-          ? common.hexToBytes(serializedPayload.startsWith('0x') ? serializedPayload.slice(2) : serializedPayload)
-          : serializedPayload;
-        
-        const payloadHex: string = typeof serializedPayload === 'string' 
-          ? serializedPayload 
-          : bytesToHex(serializedPayload);
-
-        const intent = {
-          target: `${contractAddress}.${contractName}`,
-          payload: payloadHex,
-          maxFeeUSDCx: feeMicro.toString(),
-          nonce: currentNonce,
-        };
-
-        console.log('VelumX: Preparing SIP-018 intent (v10)', intent);
-
-        const getProvider = () => {
-          if (typeof window === 'undefined') return null;
-          const win = window as any;
-          return win.LeatherProvider || win.XverseProvider || win.xverse?.stacks || win.stx || win.StacksProvider || null;
-        };
-
-        const provider = getProvider();
-        if (!provider || typeof provider.request !== 'function') {
-          throw new Error('No compatible Stacks wallet found. Please install Leather or Xverse.');
-        }
-
-        // SIP-018 Structured Data Signing
-
-        const domainCV = tupleCV({
-          name: stringAsciiCV("VelumX-Smart-Wallet"),
-          version: stringAsciiCV("1.0.0"),
-          "chain-id": uintCV(2147483648),
         });
 
-        const messageCV = tupleCV({
-          target: principalCV(intent.target),
-          payload: bufferCV(payloadBytes),
-          "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
-          nonce: uintCV(intent.nonce),
-        });
-
-        if (!connect || !connect.showSignStructuredMessage) throw new Error('Stacks request API not available');
-
-        let signature: string | undefined;
-        try {
-          signature = await new Promise<string>((resolve, reject) => {
-            connect.showSignStructuredMessage({
-              domain: domainCV,
-              message: messageCV,
-              onFinish: (data: any) => {
-                resolve(data.signature || data.result?.signature || data);
-              },
-              onCancel: () => {
-                reject(new Error('User cancelled signature prompt'));
-              }
-            });
-          });
-        } catch (error: any) {
-          console.error('SIP-018 signing error or cancellation:', error);
-          throw new Error('Transaction signature rejected or cancelled.');
-        }
-
-        if (!signature || typeof signature !== 'string') {
-          throw new Error('No valid signature returned from wallet');
-        }
-
-        const signedIntent = {
-          ...intent,
-          signature,
-        };
-
-        // Step 3: Submit to Relayer via VelumX SDK
-        const result = await velumx.submitIntent(signedIntent);
-        const finalTxId = result.txid;
-
-        // Submit to monitoring service (Bypassed: Vercel does not have a Prisma DB attached - Option B)
-        /*
-        await fetch(`${config.backendUrl}/api/transactions/monitor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: finalTxId,
-            type: 'withdrawal',
-            sourceTxHash: finalTxId,
-            sourceChain: 'stacks',
-            destinationChain: 'ethereum',
-            amount: state.amount,
-            sender: stacksAddress,
-            recipient: ethereumAddress,
-            status: 'pending',
-            timestamp: Date.now(),
-            isGasless: useGasless,
-            gasFeeInUsdcx: state.feeEstimate?.usdcx,
-          }),
-        });
-        */
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          success: `Bridge successful! TX: ${txid}. Funds will arrive in ~15 minutes.`,
+          amount: '',
+        }));
       } else {
-        if (!connect || !connect.request) throw new Error('Stacks request API not available');
+        // Standard non-gasless bridge (requires STX for gas)
+        const transactions = await getStacksTransactions() as any;
+        const { Cl } = transactions;
+        const connect = await getStacksConnect() as any;
+        const network = await getNetworkInstance();
 
-        console.log('Stacks Bridge Standard Tx Params (request API):', {
-          contract: `${contractAddress}.${contractName}`,
-          functionName,
-          functionArgsLength: functionArgs.length,
-          network: 'testnet'
-        });
+        const amountInMicroUsdc = parseUnits(state.amount, 6);
+        const recipientBytes = encodeEthereumAddress(ethereumAddress);
+
+        const contractParts = config.stacksUsdcxProtocolAddress.split('.');
+        if (contractParts.length !== 2) {
+          throw new Error('Invalid bridge contract configuration');
+        }
+
+        const contractAddress = contractParts[0];
+        const contractName = contractParts[1];
 
         const response = await connect.request('stx_callContract', {
           contract: `${contractAddress}.${contractName}`,
-          functionName,
-          functionArgs,
+          functionName: 'burn',
+          functionArgs: [
+            Cl.uint(amountInMicroUsdc.toString()),
+            Cl.uint("0"), // native-domain: 0 for Ethereum
+            Cl.buffer(recipientBytes),
+          ],
           network: 'testnet',
           anchorMode: 'any',
           postConditionMode: 'allow',
@@ -650,42 +434,20 @@ export function BridgeInterface() {
         });
 
         const finalTxId = response?.result?.txid;
-        if (finalTxId) {
-          // Submit to monitoring service (Bypassed: Vercel does not have a Prisma DB attached - Option B)
-          /*
-          await fetch(`${config.backendUrl}/api/transactions/monitor`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: finalTxId,
-              type: 'withdrawal',
-              sourceTxHash: finalTxId,
-              sourceChain: 'stacks',
-              destinationChain: 'ethereum',
-              amount: state.amount,
-              sender: stacksAddress,
-              recipient: ethereumAddress,
-              status: 'pending',
-              timestamp: Date.now(),
-              isGasless: false,
-            }),
-          });
-          */
-        }
+        
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          success: `Bridge successful! TX: ${finalTxId}`,
+          amount: '',
+        }));
       }
-
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        success: 'Withdrawal initiated! Check transaction history for status.',
-        amount: '',
-      }));
 
       // Refresh balances after successful transaction
       if (fetchBalances) {
         setTimeout(() => {
           fetchBalances();
-        }, 3000); // Wait 3 seconds for initial confirmation
+        }, 3000);
       }
     } catch (error) {
       console.error('Withdrawal error:', error);
@@ -967,10 +729,7 @@ export function BridgeInterface() {
           ) : (
             (() => {
               if (state.direction === 'stacks-to-eth' && state.gaslessMode) {
-                const totalNeeded = state.amount ? parseUnits(state.amount, 6) + parseUnits(state.feeEstimate?.usdcx || '0', 6) : BigInt(0);
-                const swBalance = parseUnits(smartWalletBalances.usdcx, 6);
-                if (state.amount && swBalance < totalNeeded) return '1. Move Funds to Smart Wallet';
-                return '2. Initiate Bridge Out';
+                return 'Bridge USDCx';
               }
               return (
                 <div className="flex items-center justify-center gap-2">

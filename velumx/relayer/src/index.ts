@@ -95,8 +95,25 @@ app.post('/api/v1/broadcast', async (req, res) => {
 // Dashboard Analytics Endpoints
 // ==========================================
 
+// Simple dashboard auth middleware (optional - add admin password)
+const dashboardAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const adminPassword = process.env.DASHBOARD_PASSWORD;
+    
+    // If no password is set, allow access (for development)
+    if (!adminPassword) {
+        return next();
+    }
+    
+    const authHeader = req.headers.authorization;
+    if (authHeader === `Bearer ${adminPassword}`) {
+        return next();
+    }
+    
+    res.status(401).json({ error: 'Unauthorized' });
+};
+
 // Get Analytics Overview
-app.get('/api/dashboard/stats', async (req, res) => {
+app.get('/api/dashboard/stats', dashboardAuth, async (req, res) => {
     try {
         const totalTransactions = await prisma.transaction.count();
         const activeKeys = await prisma.apiKey.count({ where: { status: 'Active' } });
@@ -169,7 +186,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
 });
 
 // Get API Keys
-app.get('/api/dashboard/keys', async (req, res) => {
+app.get('/api/dashboard/keys', dashboardAuth, async (req, res) => {
     try {
         const keys = await prisma.apiKey.findMany({
             orderBy: { createdAt: 'desc' }
@@ -181,7 +198,7 @@ app.get('/api/dashboard/keys', async (req, res) => {
 });
 
 // Generate new API Key
-app.post('/api/dashboard/keys', async (req, res) => {
+app.post('/api/dashboard/keys', dashboardAuth, async (req, res) => {
     try {
         const { name } = req.body;
         // Generate a random mock key (e.g. sgal_live_...)
@@ -202,7 +219,7 @@ app.post('/api/dashboard/keys', async (req, res) => {
 });
 
 // Get Transaction Logs
-app.get('/api/dashboard/logs', async (req, res) => {
+app.get('/api/dashboard/logs', dashboardAuth, async (req, res) => {
     try {
         const logs = await prisma.transaction.findMany({
             orderBy: { createdAt: 'desc' },
