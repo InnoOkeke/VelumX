@@ -41,12 +41,17 @@ export async function executeGaslessSwap(params: GaslessSwapParams): Promise<str
   const estimate = await gaslessService.estimateFee(100000);
   const feeInMicro = BigInt(estimate.maxFeeUSDCx);
   
+  // Calculate total needed (only if input token is USDCx, otherwise fee is separate)
+  const isInputUsdcx = inputToken.symbol === 'USDCx';
+  const totalNeeded = isInputUsdcx ? amountInMicro + feeInMicro : feeInMicro;
+  
   console.log('Swap Details:', {
     inputToken: inputToken.symbol,
     outputToken: outputToken.symbol,
     amountIn: amountInMicro.toString(),
     minOut: minAmountOutMicro.toString(),
-    fee: feeInMicro.toString()
+    fee: feeInMicro.toString(),
+    total: totalNeeded.toString()
   });
   
   // Determine swap function based on token types
@@ -92,6 +97,7 @@ export async function executeGaslessSwap(params: GaslessSwapParams): Promise<str
     targetContract,
     payload,
     estimatedFeeUsdcx: (Number(feeInMicro) / 1_000_000).toString(),
+    totalAmountUsdcx: (Number(totalNeeded) / 1_000_000).toString(),
     onProgress
   });
   

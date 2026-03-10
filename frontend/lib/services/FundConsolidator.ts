@@ -122,6 +122,13 @@ export class FundConsolidator {
     onProgress?.('Checking Smart Wallet balance...');
 
     const swBalance = await this.getUsdcxBalance(smartWalletAddress);
+    
+    console.log('Smart Wallet Balance Check:', {
+      smartWallet: smartWalletAddress,
+      currentBalance: swBalance.toString(),
+      required: requiredAmount.toString(),
+      sufficient: swBalance >= requiredAmount
+    });
 
     if (swBalance >= requiredAmount) {
       onProgress?.('Smart Wallet has sufficient funds!');
@@ -133,6 +140,13 @@ export class FundConsolidator {
 
     // Check personal wallet balance
     const personalBalance = await this.getUsdcxBalance(userAddress);
+    
+    console.log('Personal Balance Check:', {
+      personal: userAddress,
+      balance: personalBalance.toString(),
+      deficit: deficit.toString(),
+      sufficient: personalBalance >= deficit
+    });
 
     if (personalBalance < deficit) {
       throw new Error(
@@ -144,16 +158,36 @@ export class FundConsolidator {
     // Transfer funds
     const txid = await this.transferToSmartWallet(userAddress, smartWalletAddress, deficit, onProgress);
 
-    // Don't wait for confirmation - the transaction will be processed before the bridge tx
-    // Just give it a moment to propagate
-    if (txid) {
-      onProgress?.(`Transfer submitted (TX: ${txid.substring(0, 10)}...). Continuing...`);
+    // Wait longer for the transfer to confirm (30 seconds)
+    if (txid && txid !== 'pending') {
+      onProgress?.(`Transfer submitted (TX: ${txid.substring(0, 10)}...). Waiting for confirmation...`);
     } else {
-      onProgress?.('Transfer submitted. Continuing...');
+      onProgress?.('Transfer submitted. Waiting for confirmation...');
     }
-    await new Promise(resolve => setTimeout(resolve, 2000));
     
-    onProgress?.('Proceeding with transaction...');
+    // Poll for confirmation
+    const maxAttempts = 30;
+    let attempts = 0;
+    let confirmed = false;
+
+    while (attempts < maxAttempts && !confirmed) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const newBalance = await this.getUsdcxBalance(smartWalletAddress);
+      console.log(`Polling attempt ${attempts + 1}/${maxAttempts}: Smart Wallet balance = ${newBalance.toString()}`);
+      
+      if (newBalance >= requiredAmount) {
+        confirmed = true;
+        onProgress?.('Transfer confirmed! Proceeding...');
+      }
+      attempts++;
+    }
+
+    if (!confirmed) {
+      throw new Error(
+        `Transfer is taking longer than expected. Please wait a moment and try again. ` +
+        `TX: ${txid || 'unknown'}`
+      );
+    }
   }
 
   /**

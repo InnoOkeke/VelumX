@@ -15,6 +15,7 @@ export interface GaslessTransactionParams {
   targetContract: string; // e.g., "ST...ADMIN.paymaster-module-v10"
   payload: any; // Clarity tuple CV
   estimatedFeeUsdcx: string; // e.g., "0.25"
+  totalAmountUsdcx?: string; // Total amount needed (amount + fee) - optional, defaults to just fee
   onProgress?: (status: string) => void;
 }
 
@@ -30,7 +31,7 @@ export class GaslessTransactionService {
   async executeGaslessTransaction(
     params: GaslessTransactionParams
   ): Promise<GaslessTransactionResult> {
-    const { userAddress, targetContract, payload, estimatedFeeUsdcx, onProgress } = params;
+    const { userAddress, targetContract, payload, estimatedFeeUsdcx, totalAmountUsdcx, onProgress } = params;
 
     try {
       // Step 1: Ensure Smart Wallet exists
@@ -39,12 +40,20 @@ export class GaslessTransactionService {
       const smartWalletAddress = await smartWalletManager.ensureSmartWallet(userAddress, onProgress);
 
       // Step 2: Calculate total required amount
-      const feeMicro = parseUnits(estimatedFeeUsdcx, 6);
+      const totalRequired = totalAmountUsdcx 
+        ? parseUnits(totalAmountUsdcx, 6)
+        : parseUnits(estimatedFeeUsdcx, 6);
+      
+      console.log('Gasless Transaction Requirements:', {
+        totalRequired: totalRequired.toString(),
+        estimatedFee: estimatedFeeUsdcx,
+        totalAmount: totalAmountUsdcx
+      });
       
       // Step 3: Ensure Smart Wallet has sufficient funds
       onProgress?.('Checking funds...');
       const fundConsolidator = getFundConsolidator();
-      await fundConsolidator.ensureFunds(userAddress, smartWalletAddress, feeMicro, onProgress);
+      await fundConsolidator.ensureFunds(userAddress, smartWalletAddress, totalRequired, onProgress);
 
       // Step 4: Get current nonce
       onProgress?.('Preparing transaction...');
@@ -65,6 +74,7 @@ export class GaslessTransactionService {
         : bytesToHex(serializedPayload);
 
       // Step 6: Create intent
+      const feeMicro = parseUnits(estimatedFeeUsdcx, 6);
       const intent = {
         target: targetContract,
         payload: payloadHex,

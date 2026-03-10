@@ -32,9 +32,13 @@ export async function executeGaslessBridge(params: GaslessBridgeParams): Promise
   const estimate = await gaslessService.estimateFee(100000);
   const feeInMicro = BigInt(estimate.maxFeeUSDCx);
   
+  // Calculate total needed
+  const totalNeeded = amountInMicro + feeInMicro;
+  
   console.log('Bridge Details:', {
     amount: amountInMicro.toString(),
     fee: feeInMicro.toString(),
+    total: totalNeeded.toString(),
     recipient: recipientAddress
   });
   
@@ -54,6 +58,7 @@ export async function executeGaslessBridge(params: GaslessBridgeParams): Promise
     targetContract: config.stacksPaymasterAddress,
     payload,
     estimatedFeeUsdcx: (Number(feeInMicro) / 1_000_000).toString(),
+    totalAmountUsdcx: (Number(totalNeeded) / 1_000_000).toString(),
     onProgress
   });
   
