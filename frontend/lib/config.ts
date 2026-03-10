@@ -6,18 +6,6 @@
 import { FrontendConfig } from './types';
 
 /**
- * Safely get environment variable with fallback
- */
-function getEnv(key: string, fallback: string): string {
-  if (typeof window === 'undefined') {
-    // Server-side: use process.env
-    return process.env[key] || fallback;
-  }
-  // Client-side: use process.env (bundled at build time)
-  return process.env[key] || fallback;
-}
-
-/**
  * Loads frontend configuration from environment variables
  */
 export function getConfig(): FrontendConfig {
@@ -35,10 +23,16 @@ export function getConfig(): FrontendConfig {
     ethereumXReserveAddress: process.env.NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS || '0x008888878f94C0d87defdf0B07f46B93C1934442',
     stacksUsdcxAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
     stacksUsdcxProtocolAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1',
-    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.paymaster-module-v10',
+    
+    // Simple Paymaster (New Stacks-Native Approach)
+    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1',
+    
+    // Legacy Smart Wallet contracts (deprecated - kept for backward compatibility)
     stacksSmartWalletAddress: process.env.NEXT_PUBLIC_STACKS_SMART_WALLET_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.smart-wallet-v11',
     stacksWalletFactoryAddress: process.env.NEXT_PUBLIC_STACKS_WALLET_FACTORY_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.wallet-factory-v8',
     stacksRelayerRegistryAddress: process.env.NEXT_PUBLIC_STACKS_RELAYER_REGISTRY_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.relayer-registry-v3',
+    
+    // DEX contracts
     stacksSwapContractAddress: process.env.NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v3',
     stacksVexAddress: process.env.NEXT_PUBLIC_STACKS_VEX_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
 

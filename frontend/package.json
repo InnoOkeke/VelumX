@@ -15,7 +15,7 @@
     "@stacks/network": "7.3.1",
     "@stacks/transactions": "7.3.1",
     "@velarprotocol/velar-sdk": "^0.7.6",
-    "@velumx/sdk": "^1.4.0",
+    "@velumx/sdk": "file:../velumx/sdk",
     "buffer": "^6.0.3",
     "lucide-react": "^0.562.0",
     "next": "16.1.3",

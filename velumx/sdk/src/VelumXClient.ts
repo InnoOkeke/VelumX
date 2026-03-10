@@ -27,11 +27,11 @@ export class VelumXClient {
             });
 
             if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
+                const errData = await response.json().catch(() => ({ error: 'Unknown error' })) as any;
                 throw new Error(`Fee estimation failed: ${errData.error || errData.message || response.statusText}`);
             }
 
-            return await response.json();
+            return await response.json() as { maxFeeUSDCx: string, estimatedGas: number };
         } catch (error) {
             console.error("VelumX Client Error (estimateFee):", error);
             throw error;
@@ -55,11 +55,11 @@ export class VelumXClient {
             });
 
             if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
+                const errData = await response.json().catch(() => ({ error: 'Unknown error' })) as any;
                 throw new Error(`Intent sponsorship failed: ${errData.error || errData.message || response.statusText}`);
             }
 
-            return await response.json();
+            return await response.json() as { txid: string, status: string };
         } catch (error) {
             console.error("VelumX Client Error (submitIntent):", error);
             throw error;
@@ -83,11 +83,11 @@ export class VelumXClient {
             });
 
             if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
+                const errData = await response.json().catch(() => ({ error: 'Unknown error' })) as any;
                 throw new Error(`Transaction broadcast failed: ${errData.error || errData.message || response.statusText}`);
             }
 
-            return await response.json();
+            return await response.json() as { txid: string, status: string };
         } catch (error) {
             console.error("VelumX Client Error (submitRawTransaction):", error);
             throw error;

@@ -379,10 +379,10 @@ export function BridgeInterface() {
       const useGasless = state.gaslessMode;
 
       if (useGasless) {
-        // Use the seamless gasless service
-        const { executeGaslessBridge } = await import('@/lib/helpers/gasless-bridge');
+        // Use the simple Stacks-native gasless approach
+        const { executeSimpleGaslessBridge } = await import('@/lib/helpers/simple-gasless-bridge');
         
-        const txid = await executeGaslessBridge({
+        const txid = await executeSimpleGaslessBridge({
           userAddress: stacksAddress,
           amount: state.amount,
           recipientAddress: ethereumAddress,

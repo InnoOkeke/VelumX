@@ -1,6 +1,6 @@
 {
   "name": "@velumx/sdk",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "VelumX Gas Abstraction Layer SDK for dApps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,6 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@stacks/common": "^7.3.1",
+    "@stacks/connect": "^7.10.0",
     "@stacks/network": "^7.3.1",
     "@stacks/transactions": "^7.3.1"
   },
