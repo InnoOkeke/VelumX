@@ -81,6 +81,8 @@ export class FundConsolidator {
             Cl.none(),
           ],
           network,
+          postConditionMode: 'allow', // Allow mode to bypass automatic post-condition checks
+          postConditions: [], // No post-conditions
           sponsored: true,
           onFinish: (data: any) => {
             console.log('Transfer onFinish data:', data);
