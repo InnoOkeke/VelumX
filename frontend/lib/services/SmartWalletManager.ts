@@ -17,7 +17,7 @@ interface SmartWalletCache {
 }
 
 const cache: SmartWalletCache = {};
-const CACHE_DURATION = 60000; // 1 minute
+const CACHE_DURATION = 300000; // 5 minutes (increased from 1 minute)
 
 export class SmartWalletManager {
   private config = getConfig();
@@ -28,14 +28,17 @@ export class SmartWalletManager {
   async getSmartWalletAddress(ownerAddress: string): Promise<string | null> {
     // Check cache first
     const cached = cache[ownerAddress];
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION && !cached.isRegistering) {
+      console.log('Smart Wallet from cache:', cached.address);
       return cached.address;
     }
 
     try {
       const network = await getNetworkInstance();
-      const { fetchCallReadOnlyFunction } = await getStacksTransactions();
+      const { fetchCallReadOnlyFunction, cvToString } = await getStacksTransactions();
       const [contractAddress, contractName] = this.config.stacksWalletFactoryAddress.split('.');
+
+      console.log('Fetching Smart Wallet from factory:', { ownerAddress, factory: `${contractAddress}.${contractName}` });
 
       const result = await fetchCallReadOnlyFunction({
         contractAddress,
@@ -46,14 +49,31 @@ export class SmartWalletManager {
         network,
       });
 
+      console.log('Factory response:', JSON.stringify(result, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
+
       let address: string | null = null;
 
+      // Handle optional/some types
       if (result.type === 'some' || result.type === 'optionalSome' || result.type === 9) {
         const value = result.value || (result as any).data;
-        if (value && typeof value === 'object' && 'data' in value) {
+        
+        // Try to convert to string using cvToString
+        if (cvToString) {
+          try {
+            address = cvToString(value);
+            console.log('Smart Wallet address (cvToString):', address);
+          } catch (e) {
+            console.warn('cvToString failed, trying manual extraction:', e);
+          }
+        }
+        
+        // Fallback: manual extraction
+        if (!address && value && typeof value === 'object' && 'data' in value) {
           address = value.data;
-        } else if (typeof value === 'string') {
+          console.log('Smart Wallet address (manual):', address);
+        } else if (!address && typeof value === 'string') {
           address = value;
+          console.log('Smart Wallet address (string):', address);
         }
       }
 
@@ -63,6 +83,8 @@ export class SmartWalletManager {
         timestamp: Date.now(),
         isRegistering: false,
       };
+
+      console.log('Smart Wallet lookup result:', { ownerAddress, address, cached: true });
 
       return address;
     } catch (error) {
@@ -176,12 +198,25 @@ export class SmartWalletManager {
 
       while (attempts < maxAttempts && !smartWalletAddress) {
         await new Promise(resolve => setTimeout(resolve, 1000));
+        // Clear cache before fetching to force fresh lookup
+        delete cache[ownerAddress];
         smartWalletAddress = await this.getSmartWalletAddress(ownerAddress);
         attempts++;
       }
 
       if (!smartWalletAddress) {
-        throw new Error('Smart Wallet registration timed out. Please check transaction status.');
+        // One final attempt after clearing cache completely
+        console.warn('Registration confirmation timed out, attempting final lookup...');
+        delete cache[ownerAddress];
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        smartWalletAddress = await this.getSmartWalletAddress(ownerAddress);
+        
+        if (!smartWalletAddress) {
+          // Don't throw error - the wallet might exist but we can't confirm yet
+          console.error('Could not confirm Smart Wallet registration. TX:', result.txid);
+          cache[ownerAddress].isRegistering = false;
+          throw new Error(`Smart Wallet registration submitted (TX: ${result.txid}) but confirmation timed out. Please try again in a few seconds.`);
+        }
       }
 
       onProgress?.('Registration complete!');
@@ -212,14 +247,32 @@ export class SmartWalletManager {
   ): Promise<string> {
     onProgress?.('Checking Smart Wallet...');
 
+    // Force fresh lookup by clearing cache if it's stale
+    const cached = cache[ownerAddress];
+    if (cached && cached.isRegistering) {
+      throw new Error('Smart Wallet registration already in progress. Please wait.');
+    }
+
     let smartWalletAddress = await this.getSmartWalletAddress(ownerAddress);
 
+    console.log('Smart Wallet Check:', { ownerAddress, smartWalletAddress, cached: !!cache[ownerAddress] });
+
     if (smartWalletAddress) {
-      onProgress?.('Smart Wallet found!');
+      onProgress?.(`Smart Wallet found: ${smartWalletAddress.substring(0, 10)}...`);
       return smartWalletAddress;
     }
 
-    onProgress?.('No Smart Wallet found. Registering...');
+    // Double-check by clearing cache and trying again
+    console.log('Smart Wallet not found, clearing cache and retrying...');
+    delete cache[ownerAddress];
+    smartWalletAddress = await this.getSmartWalletAddress(ownerAddress);
+    
+    if (smartWalletAddress) {
+      onProgress?.(`Smart Wallet found: ${smartWalletAddress.substring(0, 10)}...`);
+      return smartWalletAddress;
+    }
+
+    onProgress?.('No Smart Wallet found. Starting registration...');
 
     const result = await this.registerSmartWallet(ownerAddress, onProgress);
 
