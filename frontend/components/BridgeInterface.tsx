@@ -463,13 +463,22 @@ export function BridgeInterface() {
         const { tupleCV, serializeCV } = await import('@stacks/transactions');
         const feeMicro = parseUnits(feeEstimateUsdcx, 6);
 
-        // Encode payload as a Tuple for the v7 Smart Wallet Dispatcher
-        // Field names must match smart-wallet-v7.clar EXACTLY
-        const payloadHex = serializeCV(tupleCV({
+        // Encode payload as a Tuple for the v10 Smart Wallet Dispatcher
+        // Field names must match smart-wallet-v10.clar EXACTLY
+        const serializedPayload = serializeCV(tupleCV({
           amount: Cl.uint(amountInMicroUsdc.toString()),
           fee: Cl.uint(feeMicro.toString()),
           recipient: Cl.buffer(recipientBytes)
-        }));
+        })) as any;
+
+        // Ensure we have bytes for signing and hex for the relayer
+        const payloadBytes: Uint8Array = typeof serializedPayload === 'string' 
+          ? common.hexToBytes(serializedPayload.startsWith('0x') ? serializedPayload.slice(2) : serializedPayload)
+          : serializedPayload;
+        
+        const payloadHex: string = typeof serializedPayload === 'string' 
+          ? serializedPayload 
+          : bytesToHex(serializedPayload);
 
         const intent = {
           target: `${contractAddress}.${contractName}`,
@@ -503,7 +512,7 @@ export function BridgeInterface() {
 
         const messageCV = tupleCV({
           target: principalCV(intent.target),
-          payload: bufferCV(payloadHex),
+          payload: bufferCV(payloadBytes),
           "max-fee-usdcx": uintCV(intent.maxFeeUSDCx),
           nonce: uintCV(intent.nonce),
         });
