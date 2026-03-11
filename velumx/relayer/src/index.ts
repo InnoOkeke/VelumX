@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { PaymasterService } from './PaymasterService.js';
 import { getAddressFromPrivateKey } from '@stacks/transactions';
-import { STACKS_MAINNET, STACKS_TESTNET, TransactionVersion } from '@stacks/network';
+import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
 import { verifySupabaseToken, AuthRequest } from './auth.js';
 
@@ -160,17 +160,19 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
         const relayerKey = paymasterService.getUserRelayerKey(userId);
         const networkType = process.env.NETWORK || 'testnet';
         const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
-        // TransactionVersion: Mainnet=0x00, Testnet=0x80 (for addresses) or 0x01 (for scripts)
-        // Stacks transactions use 0 for Mainnet and 1 for Testnet
+        
+        // TransactionVersion for addresses: Mainnet=0, Testnet=1
         const version = networkType === 'mainnet' ? 0 : 1;
 
         let relayerAddress = "Not Configured";
         let stxBalance = "0";
         let usdcxBalance = "0";
 
-        if (relayerKey) {
+        if (relayerKey && relayerKey.length >= 64) {
             try {
-                relayerAddress = getAddressFromPrivateKey(relayerKey, version as any);
+                // Ensure relayerKey is a clean hex string
+                const cleanKey = relayerKey.replace(/^0x/, '');
+                relayerAddress = getAddressFromPrivateKey(cleanKey, version);
 
                 // Fetch STX Balance
                 const url = `${network.client.baseUrl}/v2/accounts/${relayerAddress}`;

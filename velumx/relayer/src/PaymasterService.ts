@@ -12,7 +12,7 @@ import {
     deserializeTransaction,
     sponsorTransaction,
 } from '@stacks/transactions';
-import { StacksNetwork, STACKS_MAINNET, STACKS_TESTNET, TransactionVersion } from '@stacks/network';
+import { StacksNetwork, STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'node:crypto';
 
@@ -114,8 +114,9 @@ export class PaymasterService {
         // If relative (e.g. .smart-wallet-v10), derive address from active key
         if (!contractAddress && activeKey) {
             const { getAddressFromPrivateKey } = await import('@stacks/transactions');
+            const cleanKey = activeKey.replace(/^0x/, '');
             const version = process.env.NETWORK === 'mainnet' ? 0 : 1;
-            contractAddress = getAddressFromPrivateKey(activeKey, version as any);
+            contractAddress = getAddressFromPrivateKey(cleanKey, version);
         }
 
         const txOptions = {
