@@ -29,12 +29,12 @@ export const verifySupabaseToken = (req: AuthRequest, res: Response, next: NextF
         let decoded: any;
         try {
             // Try with raw secret
-            decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256', 'HS384', 'HS512'] });
+            decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256', 'HS384', 'HS512', 'ES256'] });
         } catch (rawError: any) {
             console.log("Relayer Auth: Verification with raw secret failed, trying Base64 decode...");
             // Try with Base64 decoded secret (common for Supabase)
             const decodedSecret = Buffer.from(jwtSecret, 'base64');
-            decoded = jwt.verify(token, decodedSecret, { algorithms: ['HS256', 'HS384', 'HS512'] });
+            decoded = jwt.verify(token, decodedSecret, { algorithms: ['HS256', 'HS384', 'HS512', 'ES256'] });
         }
         
         req.userId = decoded.sub;
