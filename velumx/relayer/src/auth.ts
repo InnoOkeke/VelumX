@@ -8,12 +8,18 @@ export interface AuthRequest extends Request {
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://yjbsdesjzvuagcxntscd.supabase.co';
 const client = jwksClient({
-  jwksUri: `${supabaseUrl}/auth/v1/jwt/jwks`
+  jwksUri: `${supabaseUrl}/auth/v1/jwt/jwks`,
+  requestHeaders: {
+    'apikey': process.env.SUPABASE_ANON_KEY || ''
+  },
+  timeout: 10000 // 10s timeout
 });
 
 function getKey(header: any, callback: any) {
+  console.log("Relayer Auth: Fetching signing key for kid:", header.kid);
   client.getSigningKey(header.kid, (err, key: any) => {
     if (err) {
+      console.error("Relayer Auth: JWKS getSigningKey error:", err.message);
       callback(err);
       return;
     }
