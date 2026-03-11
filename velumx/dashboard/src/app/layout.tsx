@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "VelumX Developer Console",
   description: "Manage your modular Stacks Gas Abstraction integrations",
   other: {
+    // Project verification hash for TalentApp - 128 chars (NOT a private key)
     "talentapp:project_verification": "d21212d94aeabdeb188f36ea3cd442602a50aa581677ad2a0e505636006fb9d5f14151bf86e1d4febbcfa688e806453ceee2b7d12855a36d97cbd1339fd054d2"
   }
 };

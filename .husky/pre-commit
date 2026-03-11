@@ -1,5 +1,4 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+
 
 # Run Avanasec security scan
 echo "🔒 Running Avanasec security scan..."
