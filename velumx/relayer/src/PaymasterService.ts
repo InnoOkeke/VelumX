@@ -114,7 +114,7 @@ export class PaymasterService {
         // If relative (e.g. .smart-wallet-v10), derive address from active key
         if (!contractAddress && activeKey) {
             const { getAddressFromPrivateKey } = await import('@stacks/transactions');
-            const version = process.env.NETWORK === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;
+            const version = process.env.NETWORK === 'mainnet' ? 0 : 1;
             contractAddress = getAddressFromPrivateKey(activeKey, version as any);
         }
 

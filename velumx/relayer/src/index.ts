@@ -160,7 +160,9 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
         const relayerKey = paymasterService.getUserRelayerKey(userId);
         const networkType = process.env.NETWORK || 'testnet';
         const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
-        const version = networkType === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;
+        // TransactionVersion: Mainnet=0x00, Testnet=0x80 (for addresses) or 0x01 (for scripts)
+        // Stacks transactions use 0 for Mainnet and 1 for Testnet
+        const version = networkType === 'mainnet' ? 0 : 1;
 
         let relayerAddress = "Not Configured";
         let stxBalance = "0";
