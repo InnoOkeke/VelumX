@@ -115,8 +115,8 @@ export class PaymasterService {
         if (!contractAddress && activeKey) {
             const { getAddressFromPrivateKey } = await import('@stacks/transactions');
             const cleanKey = activeKey.replace(/^0x/, '');
-            const version = process.env.NETWORK === 'mainnet' ? 0 : 1;
-            contractAddress = getAddressFromPrivateKey(cleanKey, version);
+            const networkType = (process.env.NETWORK || 'testnet') as "mainnet" | "testnet";
+            contractAddress = getAddressFromPrivateKey(cleanKey, networkType);
         }
 
         const txOptions = {

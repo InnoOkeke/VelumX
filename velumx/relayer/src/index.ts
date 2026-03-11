@@ -158,11 +158,8 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
 
         // --- Relayer Health Metrics ---
         const relayerKey = paymasterService.getUserRelayerKey(userId);
-        const networkType = process.env.NETWORK || 'testnet';
+        const networkType = (process.env.NETWORK || 'testnet') as "mainnet" | "testnet";
         const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
-        
-        // TransactionVersion for addresses: Mainnet=0, Testnet=1
-        const version = networkType === 'mainnet' ? 0 : 1;
 
         let relayerAddress = "Not Configured";
         let stxBalance = "0";
@@ -172,7 +169,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
             try {
                 // Ensure relayerKey is a clean hex string
                 const cleanKey = relayerKey.replace(/^0x/, '');
-                relayerAddress = getAddressFromPrivateKey(cleanKey, version);
+                relayerAddress = getAddressFromPrivateKey(cleanKey, networkType);
 
                 // Fetch STX Balance
                 const url = `${network.client.baseUrl}/v2/accounts/${relayerAddress}`;
