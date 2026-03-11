@@ -22,7 +22,7 @@ export const verifySupabaseToken = (req: AuthRequest, res: Response, next: NextF
     }
 
     try {
-        const decoded = jwt.verify(token, jwtSecret) as { sub: string };
+        const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { sub: string };
         req.userId = decoded.sub;
         next();
     } catch (error: any) {
