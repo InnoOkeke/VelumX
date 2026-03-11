@@ -47,6 +47,8 @@ export async function getSwapQuote(
             senderAddress: contractAddress,
         });
 
+        console.log('Quote response:', response);
+
         if (response.type === 'response-ok') {
             const val = response.value.data;
             return {
@@ -58,9 +60,14 @@ export async function getSwapQuote(
             };
         }
 
+        console.error('Quote failed with response:', response);
         throw new Error('No liquidity pool found');
     } catch (error: any) {
         console.error('Failed to fetch swap quote:', error);
+        console.error('Contract:', swapContractAddress);
+        console.error('Input token:', inputToken);
+        console.error('Output token:', outputToken);
+        console.error('Amount:', inputAmount);
         throw new Error(error.message || 'No liquidity pool found');
     }
 }
