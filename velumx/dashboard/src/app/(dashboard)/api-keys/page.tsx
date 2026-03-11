@@ -35,7 +35,7 @@ export default function ApiKeysPage() {
             const res = await fetch('/api/keys');
             if (!res.ok) throw new Error('Failed to fetch keys');
             const data = await res.json();
-            setKeys(data.apiKeys);
+            setKeys(Array.isArray(data.apiKeys) ? data.apiKeys : []);
         } catch (error) {
             console.error('Error fetching keys:', error);
             toast.error('Failed to load API keys');

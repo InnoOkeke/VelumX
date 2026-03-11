@@ -30,7 +30,7 @@ export default function TransactionLogsPage() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
-                setLogs(data);
+                setLogs(Array.isArray(data) ? data : []);
             } catch (error) {
                 console.error('Error fetching logs:', error);
             } finally {

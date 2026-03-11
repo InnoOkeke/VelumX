@@ -22,14 +22,29 @@ export const verifySupabaseToken = (req: AuthRequest, res: Response, next: NextF
     }
 
     try {
-        const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { sub: string };
+        const decodedHeader = jwt.decode(token, { complete: true }) as any;
+        const alg = decodedHeader?.header?.alg;
+        console.log("Relayer Auth: Attempting verification. Algorithm:", alg);
+        
+        let decoded: any;
+        try {
+            // Try with raw secret
+            decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256', 'HS384', 'HS512'] });
+        } catch (rawError: any) {
+            console.log("Relayer Auth: Verification with raw secret failed, trying Base64 decode...");
+            // Try with Base64 decoded secret (common for Supabase)
+            const decodedSecret = Buffer.from(jwtSecret, 'base64');
+            decoded = jwt.verify(token, decodedSecret, { algorithms: ['HS256', 'HS384', 'HS512'] });
+        }
+        
         req.userId = decoded.sub;
         next();
     } catch (error: any) {
-        console.error("Relayer Auth: JWT verification failed!", {
+        console.error("Relayer Auth: JWT verification finally failed!", {
             error: error.message,
-            tokenSnippet: token.substring(0, 10) + "..."
+            tokenSnippet: token.substring(0, 10) + "...",
+            header: jwt.decode(token, { complete: true })?.header
         });
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized', details: error.message });
     }
 };

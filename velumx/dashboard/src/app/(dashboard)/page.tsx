@@ -68,9 +68,9 @@ export default function DashboardOverview() {
         const [stats, logsData] = await Promise.all([fetchStats(), fetchLogs()]);
 
         if (stats) setStatsData(stats);
-        if (logsData) setLogs(logsData);
+        if (logsData && Array.isArray(logsData)) setLogs(logsData);
 
-        if (!stats && logsData.length === 0) {
+        if (!stats && (!logsData || logsData.length === 0)) {
           toast.error('Relayer Offline: Showing cached data.', { id: 'relayer-offline' });
         }
       } catch (error) {
