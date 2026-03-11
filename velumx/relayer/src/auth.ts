@@ -8,7 +8,7 @@ export interface AuthRequest extends Request {
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://yjbsdesjzvuagcxntscd.supabase.co';
 const client = jwksClient({
-  jwksUri: `${supabaseUrl}/auth/v1/jwt/jwks`,
+  jwksUri: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
   requestHeaders: {
     'apikey': process.env.SUPABASE_ANON_KEY || ''
   },
