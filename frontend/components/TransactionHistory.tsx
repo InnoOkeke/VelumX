@@ -1,6 +1,6 @@
 /**
  * TransactionHistory Component
- * Display user's transaction history with filtering and sorting
+ * Fetches transaction history directly from blockchain explorers
  */
 
 'use client';
@@ -8,7 +8,6 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../lib/hooks/useWallet';
 import { useConfig } from '../lib/config';
-import { TransactionMonitor } from './TransactionMonitor';
 import {
   Loader2,
   CheckCircle,
@@ -20,74 +19,75 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
-// Define BridgeTransaction type to match Prisma schema
-interface BridgeTransaction {
+interface Transaction {
   id: string;
-  type: 'deposit' | 'withdrawal';
-  sourceTxHash: string;
-  destinationTxHash?: string;
-  sourceChain: string;
-  destinationChain: string;
+  type: 'bridge' | 'swap';
+  txHash: string;
+  chain: 'ethereum' | 'stacks';
   amount: string;
-  stacksAddress: string;
-  ethereumAddress?: string;
-  status: string;
-  createdAt: Date | number;
-  currentStep?: string;
+  status: 'success' | 'pending' | 'failed';
+  timestamp: number;
+  from: string;
+  to: string;
 }
 
-type FilterType = 'all' | 'deposit' | 'withdrawal';
-type SortType = 'newest' | 'oldest' | 'amount';
+type FilterType = 'all' | 'bridge' | 'swap';
+type SortType = 'newest' | 'oldest';
 
 export function TransactionHistory() {
   const { ethereumAddress, stacksAddress } = useWallet();
   const config = useConfig();
 
-  const [transactions, setTransactions] = useState<BridgeTransaction[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
   const [sort, setSort] = useState<SortType>('newest');
-  const [selectedTx, setSelectedTx] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
 
-  const ITEMS_PER_PAGE = 10;
-
-  // Fetch transactions
+  // Fetch transactions from blockchain
   const fetchTransactions = async (refresh = false) => {
-    if (!ethereumAddress && !stacksAddress) return;
+    if (!ethereumAddress && !stacksAddress) {
+      setLoading(false);
+      return;
+    }
 
     if (refresh) {
       setLoading(true);
-      setPage(0);
     }
 
     try {
-      // Fetch from both addresses if available
-      const addresses = [ethereumAddress, stacksAddress].filter(Boolean);
-      const allTransactions: BridgeTransaction[] = [];
+      const allTransactions: Transaction[] = [];
 
-      for (const address of addresses) {
+      // Fetch Stacks transactions
+      if (stacksAddress) {
         const response = await fetch(
-          `${config.backendUrl}/api/transactions/monitor?address=${address}`
+          `https://api.testnet.hiro.so/extended/v1/address/${stacksAddress}/transactions?limit=20`
         );
         const data = await response.json();
 
-        // The monitor API returns an array directly
-        if (Array.isArray(data)) {
-          allTransactions.push(...data);
-          // Simple pagination check: if we got exactly ITEMS_PER_PAGE, there might be more
-          if (data.length === ITEMS_PER_PAGE) setHasMore(true);
+        if (data.results) {
+          const stacksTxs = data.results.map((tx: any) => ({
+            id: tx.tx_id,
+            type: 'bridge' as const, // Simplified - could parse contract calls to determine type
+            txHash: tx.tx_id,
+            chain: 'stacks' as const,
+            amount: '0', // Would need to parse from tx events
+            status: tx.tx_status === 'success' ? 'success' : tx.tx_status === 'pending' ? 'pending' : 'failed',
+            timestamp: tx.burn_block_time,
+            from: tx.sender_address,
+            to: tx.sender_address,
+          }));
+          allTransactions.push(...stacksTxs);
         }
       }
 
-      // Remove duplicates based on transaction ID
-      const uniqueTxs = Array.from(
-        new Map((allTransactions || []).map(tx => [tx.id, tx])).values()
-      );
+      // Fetch Ethereum transactions
+      if (ethereumAddress) {
+        // Note: Would need Etherscan API key for production
+        // For now, just showing Stacks transactions
+      }
 
-      setTransactions(uniqueTxs);
+      setTransactions(allTransactions);
       setError(null);
     } catch (err) {
       console.error('Failed to fetch transactions:', err);
@@ -97,17 +97,10 @@ export function TransactionHistory() {
     }
   };
 
-  // Initial fetch and auto-refresh
+  // Initial fetch
   useEffect(() => {
     fetchTransactions();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(() => {
-      fetchTransactions();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [ethereumAddress, stacksAddress, page]);
+  }, [ethereumAddress, stacksAddress]);
 
   // Filter transactions
   const filteredTransactions = transactions.filter(tx => {
@@ -117,16 +110,11 @@ export function TransactionHistory() {
 
   // Sort transactions
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-    const aTime = typeof a.createdAt === 'number' ? a.createdAt : new Date(a.createdAt).getTime();
-    const bTime = typeof b.createdAt === 'number' ? b.createdAt : new Date(b.createdAt).getTime();
-    
     switch (sort) {
       case 'newest':
-        return bTime - aTime;
+        return b.timestamp - a.timestamp;
       case 'oldest':
-        return aTime - bTime;
-      case 'amount':
-        return parseFloat(b.amount) - parseFloat(a.amount);
+        return a.timestamp - b.timestamp;
       default:
         return 0;
     }
@@ -135,7 +123,7 @@ export function TransactionHistory() {
   // Get status icon
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'success':
         return <CheckCircle className="w-5 h-5 text-green-400" />;
       case 'failed':
         return <XCircle className="w-5 h-5 text-red-400" />;
@@ -147,7 +135,7 @@ export function TransactionHistory() {
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'success':
         return 'text-green-400';
       case 'failed':
         return 'text-red-400';
@@ -169,20 +157,6 @@ export function TransactionHistory() {
       return `${config.stacksExplorerUrl}/txid/${hash}?chain=testnet`;
     }
   };
-
-  if (selectedTx) {
-    return (
-      <div>
-        <button
-          onClick={() => setSelectedTx(null)}
-          className="mb-4 text-sm text-purple-400 hover:text-purple-300 flex items-center gap-2"
-        >
-          ← Back to History
-        </button>
-        <TransactionMonitor txHash={selectedTx} onClose={() => setSelectedTx(null)} />
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -210,7 +184,7 @@ export function TransactionHistory() {
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Filter:</span>
           </div>
           <div className="flex gap-2">
-            {(['all', 'deposit', 'withdrawal'] as FilterType[]).map((f) => (
+            {(['all', 'bridge', 'swap'] as FilterType[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -242,7 +216,6 @@ export function TransactionHistory() {
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
-              <option value="amount">Amount</option>
             </select>
           </div>
         </div>
@@ -275,11 +248,10 @@ export function TransactionHistory() {
         {/* Transaction List */}
         {sortedTransactions.length > 0 && (
           <div className="space-y-3">
-            {(sortedTransactions || []).map((tx) => (
+            {sortedTransactions.map((tx) => (
               <div
                 key={tx.id}
-                onClick={() => setSelectedTx(tx.id)}
-                className="rounded-xl p-5 cursor-pointer transition-all group hover:-translate-y-0.5"
+                className="rounded-xl p-5 transition-all group hover:-translate-y-0.5"
                 style={{
                   backgroundColor: 'var(--bg-surface)',
                   border: '1px solid var(--border-color)'
@@ -295,27 +267,20 @@ export function TransactionHistory() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          {tx.type === 'deposit' ? 'Bridge In' : 
-                           tx.currentStep?.startsWith('swap:') ? 'Swap' : 'Bridge Out'}
+                          {tx.type === 'bridge' ? 'Bridge' : 'Swap'}
                         </span>
                         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          {tx.type === 'deposit' ? 'ETH → STX' :
-                           tx.currentStep?.startsWith('swap:') ? tx.currentStep.replace('swap:', '') : 'STX → ETH'}
+                          {tx.chain === 'ethereum' ? 'Ethereum' : 'Stacks'}
                         </span>
                       </div>
                       <div className="text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
                         <div>
-                          Stacks: <span className="font-mono">{formatAddress(tx.stacksAddress)}</span>
+                          From: <span className="font-mono">{formatAddress(tx.from)}</span>
                         </div>
-                        {tx.ethereumAddress && (
-                          <div>
-                            Ethereum: <span className="font-mono">{formatAddress(tx.ethereumAddress)}</span>
-                          </div>
-                        )}
                         <div className="flex items-center gap-2">
-                          <span>{new Date(tx.createdAt).toLocaleDateString()}</span>
+                          <span>{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
                           <span style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>•</span>
-                          <span>{new Date(tx.createdAt).toLocaleTimeString()}</span>
+                          <span>{new Date(tx.timestamp * 1000).toLocaleTimeString()}</span>
                         </div>
                       </div>
                     </div>
@@ -323,17 +288,13 @@ export function TransactionHistory() {
 
                   {/* Right Side */}
                   <div className="text-right">
-                    <div className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                      {tx.amount} {tx.type === 'deposit' ? 'USDC' : 'USDCx'}
-                    </div>
                     <div className={`text-sm font-semibold capitalize ${getStatusColor(tx.status)}`}>
-                      {tx.status.replace('_', ' ')}
+                      {tx.status}
                     </div>
                     <a
-                      href={getExplorerUrl(tx.sourceChain, tx.sourceTxHash)}
+                      href={getExplorerUrl(tx.chain, tx.txHash)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
                       className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 mt-2 font-medium"
                     >
                       View TX <ExternalLink className="w-3 h-3" />
@@ -342,19 +303,6 @@ export function TransactionHistory() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {hasMore && (
-          <div className="mt-6 flex justify-center">
-            <button
-              onClick={() => setPage(p => p + 1)}
-              disabled={loading}
-              className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-            >
-              Load More
-            </button>
           </div>
         )}
       </div>

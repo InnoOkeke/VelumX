@@ -32,7 +32,6 @@ export interface WalletState {
   stacksConnected: boolean;
   stacksWalletType: StacksWalletType | null;
   balances: WalletBalances;
-  smartWalletBalances: WalletBalances;
   isConnecting: boolean;
   isFetchingBalances: boolean;
 }
@@ -84,7 +83,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     stacksConnected: false,
     stacksWalletType: null,
     balances: { eth: '0', usdc: '0', stx: '0', usdcx: '0', vex: '0' },
-    smartWalletBalances: { eth: '0', usdc: '0', stx: '0', usdcx: '0', vex: '0' },
     isConnecting: false,
     isFetchingBalances: false,
   });
@@ -143,51 +141,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const apiUrl = 'https://api.testnet.hiro.so';
       
-      // 1. Fetch personal balances
+      // Fetch personal balances
       const response = await fetch(`${apiUrl}/extended/v1/address/${address}/balances`);
-      
-      // 2. Fetch smart wallet balances if possible
-      const { getSmartWalletAddress } = await import('../stacks-wallet');
-      const smartWalletAddress = await getSmartWalletAddress(address);
-      
-      let swResponse = null;
-      if (smartWalletAddress) {
-        swResponse = await fetch(`${apiUrl}/extended/v1/address/${smartWalletAddress}/balances`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch balances');
       }
 
-      const parseBalances = (data: any) => {
-        const stx = BigInt(data.stx?.balance || 0);
-        const fungibleTokens = data.fungible_tokens || {};
-        const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksUsdcxAddress));
-        const usdcx = usdcxKey ? BigInt(fungibleTokens[usdcxKey].balance) : BigInt(0);
-        const vexKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksVexAddress));
-        const vex = vexKey ? BigInt(fungibleTokens[vexKey].balance) : BigInt(0);
-        return { stx, usdcx, vex };
-      };
-
-      let personal = { stx: BigInt(0), usdcx: BigInt(0), vex: BigInt(0) };
-      if (response.ok) {
-        personal = parseBalances(await response.json());
-      }
-
-      let smart = { stx: BigInt(0), usdcx: BigInt(0), vex: BigInt(0) };
-      if (swResponse && swResponse.ok) {
-        smart = parseBalances(await swResponse.json());
-      }
+      const data = await response.json();
+      const stx = BigInt(data.stx?.balance || 0);
+      const fungibleTokens = data.fungible_tokens || {};
+      const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksUsdcxAddress));
+      const usdcx = usdcxKey ? BigInt(fungibleTokens[usdcxKey].balance) : BigInt(0);
+      const vexKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksVexAddress));
+      const vex = vexKey ? BigInt(fungibleTokens[vexKey].balance) : BigInt(0);
 
       setState(prev => ({
         ...prev,
         balances: {
           ...prev.balances,
-          stx: formatUnits(personal.stx, TOKEN_DECIMALS.stx),
-          usdcx: formatUnits(personal.usdcx, TOKEN_DECIMALS.usdcx),
-          vex: formatUnits(personal.vex, TOKEN_DECIMALS.usdcx),
-        },
-        smartWalletBalances: {
-          ...prev.smartWalletBalances,
-          stx: formatUnits(smart.stx, TOKEN_DECIMALS.stx),
-          usdcx: formatUnits(smart.usdcx, TOKEN_DECIMALS.usdcx),
-          vex: formatUnits(smart.vex, TOKEN_DECIMALS.usdcx),
+          stx: formatUnits(stx, TOKEN_DECIMALS.stx),
+          usdcx: formatUnits(usdcx, TOKEN_DECIMALS.usdcx),
+          vex: formatUnits(vex, TOKEN_DECIMALS.usdcx),
         }
       }));
     } catch (error) {
@@ -218,7 +193,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Persistence
   useEffect(() => {
-    const { balances, smartWalletBalances, isConnecting, isFetchingBalances, ...toPersist } = state;
+    const { balances, isConnecting, isFetchingBalances, ...toPersist } = state;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
   }, [state]);
 
@@ -358,8 +333,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       stacksAddress: null,
       stacksConnected: false,
       stacksWalletType: null,
-      balances: { ...prev.balances, stx: '0', usdcx: '0' },
-      smartWalletBalances: { ...prev.smartWalletBalances, stx: '0', usdcx: '0' }
+      balances: { ...prev.balances, stx: '0', usdcx: '0' }
     }));
   }, []);
 

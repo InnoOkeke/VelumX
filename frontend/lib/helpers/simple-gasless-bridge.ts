@@ -88,57 +88,16 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   if (result.txRaw) {
     const broadcastResult = await velumx.submitRawTransaction(result.txRaw);
     console.log('Bridge broadcast result:', broadcastResult);
-    
-    // Save transaction to history
-    await saveTransactionToHistory({
-      type: 'withdrawal',
-      sourceTxHash: broadcastResult.txid,
-      sourceChain: 'stacks',
-      destinationChain: 'ethereum',
-      amount,
-      stacksAddress: userAddress,
-      ethereumAddress: recipientAddress,
-      status: 'pending'
-    });
-    
     return broadcastResult.txid;
   }
 
   // Otherwise use the txid from the response
   const txid = result.txid || (result as any).txId || (result as any).result?.txid;
   if (txid) {
-    // Save transaction to history
-    await saveTransactionToHistory({
-      type: 'withdrawal',
-      sourceTxHash: txid,
-      sourceChain: 'stacks',
-      destinationChain: 'ethereum',
-      amount,
-      stacksAddress: userAddress,
-      ethereumAddress: recipientAddress,
-      status: 'pending'
-    });
-    
     return txid;
   }
 
   throw new Error('No transaction ID returned');
-}
-
-/**
- * Save transaction to history database
- */
-async function saveTransactionToHistory(transaction: any): Promise<void> {
-  try {
-    await fetch('/api/transactions/monitor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(transaction)
-    });
-  } catch (error) {
-    console.error('Failed to save transaction to history:', error);
-    // Don't throw - transaction already succeeded
-  }
 }
 
 /**

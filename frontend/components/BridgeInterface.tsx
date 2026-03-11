@@ -40,7 +40,6 @@ export function BridgeInterface() {
     stacksConnected,
     ethereumChainId,
     balances,
-    smartWalletBalances, // Added smartWalletBalances
     fetchBalances,
     isFetchingBalances,
     switchEthereumNetwork,
@@ -116,10 +115,9 @@ export function BridgeInterface() {
       if (numAmount < MIN_BRIDGE_OUT) {
         return `Minimum withdrawal is ${MIN_BRIDGE_OUT} USDCx (covers bridge fees)`;
       }
-      // Sum of both personal and smart wallet balances for withdrawal check
-      const totalUsdcx = parseFloat(balances.usdcx) + parseFloat(smartWalletBalances.usdcx);
-      if (numAmount > totalUsdcx) {
-        return 'Insufficient total USDCx balance';
+      
+      if (numAmount > parseFloat(balances.usdcx)) {
+        return 'Insufficient USDCx balance';
       }
     }
 
@@ -504,23 +502,6 @@ export function BridgeInterface() {
                   <RefreshCw className={`w-2.5 h-2.5 ${isFetchingBalances ? 'animate-spin' : ''}`} style={{ color: 'var(--text-secondary)' }} />
                 </button>
               </div>
-              
-              {state.direction === 'stacks-to-eth' && state.gaslessMode && (
-                <>
-                  <span className="text-[10px] font-bold uppercase tracking-wider mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    Smart Wallet Balance
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {isFetchingBalances ? (
-                      <Loader2 className="inline w-3 h-3 animate-spin" />
-                    ) : (
-                      <span className="font-mono font-semibold text-purple-600 dark:text-purple-400">
-                        {parseFloat(smartWalletBalances.usdcx).toFixed(4)}
-                      </span>
-                    )} USDCx
-                  </span>
-                </>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-4">

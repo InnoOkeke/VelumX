@@ -92,55 +92,14 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   if (result.txRaw) {
     const broadcastResult = await velumx.submitRawTransaction(result.txRaw);
     console.log('Swap broadcast result:', broadcastResult);
-    
-    // Save transaction to history (using withdrawal type for now as schema doesn't have swap)
-    await saveTransactionToHistory({
-      type: 'withdrawal', // Using withdrawal as placeholder
-      sourceTxHash: broadcastResult.txid,
-      sourceChain: 'stacks',
-      destinationChain: 'stacks',
-      amount: amountIn,
-      stacksAddress: userAddress,
-      status: 'pending',
-      currentStep: `swap:${tokenIn.split('.').pop()}->${tokenOut.split('.').pop()}`
-    });
-    
     return broadcastResult.txid;
   }
 
   // Otherwise use the txid from the response
   const txid = result.txid || (result as any).txId || (result as any).result?.txid;
   if (txid) {
-    // Save transaction to history (using withdrawal type for now as schema doesn't have swap)
-    await saveTransactionToHistory({
-      type: 'withdrawal', // Using withdrawal as placeholder
-      sourceTxHash: txid,
-      sourceChain: 'stacks',
-      destinationChain: 'stacks',
-      amount: amountIn,
-      stacksAddress: userAddress,
-      status: 'pending',
-      currentStep: `swap:${tokenIn.split('.').pop()}->${tokenOut.split('.').pop()}`
-    });
-    
     return txid;
   }
 
   throw new Error('No transaction ID returned');
-}
-
-/**
- * Save transaction to history database
- */
-async function saveTransactionToHistory(transaction: any): Promise<void> {
-  try {
-    await fetch('/api/transactions/monitor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(transaction)
-    });
-  } catch (error) {
-    console.error('Failed to save transaction to history:', error);
-    // Don't throw - transaction already succeeded
-  }
 }

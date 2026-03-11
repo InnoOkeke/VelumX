@@ -134,43 +134,31 @@ export function SwapInterface() {
       // Convert input amount to micro units
       const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals);
 
-      // Call backend to get quote from swap contract
-      const response = await fetch(`${config.backendUrl}/api/swap/quote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inputToken: state.inputToken.address,
-          outputToken: state.outputToken.address,
-          inputAmount: amountInMicro.toString(),
-        }),
-      });
+      // Fetch quote directly from blockchain (client-side)
+      const { getSwapQuote } = await import('@/lib/services/SwapQuoteService');
+      const quote = await getSwapQuote(
+        state.inputToken.address,
+        state.outputToken.address,
+        amountInMicro.toString(),
+        config.stacksSwapContractAddress
+      );
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch quote');
-      }
+      // Convert output amount from micro units to display units
+      const outputAmountFormatted = (Number(quote.outputAmount) / Math.pow(10, state.outputToken.decimals)).toFixed(6);
+      const feeFormatted = (Number(quote.estimatedFee) / Math.pow(10, state.inputToken.decimals)).toFixed(6);
+      const rate = (Number(quote.outputAmount) / Number(quote.inputAmount)).toFixed(6);
 
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        // Convert output amount from micro units to display units
-        const outputAmountFormatted = (Number(data.data.outputAmount) / Math.pow(10, state.outputToken.decimals)).toFixed(6);
-        const feeFormatted = (Number(data.data.estimatedFee) / Math.pow(10, state.inputToken.decimals)).toFixed(6);
-        const rate = (Number(data.data.outputAmount) / Number(data.data.inputAmount)).toFixed(6);
-
-        setState(prev => ({
-          ...prev,
-          outputAmount: outputAmountFormatted,
-          quote: {
-            amountOut: outputAmountFormatted,
-            priceImpact: data.data.priceImpact.toFixed(2),
-            fee: feeFormatted,
-            rate: rate,
-          },
-          isFetchingQuote: false,
-        }));
-      } else {
-        throw new Error(data.error || 'Pool may not exist yet');
-      }
+      setState(prev => ({
+        ...prev,
+        outputAmount: outputAmountFormatted,
+        quote: {
+          amountOut: outputAmountFormatted,
+          priceImpact: quote.priceImpact.toFixed(2),
+          fee: feeFormatted,
+          rate: rate,
+        },
+        isFetchingQuote: false,
+      }));
     } catch (error) {
       console.error('Failed to fetch quote:', error);
       setState(prev => ({
