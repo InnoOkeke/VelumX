@@ -7,11 +7,13 @@ import { BatteryCharging } from 'lucide-react';
 import { ArrowUpRight } from 'lucide-react';
 import { ArrowDownRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useUser } from '@/components/providers/SessionProvider';
 
 import { RELAYER_URL } from '@/lib/config';
 
 export default function DashboardOverview() {
   const [isClient, setIsClient] = useState(false);
+  const { user, loading: userLoading } = useUser();
   const [statsData, setStatsData] = useState({
     totalTransactions: 0,
     activeKeys: 0,
@@ -27,21 +29,27 @@ export default function DashboardOverview() {
   useEffect(() => {
     setIsClient(true);
     const fetchAllData = async () => {
+      if (!user) return;
+      
+      setIsLoading(true);
       try {
         const supabase = (await import('@/lib/supabase/client')).createClient();
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const headers: any = { 'cache': 'no-store' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (!token) {
+          console.log('Dashboard: No session token available yet.');
+          return;
+        }
 
         const fetchStats = async () => {
           try {
             const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { 
               cache: 'no-store',
-              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+              headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) return await res.json();
+            if (res.status === 401) console.warn('Relayer: 401 Unauthorized');
           } catch (e) { console.warn('Stats fetch failed'); }
           return null;
         };
@@ -50,7 +58,7 @@ export default function DashboardOverview() {
           try {
             const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, { 
               cache: 'no-store',
-              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+              headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) return await res.json();
           } catch (e) { console.warn('Logs fetch failed'); }
@@ -71,8 +79,11 @@ export default function DashboardOverview() {
         setIsLoading(false);
       }
     };
-    fetchAllData();
-  }, []);
+
+    if (!userLoading) {
+      fetchAllData();
+    }
+  }, [user, userLoading]);
 
   if (!isClient) return null;
 
@@ -252,3 +263,15 @@ export default function DashboardOverview() {
     </div>
   );
 }
+function setIsLoading(arg0: boolean) {
+  throw new Error('Function not implemented.');
+}
+
+function setStatsData(stats: any) {
+  throw new Error('Function not implemented.');
+}
+
+function setLogs(logsData: any) {
+  throw new Error('Function not implemented.');
+}
+

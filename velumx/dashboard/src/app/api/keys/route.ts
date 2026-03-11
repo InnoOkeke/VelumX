@@ -30,10 +30,10 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json({ apiKeys })
-  } catch (error) {
-    console.error("Failed to fetch API keys:", error)
+  } catch (error: any) {
+    console.error("Dashboard API: Failed to fetch API keys:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error.message },
       { status: 500 }
     )
   }
@@ -75,10 +75,10 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ apiKey })
-  } catch (error) {
-    console.error("Failed to create API key:", error)
+  } catch (error: any) {
+    console.error("Dashboard API: Failed to create API key:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error.message, stack: error.stack },
       { status: 500 }
     )
   }

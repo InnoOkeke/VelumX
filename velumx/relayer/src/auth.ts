@@ -9,6 +9,7 @@ export const verifySupabaseToken = (req: AuthRequest, res: Response, next: NextF
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.warn("Relayer Auth: Missing or invalid Bearer token header.");
         return res.status(401).json({ error: 'Missing or invalid authorization header' });
     }
 
@@ -17,17 +18,18 @@ export const verifySupabaseToken = (req: AuthRequest, res: Response, next: NextF
 
     if (!jwtSecret) {
         console.error("Relayer Auth: SUPABASE_JWT_SECRET is not set in environment.");
-        // In local development or if not yet configured, we might allow bypass IF explicitely enabled
-        // but for safety, we'll fail fast.
         return res.status(500).json({ error: 'Server authentication misconfiguration' });
     }
 
     try {
         const decoded = jwt.verify(token, jwtSecret) as { sub: string };
-        req.userId = decoded.sub; // 'sub' in Supabase JWT is the user's UUID
+        req.userId = decoded.sub;
         next();
-    } catch (error) {
-        console.error("Relayer Auth: JWT verification failed:", error);
+    } catch (error: any) {
+        console.error("Relayer Auth: JWT verification failed!", {
+            error: error.message,
+            tokenSnippet: token.substring(0, 10) + "..."
+        });
         return res.status(401).json({ error: 'Unauthorized' });
     }
 };

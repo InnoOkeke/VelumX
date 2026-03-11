@@ -22,7 +22,7 @@ build/
 out/
 
 # Logs
-logs/
+/log/
 *.log
 details.md
 

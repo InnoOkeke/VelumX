@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useUser } from '@/components/providers/SessionProvider';
 import { Wallet, RefreshCcw, History } from 'lucide-react';
 import { useWallet } from '@/components/providers/WalletContext';
 
@@ -8,6 +9,7 @@ import { RELAYER_URL } from '@/lib/config';
 
 export default function FundingPage() {
     const [isClient, setIsClient] = useState(false);
+    const { user, loading: userLoading } = useUser();
     const { network } = useWallet();
     const [stats, setStats] = useState({
         relayerAddress: 'Loading...',
@@ -17,15 +19,19 @@ export default function FundingPage() {
     const [isFetching, setIsFetching] = useState(true);
 
     const fetchRelayerStatus = async () => {
+        if (!user) return;
+        
         setIsFetching(true);
         try {
             const supabase = (await import('@/lib/supabase/client')).createClient();
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
 
+            if (!token) return;
+
             const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { 
                 cache: 'no-store',
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
@@ -46,8 +52,10 @@ export default function FundingPage() {
 
     useEffect(() => {
         setIsClient(true);
-        fetchRelayerStatus();
-    }, [network]);
+        if (!userLoading) {
+            fetchRelayerStatus();
+        }
+    }, [network, user, userLoading]);
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
