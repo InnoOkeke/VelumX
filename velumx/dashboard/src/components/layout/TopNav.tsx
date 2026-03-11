@@ -1,6 +1,9 @@
 'use client';
 
-import { Bell, Search, User, LogOut } from 'lucide-react';
+import { Bell } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { User } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useUser } from '../providers/SessionProvider';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';

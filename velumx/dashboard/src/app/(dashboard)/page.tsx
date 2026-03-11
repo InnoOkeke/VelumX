@@ -1,13 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-  Activity,
-  Users,
-  BatteryCharging,
-  ArrowUpRight,
-  ArrowDownRight
-} from 'lucide-react';
+import { Activity } from 'lucide-react';
+import { Users } from 'lucide-react';
+import { BatteryCharging } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
+import { ArrowDownRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { RELAYER_URL } from '@/lib/config';
@@ -18,29 +16,44 @@ export default function DashboardOverview() {
     totalTransactions: 0,
     activeKeys: 0,
     totalSponsored: '0',
-    activeSmartWallets: 0
+    activeSmartWallets: 0,
+    relayerAddress: '',
+    relayerStxBalance: '0',
+    relayerUsdcxBalance: '0'
   });
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setIsClient(true);
-    const fetchAllData = async () => {
+const fetchAllData = async () => {
       try {
-        const [statsRes, logsRes] = await Promise.all([
-          fetch(`${RELAYER_URL}/api/dashboard/stats`),
-          fetch(`${RELAYER_URL}/api/dashboard/logs`)
-        ]);
+        const fetchStats = async () => {
+          try {
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { cache: 'no-store' });
+            if (res.ok) return await res.json();
+          } catch (e) { console.warn('Stats fetch failed'); }
+          return null;
+        };
 
-        if (!statsRes.ok || !logsRes.ok) throw new Error('Failed to connect to Relayer');
+        const fetchLogs = async () => {
+          try {
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, { cache: 'no-store' });
+            if (res.ok) return await res.json();
+          } catch (e) { console.warn('Logs fetch failed'); }
+          return [];
+        };
 
-        const stats = await statsRes.json();
-        const logsData = await logsRes.json();
-        setStatsData(stats);
-        setLogs(logsData);
+        const [stats, logsData] = await Promise.all([fetchStats(), fetchLogs()]);
+
+        if (stats) setStatsData(stats);
+        if (logsData) setLogs(logsData);
+
+        if (!stats && logsData.length === 0) {
+          toast.error('Relayer Offline: Showing cached data.', { id: 'relayer-offline' });
+        }
       } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Relayer Offline: Dashboard displaying cached/empty data.', { duration: 5000 });
+        console.error('Dashboard Overview: Error fetching data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -79,9 +92,38 @@ export default function DashboardOverview() {
 
   return (
     <div className="space-y-8 pb-12">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Overview</h1>
-        <p className="text-white/40 mt-1 text-sm">Monitor your dApp's gas abstraction performance.</p>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Overview</h1>
+          <p className="text-white/40 mt-1 text-sm">Monitor your dApp's gas abstraction performance.</p>
+        </div>
+
+        {!isLoading && statsData.relayerAddress && (
+          <div className="glass-card px-5 py-3 flex items-center gap-6 border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-colors">
+            <div className="flex flex-col">
+              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Relayer Node</span>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[11px] text-white/60 font-mono tracking-tight">
+                  {statsData.relayerAddress.substring(0, 8)}...{statsData.relayerAddress.substring(statsData.relayerAddress.length - 6)}
+                </span>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-white/10" />
+            <div className="flex flex-col">
+              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">STX Balance</span>
+              <span className="text-[11px] text-white font-bold font-mono">
+                {(parseInt(statsData.relayerStxBalance) / 1_000_000).toFixed(2)} <span className="text-white/40 font-medium">STX</span>
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">USDCx Revenue</span>
+              <span className="text-[11px] text-emerald-400 font-bold font-mono">
+                {(parseInt(statsData.relayerUsdcxBalance) / 1_000_000).toFixed(2)} <span className="text-emerald-400/40 font-medium">USDCx</span>
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Metrics Row */}

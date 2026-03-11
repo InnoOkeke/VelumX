@@ -19,14 +19,16 @@ export default function FundingPage() {
     const fetchRelayerStatus = async () => {
         setIsFetching(true);
         try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`);
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
                 setStats({
                     relayerAddress: data.relayerAddress,
-                    relayerStxBalance: (parseInt(data.relayerStxBalance) / 1_000_000).toFixed(2),
-                    relayerUsdcxBalance: (parseInt(data.relayerUsdcxBalance) / 1_000_000).toFixed(2)
+                    relayerStxBalance: (parseInt(data.relayerStxBalance || '0') / 1_000_000).toFixed(2),
+                    relayerUsdcxBalance: (parseInt(data.relayerUsdcxBalance || '0') / 1_000_000).toFixed(2)
                 });
+            } else {
+                console.warn('Relayer: Stats API returned non-ok status');
             }
         } catch (error) {
             console.error('Error fetching relayer status:', error);
