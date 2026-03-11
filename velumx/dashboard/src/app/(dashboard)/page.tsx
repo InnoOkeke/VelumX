@@ -26,11 +26,21 @@ export default function DashboardOverview() {
 
   useEffect(() => {
     setIsClient(true);
-const fetchAllData = async () => {
+    const fetchAllData = async () => {
       try {
+        const supabase = (await import('@/lib/supabase/client')).createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const headers: any = { 'cache': 'no-store' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const fetchStats = async () => {
           try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { cache: 'no-store' });
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { 
+              cache: 'no-store',
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             if (res.ok) return await res.json();
           } catch (e) { console.warn('Stats fetch failed'); }
           return null;
@@ -38,7 +48,10 @@ const fetchAllData = async () => {
 
         const fetchLogs = async () => {
           try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, { cache: 'no-store' });
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, { 
+              cache: 'no-store',
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             if (res.ok) return await res.json();
           } catch (e) { console.warn('Logs fetch failed'); }
           return [];

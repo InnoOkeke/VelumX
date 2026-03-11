@@ -6,6 +6,8 @@ import { PaymasterService } from './PaymasterService.js';
 import { getAddressFromPrivateKey } from '@stacks/transactions';
 import { STACKS_MAINNET, STACKS_TESTNET, TransactionVersion } from '@stacks/network';
 
+import { verifySupabaseToken, AuthRequest } from './auth.js';
+
 dotenv.config();
 
 const prisma = new PrismaClient();
@@ -63,11 +65,28 @@ app.post('/api/v1/estimate', async (req, res) => {
 app.post('/api/v1/sponsor', async (req, res) => {
     try {
         const { intent } = req.body;
+        const apiKey = req.headers['x-api-key'] as string;
+
         if (!intent || !intent.signature) {
             return res.status(400).json({ error: "Missing signed intent" });
         }
 
-        const result = await paymasterService.sponsorIntent(intent);
+        // Resolve API Key to find the owner (userId)
+        let userId: string | undefined;
+        let apiKeyId: string | undefined;
+
+        if (apiKey) {
+            const keyRecord = await (prisma.apiKey as any).findUnique({
+                where: { key: apiKey },
+                select: { id: true, userId: true }
+            });
+            if (keyRecord) {
+                userId = keyRecord.userId || undefined;
+                apiKeyId = keyRecord.id;
+            }
+        }
+
+        const result = await paymasterService.sponsorIntent(intent, apiKeyId, userId);
         res.json(result);
     } catch (error: any) {
         console.error("Sponsorship Error:", error);
@@ -79,11 +98,23 @@ app.post('/api/v1/sponsor', async (req, res) => {
 app.post('/api/v1/broadcast', async (req, res) => {
     try {
         const { txHex } = req.body;
+        const apiKey = req.headers['x-api-key'] as string;
+
         if (!txHex) {
             return res.status(400).json({ error: "Missing transaction hex" });
         }
 
-        const result = await paymasterService.sponsorRawTransaction(txHex);
+        // Resolve API Key to find the owner (userId)
+        let userId: string | undefined;
+        if (apiKey) {
+            const keyRecord = await (prisma.apiKey as any).findUnique({
+                where: { key: apiKey },
+                select: { userId: true }
+            });
+            userId = keyRecord?.userId || undefined;
+        }
+
+        const result = await paymasterService.sponsorRawTransaction(txHex, userId);
         res.json(result);
     } catch (error: any) {
         console.error("Broadcast Error:", error);
@@ -92,39 +123,27 @@ app.post('/api/v1/broadcast', async (req, res) => {
 });
 
 // ==========================================
-// Dashboard Analytics Endpoints
+// Dashboard Analytics Endpoints (Multi-tenant)
 // ==========================================
 
-// Simple dashboard auth middleware (optional - add admin password)
-const dashboardAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const adminPassword = process.env.DASHBOARD_PASSWORD;
-    
-    // If no password is set, allow access (for development)
-    if (!adminPassword) {
-        return next();
-    }
-    
-    const authHeader = req.headers.authorization;
-    if (authHeader === `Bearer ${adminPassword}`) {
-        return next();
-    }
-    
-    res.status(401).json({ error: 'Unauthorized' });
-};
-
 // Get Analytics Overview
-app.get('/api/dashboard/stats', dashboardAuth, async (req, res) => {
+app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, res) => {
     try {
+        const userId = req.userId!;
+        
         let totalTransactions = 0;
         let activeKeys = 0;
         let totalSponsored = BigInt(0);
 
         try {
-            totalTransactions = await prisma.transaction.count();
-            activeKeys = await prisma.apiKey.count({ where: { status: 'Active' } });
+            totalTransactions = await (prisma.transaction as any).count({ where: { userId } });
+            activeKeys = await (prisma.apiKey as any).count({ where: { userId, status: 'Active' } });
 
             // Sum total sponsored amount with sanitization
-            const transactions = await prisma.transaction.findMany({ select: { feeAmount: true } });
+            const transactions = await (prisma.transaction as any).findMany({ 
+                where: { userId },
+                select: { feeAmount: true } 
+            });
             for (const tx of transactions) {
                 try {
                     const amount = tx.feeAmount?.replace(/[^0-9]/g, '') || '0';
@@ -138,17 +157,10 @@ app.get('/api/dashboard/stats', dashboardAuth, async (req, res) => {
         }
 
         // --- Relayer Health Metrics ---
-        const relayerKey = process.env.RELAYER_PRIVATE_KEY || '';
+        const relayerKey = paymasterService.getUserRelayerKey(userId);
         const networkType = process.env.NETWORK || 'testnet';
         const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
         const version = networkType === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;
-
-        const sanitizeKey = (key: string) => {
-            let s = key.trim();
-            if (s.startsWith('0x')) s = s.substring(2);
-            if (s.length === 64) s += '01';
-            return s;
-        };
 
         let relayerAddress = "Not Configured";
         let stxBalance = "0";
@@ -156,8 +168,7 @@ app.get('/api/dashboard/stats', dashboardAuth, async (req, res) => {
 
         if (relayerKey) {
             try {
-                const sanitizedKey = sanitizeKey(relayerKey);
-                relayerAddress = getAddressFromPrivateKey(sanitizedKey, version as any);
+                relayerAddress = getAddressFromPrivateKey(relayerKey, version as any);
 
                 // Fetch STX Balance
                 const url = `${network.client.baseUrl}/v2/accounts/${relayerAddress}`;
@@ -185,9 +196,11 @@ app.get('/api/dashboard/stats', dashboardAuth, async (req, res) => {
 });
 
 // Get API Keys
-app.get('/api/dashboard/keys', dashboardAuth, async (req, res) => {
+app.get('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res) => {
     try {
-        const keys = await prisma.apiKey.findMany({
+        const userId = req.userId!;
+        const keys = await (prisma.apiKey as any).findMany({
+            where: { userId },
             orderBy: { createdAt: 'desc' }
         });
         res.json(keys);
@@ -197,17 +210,19 @@ app.get('/api/dashboard/keys', dashboardAuth, async (req, res) => {
 });
 
 // Generate new API Key
-app.post('/api/dashboard/keys', dashboardAuth, async (req, res) => {
+app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res) => {
     try {
+        const userId = req.userId!;
         const { name } = req.body;
         // Generate a random mock key (e.g. sgal_live_...)
         const rawKey = `sgal_live_${Math.random().toString(36).substring(2, 15)}`;
 
-        const newKey = await prisma.apiKey.create({
+        const newKey = await (prisma.apiKey as any).create({
             data: {
                 name: name || 'Unnamed Key',
                 key: rawKey,
-                status: 'Active'
+                status: 'Active',
+                userId: userId
             }
         });
 
@@ -218,9 +233,11 @@ app.post('/api/dashboard/keys', dashboardAuth, async (req, res) => {
 });
 
 // Get Transaction Logs
-app.get('/api/dashboard/logs', dashboardAuth, async (req, res) => {
+app.get('/api/dashboard/logs', verifySupabaseToken, async (req: AuthRequest, res) => {
     try {
-        const logs = await prisma.transaction.findMany({
+        const userId = req.userId!;
+        const logs = await (prisma.transaction as any).findMany({
+            where: { userId },
             orderBy: { createdAt: 'desc' },
             take: 50,
             include: { apiKey: true }

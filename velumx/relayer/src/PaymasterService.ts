@@ -14,6 +14,7 @@ import {
 } from '@stacks/transactions';
 import { StacksNetwork, STACKS_MAINNET, STACKS_TESTNET, TransactionVersion } from '@stacks/network';
 import { PrismaClient } from '@prisma/client';
+import crypto from 'node:crypto';
 
 const prisma = new PrismaClient();
 
@@ -67,31 +68,54 @@ export class PaymasterService {
         return sanitized;
     }
 
+    /**
+     * Deterministically derive a unique relayer key for a specific developer
+     * based on their Supabase User ID and the Relayer's Master Key.
+     */
+    public getUserRelayerKey(userId: string): string {
+        if (!this.relayerKey) throw new Error("Relayer master key not configured");
+        if (!userId) throw new Error("User ID required for key derivation");
+
+        // Create a deterministic sub-key using HMAC-SHA256
+        const hmac = crypto.createHmac('sha256', Buffer.from(this.relayerKey, 'hex'));
+        hmac.update(userId);
+        const derivedBuffer = hmac.digest();
+        
+        // Ensure it's 33 bytes for Stacks (compressed)
+        let derivedHex = derivedBuffer.toString('hex');
+        if (derivedHex.length === 64) derivedHex += '01';
+        
+        return derivedHex;
+    }
+
     public async estimateFee(intent: any) {
         // Logic to calculate estimated STX gas, convert using Oracle rate, and add markup
-        // In a real scenario, this queries the smart contract via read-only call
         return {
             maxFeeUSDCx: "250000", // e.g. $0.25
             estimatedGas: 5000
         };
     }
 
-    public async sponsorIntent(intent: SignedIntent) {
-        if (!this.relayerKey) throw new Error("Relayer key not configured");
+    public async sponsorIntent(intent: SignedIntent, apiKeyId?: string, userId?: string) {
+        // Use user-specific key if userId is provided, otherwise fallback to master (legacy/admin)
+        const activeKey = userId ? this.getUserRelayerKey(userId) : this.relayerKey;
+        
+        if (!activeKey) throw new Error("Relayer key not configured");
 
         console.log("Relayer: Processing account-abstraction intent", {
             target: intent.target,
             nonce: intent.nonce,
-            maxFee: intent.maxFeeUSDCx
+            maxFee: intent.maxFeeUSDCx,
+            tenant: userId || 'MASTER'
         });
 
         let [contractAddress, contractName] = this.smartWalletContract.split('.');
 
-        // If relative (e.g. .smart-wallet-v10), derive address from relayer key
-        if (!contractAddress && this.relayerKey) {
+        // If relative (e.g. .smart-wallet-v10), derive address from active key
+        if (!contractAddress && activeKey) {
             const { getAddressFromPrivateKey } = await import('@stacks/transactions');
             const version = process.env.NETWORK === 'mainnet' ? TransactionVersion.Mainnet : TransactionVersion.Testnet;
-            contractAddress = getAddressFromPrivateKey(this.relayerKey, version as any);
+            contractAddress = getAddressFromPrivateKey(activeKey, version as any);
         }
 
         const txOptions = {
@@ -106,7 +130,7 @@ export class PaymasterService {
                 bufferCV(Buffer.from(intent.signature.replace(/^0x/, ''), 'hex')),
                 principalCV(process.env.USDCX_TOKEN || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
             ],
-            senderKey: this.relayerKey,
+            senderKey: activeKey,
             validateWithAbi: false,
             network: this.network,
             anchorMode: AnchorMode.Any,
@@ -124,15 +148,17 @@ export class PaymasterService {
 
             const txid = response.txid;
 
-            // Save to Database
+            // Save to Database with Multi-tenant association
             try {
-                await prisma.transaction.create({
+                await (prisma.transaction as any).create({
                     data: {
                         txid,
                         type: 'Intent Sponsorship',
                         userAddress: intent.target,
                         feeAmount: intent.maxFeeUSDCx.toString(),
-                        status: 'Pending'
+                        status: 'Pending',
+                        userId: userId || null,
+                        apiKeyId: apiKeyId || null
                     }
                 });
             } catch (dbError) {
@@ -148,43 +174,25 @@ export class PaymasterService {
 
     /**
      * Sponsor a raw Stacks transaction hex
-     * Used for Bridge withdrawals where the transaction is already fully built by the client
      */
-    public async sponsorRawTransaction(txHex: string) {
-        if (!this.relayerKey) throw new Error("Relayer key not configured");
+    public async sponsorRawTransaction(txHex: string, userId?: string) {
+        const activeKey = userId ? this.getUserRelayerKey(userId) : this.relayerKey;
+        if (!activeKey) throw new Error("Relayer key not configured");
 
         try {
-            // 1. Deserialize the transaction
             const transaction = deserializeTransaction(txHex);
 
-            // 2. Validate it's a sponsored transaction
-            if (!transaction.auth.spendingCondition || !('sponsor' in transaction.auth.spendingCondition)) {
-                // In Stacks v7, we check the auth field
-                const auth: any = transaction.auth;
-                if (auth.spendingCondition?.authType !== 0x01 && auth.spendingCondition?.authType !== 0x05) {
-                    // 0x05 is SponsoredSingleSig, 0x01 is StandardSingleSig
-                    // For 2026/Stacks v7+, we use the authType or sponsor field presence
-                }
-            }
-
-            // 3. Sign as sponsor
-            // Standard fee for sponsored transactions (0.05 STX)
+            // Sign as sponsor
             const RELAYER_FEE = 50000n; // microSTX
 
             const signedTx = await sponsorTransaction({
                 transaction,
-                sponsorPrivateKey: this.relayerKey,
+                sponsorPrivateKey: activeKey,
                 network: this.network,
                 fee: RELAYER_FEE,
             });
 
-            console.log("Relayer: Transaction sponsored successfully", {
-                version: (signedTx as any).version,
-                chainId: (signedTx as any).chainId,
-                fee: RELAYER_FEE.toString()
-            });
-
-            // 4. Broadcast using Stacks.js utility
+            // Broadcast
             const response = await broadcastTransaction({ transaction: signedTx, network: this.network });
 
             if ('error' in response) {
@@ -196,13 +204,14 @@ export class PaymasterService {
 
             // Save to Database
             try {
-                await prisma.transaction.create({
+                await (prisma.transaction as any).create({
                     data: {
                         txid: txid,
                         type: 'Native Sponsorship',
                         userAddress: 'unknown',
                         feeAmount: '0',
-                        status: 'Pending'
+                        status: 'Pending',
+                        userId: userId || null
                     }
                 });
             } catch (e) { }

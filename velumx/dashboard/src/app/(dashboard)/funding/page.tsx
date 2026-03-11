@@ -19,7 +19,14 @@ export default function FundingPage() {
     const fetchRelayerStatus = async () => {
         setIsFetching(true);
         try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { cache: 'no-store' });
+            const supabase = (await import('@/lib/supabase/client')).createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { 
+                cache: 'no-store',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             if (res.ok) {
                 const data = await res.json();
                 setStats({
