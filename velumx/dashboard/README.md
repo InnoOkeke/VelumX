@@ -1,36 +1,217 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VelumX Developer Dashboard
 
-## Getting Started
+A Next.js dashboard for developers to manage their VelumX SDK integration, generate API keys, and monitor usage.
 
-First, run the development server:
+## Features
+
+- 🔐 Authentication with Supabase (Email + GitHub OAuth)
+- 🔑 API Key Generation and Management
+- 📊 Usage Logs and Analytics
+- 💰 Relayer Funding Management
+- 🎨 Modern Dark UI with Tailwind CSS
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Set Up Environment Variables
+
+Create `.env.local` file:
+
+```bash
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://yjbsdesjzvuagcxntscd.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+
+# Database (Supabase PostgreSQL)
+DATABASE_URL=""
+
+# VelumX Relayer
+NEXT_PUBLIC_VELUMX_RELAYER_URL=https://sgal-relayer.onrender.com
+```
+
+### 3. Get Supabase Credentials
+
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project: `yjbsdesjzvuagcxntscd`
+3. Go to **Settings > API**
+4. Copy:
+   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
+   - anon/public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - service_role key → `SUPABASE_SERVICE_ROLE_KEY` (keep secret!)
+
+### 4. Configure Authentication Providers
+
+#### Email Authentication (Already Enabled)
+- Go to **Authentication > Providers** in Supabase
+- Email provider should be enabled by default
+
+#### GitHub OAuth
+1. In Supabase: **Authentication > Providers > GitHub**
+2. Copy the Callback URL shown
+3. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+4. Click **New OAuth App**
+5. Fill in:
+   - **Application name**: VelumX Dashboard
+   - **Homepage URL**: `http://localhost:3000` (dev) or your production URL
+   - **Authorization callback URL**: Paste from Supabase
+6. Click **Register application**
+7. Copy **Client ID** and generate **Client Secret**
+8. Paste both into Supabase GitHub provider settings
+9. Click **Save**
+
+### 5. Set Up Database
+
+```bash
+# Run migrations
+npx prisma migrate dev
+
+# Generate Prisma client
+npx prisma generate
+```
+
+### 6. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+velumx/dashboard/
+├── src/
+│   ├── app/
+│   │   ├── (dashboard)/          # Protected dashboard routes
+│   │   │   ├── api-keys/         # API key management
+│   │   │   ├── funding/          # Relayer funding
+│   │   │   └── logs/             # Usage logs
+│   │   ├── api/
+│   │   │   ├── keys/             # API key CRUD endpoints
+│   │   │   └── auth/callback/    # OAuth callback
+│   │   └── auth/
+│   │       ├── signin/           # Sign in page
+│   │       └── signup/           # Sign up page
+│   ├── components/
+│   │   ├── layout/               # Dashboard layout components
+│   │   └── providers/            # Session provider
+│   └── lib/
+│       ├── supabase/             # Supabase client utilities
+│       └── prisma.ts             # Prisma client singleton
+├── prisma/
+│   └── schema.prisma             # Database schema
+└── public/                       # Static assets
+```
 
-## Learn More
+## Database Schema
 
-To learn more about Next.js, take a look at the following resources:
+### ApiKey
+- Stores developer API keys
+- Links to Supabase Auth user via `userId`
+- Tracks creation, last usage, and revocation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### UsageLog
+- Records API key usage
+- Tracks endpoint, method, status, response time
+- Links to ApiKey for analytics
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Routes
 
-## Deploy on Vercel
+### Authentication
+- `GET /auth/signin` - Sign in page
+- `GET /auth/signup` - Sign up page
+- `GET /auth/callback` - OAuth callback handler
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### API Keys
+- `GET /api/keys` - List user's API keys
+- `POST /api/keys` - Generate new API key
+- `DELETE /api/keys/[id]` - Revoke API key
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage
+
+### For Developers Using VelumX
+
+1. **Sign Up**: Create account with email or GitHub
+2. **Generate API Key**: Go to API Keys page and create a new key
+3. **Copy Key**: Save the key securely (shown only once)
+4. **Integrate**: Use the key in your backend:
+
+```typescript
+import { VelumXClient } from '@velumx/sdk'
+
+const client = new VelumXClient({
+  apiKey: process.env.VELUMX_API_KEY, // vx_...
+  network: 'testnet'
+})
+
+// Sponsor a transaction
+const sponsored = await client.sponsorTransaction(unsignedTx)
+```
+
+5. **Monitor**: View usage logs in the dashboard
+6. **Fund**: Add STX to your relayer balance for sponsoring transactions
+
+## Security
+
+- ✅ API keys are prefixed with `vx_` for easy identification
+- ✅ Service role key is server-side only
+- ✅ Middleware protects dashboard routes
+- ✅ Supabase handles authentication securely
+- ⚠️ Consider implementing Row Level Security (RLS) in Supabase
+- ⚠️ Consider hashing API keys in production
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Push code to GitHub
+2. Import project in Vercel
+3. Add environment variables
+4. Deploy
+
+### Manual
+
+```bash
+npm run build
+npm start
+```
+
+## Troubleshooting
+
+### "Unauthorized" errors
+- Check Supabase credentials in `.env.local`
+- Verify user is signed in
+- Check browser console for auth errors
+
+### Database connection errors
+- Verify `DATABASE_URL` is correct
+- Check Supabase database is running
+- Run `npx prisma migrate dev` to sync schema
+
+### OAuth not working
+- Verify callback URL matches in GitHub and Supabase
+- Check Client ID and Secret are correct
+- Ensure GitHub OAuth app is not suspended
+
+## Documentation
+
+- [SETUP.md](./SETUP.md) - Detailed setup instructions
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture overview
+- [Supabase Docs](https://supabase.com/docs)
+- [Next.js Docs](https://nextjs.org/docs)
+- [Prisma Docs](https://www.prisma.io/docs)
+
+## Support
+
+For issues or questions:
+- Check existing documentation
+- Review Supabase logs
+- Check browser console for errors
+- Verify environment variables are set correctly

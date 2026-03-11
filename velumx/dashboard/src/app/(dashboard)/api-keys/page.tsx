@@ -5,56 +5,115 @@ import {
     KeyRound,
     Plus,
     Copy,
-    MoreVertical,
-    ShieldAlert
+    Trash2,
+    ShieldAlert,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { RELAYER_URL } from '@/lib/config';
+interface ApiKey {
+    id: string;
+    name: string;
+    key: string;
+    lastUsedAt: string | null;
+    createdAt: string;
+}
 
 export default function ApiKeysPage() {
     const [isClient, setIsClient] = useState(false);
-    const [keys, setKeys] = useState<{ id: string; name: string; key: string; status: string; createdAt: string }[]>([]);
+    const [keys, setKeys] = useState<ApiKey[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [showNewKeyModal, setShowNewKeyModal] = useState(false);
+    const [newKeyName, setNewKeyName] = useState('');
+    const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+    const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
 
     const fetchKeys = async () => {
         try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/keys`);
+            const res = await fetch('/api/keys');
             if (!res.ok) throw new Error('Failed to fetch keys');
             const data = await res.json();
-            setKeys(data);
+            setKeys(data.apiKeys);
         } catch (error) {
             console.error('Error fetching keys:', error);
-            // We use toast safely inside a function
-            toast.error('Could not reach Relayer. Please check your connection.');
+            toast.error('Failed to load API keys');
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleGenerateKey = async () => {
+        if (!newKeyName.trim()) {
+            toast.error('Please enter a key name');
+            return;
+        }
+
         setIsGenerating(true);
         const toastId = toast.loading('Generating your new API key...');
         try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/keys`, {
+            const res = await fetch('/api/keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `Prod Key ${keys.length + 1}` })
+                body: JSON.stringify({ name: newKeyName.trim() })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setNewlyCreatedKey(data.apiKey.key);
+                await fetchKeys();
+                toast.success('API Key generated successfully!', { id: toastId });
+                setNewKeyName('');
+            } else {
+                const error = await res.json();
+                throw new Error(error.error || 'Server error');
+            }
+        } catch (error: any) {
+            console.error('Error generating key:', error);
+            toast.error(error.message || 'Failed to generate key', { id: toastId });
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleRevokeKey = async (id: string, name: string) => {
+        if (!confirm(`Are you sure you want to revoke "${name}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        const toastId = toast.loading('Revoking API key...');
+        try {
+            const res = await fetch(`/api/keys/${id}`, {
+                method: 'DELETE',
             });
 
             if (res.ok) {
                 await fetchKeys();
-                toast.success('API Key generated successfully!', { id: toastId });
+                toast.success('API key revoked successfully', { id: toastId });
             } else {
-                throw new Error('Server error');
+                throw new Error('Failed to revoke key');
             }
         } catch (error) {
-            console.error('Error generating key:', error);
-            toast.error('Failed to generate key. Is the Relayer running?', { id: toastId });
-        } finally {
-            setIsGenerating(false);
+            console.error('Error revoking key:', error);
+            toast.error('Failed to revoke key', { id: toastId });
         }
+    };
+
+    const toggleKeyVisibility = (keyId: string) => {
+        setVisibleKeys(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(keyId)) {
+                newSet.delete(keyId);
+            } else {
+                newSet.add(keyId);
+            }
+            return newSet;
+        });
+    };
+
+    const maskKey = (key: string) => {
+        return `${key.substring(0, 8)}${'•'.repeat(48)}${key.substring(key.length - 8)}`;
     };
 
     const copyToClipboard = (text: string) => {
@@ -74,26 +133,104 @@ export default function ApiKeysPage() {
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-white mb-2">API Keys</h1>
-                    <p className="text-white/40 text-sm">Manage your secret keys for authenticating with the SGAL Relayer.</p>
+                    <p className="text-white/40 text-sm">Manage your secret keys for authenticating with VelumX SDK.</p>
                 </div>
 
                 <button
-                    onClick={handleGenerateKey}
-                    disabled={isGenerating}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-bold rounded-lg hover:bg-white/90 transition-all disabled:opacity-50"
+                    onClick={() => setShowNewKeyModal(true)}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-bold rounded-lg hover:bg-white/90 transition-all"
                 >
                     <Plus className="w-4 h-4" />
-                    {isGenerating ? 'Generating...' : 'Generate New Key'}
+                    Generate New Key
                 </button>
             </div>
 
             <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4 flex gap-4">
                 <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 text-white/60" />
                 <div className="text-sm">
-                    <p className="font-bold text-white mb-1">Secret keys grant access to your paymaster balance.</p>
+                    <p className="font-bold text-white mb-1">Secret keys grant access to your paymaster infrastructure.</p>
                     <p className="text-white/40">Never share your secret keys or expose them in client-side code. Use them only on your secure backend server.</p>
                 </div>
             </div>
+
+            {newlyCreatedKey && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6">
+                    <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                            <KeyRound className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="font-bold text-white mb-2">Your new API key</h3>
+                            <p className="text-sm text-white/60 mb-4">
+                                Make sure to copy your API key now. You won't be able to see it again!
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 px-4 py-3 bg-black/40 rounded-lg text-sm text-white font-mono border border-white/10">
+                                    {newlyCreatedKey}
+                                </code>
+                                <button
+                                    onClick={() => copyToClipboard(newlyCreatedKey)}
+                                    className="px-4 py-3 bg-white text-black rounded-lg hover:bg-white/90 transition-colors flex items-center gap-2 font-bold text-sm"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                    Copy
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => setNewlyCreatedKey(null)}
+                                className="mt-4 text-sm text-white/40 hover:text-white transition-colors"
+                            >
+                                I've saved my key
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showNewKeyModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-[#0a0a0a] border border-white/10 rounded-xl p-6 max-w-md w-full">
+                        <h3 className="text-xl font-bold text-white mb-4">Generate New API Key</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="keyName" className="block text-sm font-medium text-white/60 mb-2">
+                                    Key Name
+                                </label>
+                                <input
+                                    id="keyName"
+                                    type="text"
+                                    value={newKeyName}
+                                    onChange={(e) => setNewKeyName(e.target.value)}
+                                    placeholder="Production API Key"
+                                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowNewKeyModal(false);
+                                        setNewKeyName('');
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        handleGenerateKey();
+                                        setShowNewKeyModal(false);
+                                    }}
+                                    disabled={isGenerating || !newKeyName.trim()}
+                                    className="flex-1 px-4 py-2 bg-white text-black rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                                >
+                                    {isGenerating ? 'Generating...' : 'Generate'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="glass-card overflow-hidden !rounded-xl">
                 <div className="overflow-x-auto">
@@ -145,19 +282,20 @@ export default function ApiKeysPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border ${k.status === 'Active'
-                                            ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20'
-                                            : 'bg-rose-400/10 text-rose-400 border-rose-400/20'
-                                            }`}>
-                                            {k.status.toUpperCase()}
+                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border bg-emerald-400/10 text-emerald-400 border-emerald-400/20">
+                                            ACTIVE
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-xs text-white/40 font-mono">
                                         {new Date(k.createdAt).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button className="text-white/20 hover:text-white transition-colors p-1">
-                                            <MoreVertical className="w-5 h-5" />
+                                        <button 
+                                            onClick={() => handleRevokeKey(k.id, k.name)}
+                                            className="text-white/20 hover:text-rose-400 transition-colors p-1"
+                                            title="Revoke key"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
                                         </button>
                                     </td>
                                 </tr>
