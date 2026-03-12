@@ -80,11 +80,11 @@ export class PaymasterService {
         const hmac = crypto.createHmac('sha256', Buffer.from(this.relayerKey, 'hex'));
         hmac.update(userId);
         const derivedBuffer = hmac.digest();
-        
+
         // Ensure it's 33 bytes for Stacks (compressed)
         let derivedHex = derivedBuffer.toString('hex');
         if (derivedHex.length === 64) derivedHex += '01';
-        
+
         return derivedHex;
     }
 
@@ -99,7 +99,7 @@ export class PaymasterService {
     public async sponsorIntent(intent: SignedIntent, apiKeyId?: string, userId?: string) {
         // Use user-specific key if userId is provided, otherwise fallback to master (legacy/admin)
         const activeKey = userId ? this.getUserRelayerKey(userId) : this.relayerKey;
-        
+
         if (!activeKey) throw new Error("Relayer key not configured");
 
         console.log("Relayer: Processing account-abstraction intent", {

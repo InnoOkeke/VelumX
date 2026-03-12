@@ -30,7 +30,7 @@ export default function DashboardOverview() {
     setIsClient(true);
     const fetchAllData = async () => {
       if (!user) return;
-      
+
       setIsLoading(true);
       try {
         const supabase = (await import('@/lib/supabase/client')).createClient();
@@ -44,7 +44,7 @@ export default function DashboardOverview() {
 
         const fetchStats = async () => {
           try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { 
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, {
               cache: 'no-store',
               headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -56,7 +56,7 @@ export default function DashboardOverview() {
 
         const fetchLogs = async () => {
           try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, { 
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, {
               cache: 'no-store',
               headers: { 'Authorization': `Bearer ${token}` }
             });
