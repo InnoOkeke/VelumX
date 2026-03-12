@@ -1,41 +1,39 @@
-# VelumX SDK
+# @velumx/sdk
 
-The first Paymaster infrastructure on Stacks blockchain. Enable gasless transactions in your dApp - users pay gas fees in USDCx instead of STX.
+> Gasless transaction SDK for Stacks - Pay fees in USDCx, not STX
 
-## 🚀 Features
+[![npm version](https://img.shields.io/npm/v/@velumx/sdk.svg)](https://www.npmjs.com/package/@velumx/sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **Gasless Transactions**: Users pay fees in USDCx, not STX
-- **Account Abstraction**: Smart Wallet pattern with SIP-018 signing
-- **Simple Integration**: 3 lines of code to add gasless support
-- **Production Ready**: Battle-tested relayer infrastructure
-- **Developer Friendly**: TypeScript SDK with full type safety
+## Overview
 
-## 📦 Installation
+VelumX SDK enables gasless transactions on Stacks blockchain. Users pay transaction fees in USDCx instead of STX using Stacks' native sponsored transaction feature.
+
+### Key Features
+
+- � **Zero STX Required** - Users only need USDCx
+- ⚡ **Native Sponsorship** - Uses Stacks' built-in `sponsored` flag
+- 🔧 **Simple Integration** - 3 lines of code
+- 📦 **Lightweight** - ~50KB minified
+- � **Secure** - No smart wallet complexity
+
+## Installation
 
 ```bash
 npm install @velumx/sdk
 ```
 
-## 🔧 Quick Start
+## Quick Start
 
-### 1. Get API Key
-
-Register your dApp at [dashboard.velumx.com](https://dashboard.velumx.com) to get your API key.
-
-### 2. Initialize Client
+### 1. Initialize Client
 
 ```typescript
-import { VelumXClient } from '@velumx/sdk';
+import { getVelumXClient } from '@velumx/sdk';
 
-const velumx = new VelumXClient({
-  coreApiUrl: 'https://api.testnet.hiro.so',
-  network: 'testnet',
-  paymasterUrl: 'https://relayer.velumx.com/api/v1',
-  apiKey: 'your-api-key-here'
-});
+const velumx = getVelumXClient();
 ```
 
-### 3. Estimate Fee
+### 2. Estimate Fee
 
 ```typescript
 const estimate = await velumx.estimateFee({
@@ -43,263 +41,529 @@ const estimate = await velumx.estimateFee({
 });
 
 console.log(`Fee: ${estimate.maxFeeUSDCx} micro-USDCx`);
+// Output: Fee: 540000 micro-USDCx (0.54 USDCx)
 ```
 
-### 4. Submit Gasless Transaction
+### 3. Execute Gasless Transaction
 
 ```typescript
-import { tupleCV, uintCV, bufferCV, serializeCV } from '@stacks/transactions';
+import { openContractCall } from '@stacks/connect';
+import { Cl } from '@stacks/transactions';
 
-// Create your transaction payload
-const payload = tupleCV({
-  amount: uintCV(1000000), // 1 USDCx
-  recipient: bufferCV(recipientBytes)
+// Call paymaster contract with sponsored=true
+const result = await openContractCall({
+  contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+  contractName: 'simple-paymaster-v1',
+  functionName: 'bridge-gasless',
+  functionArgs: [
+    Cl.uint(10000000),  // 10 USDCx
+    Cl.buffer(recipientBytes),
+    Cl.uint(estimate.maxFeeUSDCx),
+    Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+    Cl.principal('ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
+  ],
+  sponsored: true,  // Enable gasless mode
+  network: 'testnet',
+  onFinish: async (data) => {
+    // Submit to relayer for sponsorship
+    const tx = await velumx.submitRawTransaction(data.txRaw);
+    console.log(`Transaction: ${tx.txid}`);
+  }
 });
-
-// Create intent
-const intent = {
-  target: 'ST...CONTRACT.paymaster-module-v10',
-  payload: serializeCV(payload),
-  maxFeeUSDCx: estimate.maxFeeUSDCx,
-  nonce: currentNonce
-};
-
-// Sign with user's wallet (SIP-018)
-const signature = await signWithWallet(intent);
-
-// Submit to relayer
-const result = await velumx.submitIntent({
-  ...intent,
-  signature
-});
-
-console.log(`Transaction ID: ${result.txid}`);
 ```
 
-## 📚 API Reference
+## How It Works
+
+### Architecture
+
+```
+┌──────────┐                                      ┌──────────┐
+│   User   │                                      │ Relayer  │
+└────┬─────┘                                      └────┬─────┘
+     │                                                  │
+     │ 1. Request fee estimate                         │
+     ├──────────────────────────────────────────────►  │
+     │                                                  │
+     │ 2. Return fee in USDCx                          │
+     │ ◄──────────────────────────────────────────────┤
+     │                                                  │
+     │ 3. Sign transaction (sponsored=true)            │
+     │                                                  │
+     │ 4. Submit signed transaction                    │
+     ├──────────────────────────────────────────────►  │
+     │                                                  │
+     │                                                  │ 5. Sponsor with STX
+     │                                                  │    & broadcast
+     │                                                  │
+     │ 6. Return transaction ID                        │
+     │ ◄──────────────────────────────────────────────┤
+     │                                                  │
+     ▼                                                  ▼
+
+┌─────────────────────────────────────────────────────┐
+│              Stacks Blockchain                       │
+│                                                      │
+│  simple-paymaster-v1::bridge-gasless                │
+│  • Transfer USDCx fee from user to relayer          │
+│  • Execute core logic (burn/swap)                   │
+│  • Transaction confirmed ✓                          │
+└─────────────────────────────────────────────────────┘
+```
+
+### Fee Calculation
+
+```
+Fee in USDCx = (Gas Cost in STX × STX/USD Rate × 1.08) / USDC/USD Rate
+
+Example:
+- Gas: 100,000 units = 1 STX
+- STX/USD: $0.50
+- Markup: 8%
+- Fee: 1 × $0.50 × 1.08 = $0.54 = 0.54 USDCx
+```
+
+## API Reference
 
 ### VelumXClient
 
-#### Constructor
+#### Configuration
 
 ```typescript
-new VelumXClient(config: NetworkConfig)
+interface NetworkConfig {
+  coreApiUrl: string;      // Stacks API URL
+  network: 'mainnet' | 'testnet' | 'devnet';
+  paymasterUrl?: string;   // Relayer URL (optional)
+}
 ```
 
-**NetworkConfig:**
-- `coreApiUrl`: Stacks API URL (mainnet/testnet)
-- `network`: 'mainnet' | 'testnet' | 'devnet'
-- `paymasterUrl`: VelumX relayer URL
-- `apiKey`: Your dApp API key (optional for testnet)
+**Default Configuration**:
+```typescript
+{
+  coreApiUrl: 'https://api.testnet.hiro.so',
+  network: 'testnet',
+  paymasterUrl: 'https://sgal-relayer.onrender.com/api/v1'
+}
+```
 
 #### Methods
 
 ##### estimateFee()
 
-```typescript
-estimateFee(intent: { estimatedGas: number }): Promise<{
-  maxFeeUSDCx: string;
-  estimatedGas: number;
-}>
-```
-
 Get fee estimate in USDCx for a transaction.
 
-##### submitIntent()
-
 ```typescript
-submitIntent(signedIntent: SignedIntent): Promise<{
-  txid: string;
-  status: string;
-}>
+estimateFee(params: {
+  estimatedGas: number
+}): Promise<FeeEstimate>
 ```
 
-Submit a signed intent for gasless execution.
+**Parameters**:
+- `estimatedGas`: Estimated gas units (e.g., 100000)
 
-**SignedIntent:**
-- `target`: Contract principal to call
-- `payload`: Hex-encoded transaction payload
-- `maxFeeUSDCx`: Maximum fee in micro-USDCx
-- `nonce`: Smart Wallet nonce
-- `signature`: SIP-018 signature
+**Returns**:
+```typescript
+interface FeeEstimate {
+  maxFeeUSDCx: string;    // Fee in micro-USDCx
+  estimatedGas: number;    // Gas units
+  stxToUsd?: number;       // Exchange rate
+  markup?: number;         // Fee markup (0.08 = 8%)
+}
+```
+
+**Example**:
+```typescript
+const estimate = await velumx.estimateFee({
+  estimatedGas: 100000
+});
+
+console.log(`Fee: ${estimate.maxFeeUSDCx} micro-USDCx`);
+// Fee: 540000 micro-USDCx (0.54 USDCx)
+```
 
 ##### submitRawTransaction()
 
+Submit a signed transaction for sponsorship.
+
 ```typescript
-submitRawTransaction(txHex: string): Promise<{
-  txid: string;
-  status: string;
-}>
+submitRawTransaction(txRaw: string): Promise<TransactionResult>
 ```
 
-Submit a raw Stacks transaction for sponsorship.
+**Parameters**:
+- `txRaw`: Hex-encoded signed transaction from wallet
 
-## 🎯 Use Cases
-
-### Bridge Transactions
-
+**Returns**:
 ```typescript
-// User bridges USDC from Ethereum to Stacks
-// Pays gas fee in USDCx instead of STX
-const payload = tupleCV({
-  amount: uintCV(5000000), // 5 USDCx
-  fee: uintCV(250000),     // 0.25 USDCx fee
-  recipient: bufferCV(ethAddressBytes)
-});
-
-const result = await velumx.submitIntent({
-  target: 'ST...ADMIN.paymaster-module-v10',
-  payload: serializeCV(payload),
-  maxFeeUSDCx: '250000',
-  nonce: 0,
-  signature: userSignature
-});
-```
-
-### Token Swaps
-
-```typescript
-// User swaps tokens without needing STX
-const payload = tupleCV({
-  tokenIn: principalCV('ST...TOKEN-A'),
-  tokenOut: principalCV('ST...TOKEN-B'),
-  amountIn: uintCV(1000000),
-  minOut: uintCV(950000),
-  fee: uintCV(200000)
-});
-
-const result = await velumx.submitIntent({
-  target: 'ST...ADMIN.swap-contract',
-  payload: serializeCV(payload),
-  maxFeeUSDCx: '200000',
-  nonce: 1,
-  signature: userSignature
-});
-```
-
-### NFT Minting
-
-```typescript
-// User mints NFT paying gas in USDCx
-const payload = tupleCV({
-  recipient: principalCV(userAddress),
-  tokenId: uintCV(42),
-  fee: uintCV(300000)
-});
-
-const result = await velumx.submitIntent({
-  target: 'ST...ADMIN.nft-contract',
-  payload: serializeCV(payload),
-  maxFeeUSDCx: '300000',
-  nonce: 2,
-  signature: userSignature
-});
-```
-
-## 🔐 Smart Wallet Setup
-
-Users need a Smart Wallet to use gasless transactions. The SDK handles this automatically:
-
-```typescript
-import { getSmartWalletManager } from '@velumx/sdk';
-
-const manager = getSmartWalletManager();
-
-// Check if user has Smart Wallet
-const hasWallet = await manager.hasSmartWallet(userAddress);
-
-if (!hasWallet) {
-  // Auto-register (one-time setup)
-  const result = await manager.ensureSmartWallet(userAddress);
-  console.log(`Smart Wallet: ${result}`);
+interface TransactionResult {
+  txid: string;           // Transaction ID
+  status: string;         // Status (pending/success/failed)
 }
 ```
 
-## 💰 Fee Structure
-
-- **Base Fee**: Actual STX gas cost converted to USDCx
-- **Markup**: 8% (configurable by relayer)
-- **Example**: 0.005 STX gas = ~$0.0025 = 0.0025 USDCx + 8% = 0.0027 USDCx
-
-## 🌐 Network Support
-
-### Testnet
-- Relayer: `https://relayer.velumx.com/api/v1`
-- Stacks API: `https://api.testnet.hiro.so`
-- Free for development (no API key required)
-
-### Mainnet
-- Relayer: `https://mainnet-relayer.velumx.com/api/v1`
-- Stacks API: `https://api.mainnet.hiro.so`
-- Requires API key from dashboard
-
-## 🛠️ Advanced Usage
-
-### Custom Fee Calculation
-
+**Example**:
 ```typescript
-// Get exchange rates
-const rates = await velumx.getExchangeRates();
-console.log(`STX/USD: ${rates.stxToUsd}`);
-
-// Calculate custom fee
-const gasInStx = 0.005;
-const gasInUsd = gasInStx * rates.stxToUsd;
-const feeInUsdcx = gasInUsd * 1.08; // 8% markup
+const result = await velumx.submitRawTransaction(data.txRaw);
+console.log(`Transaction ID: ${result.txid}`);
 ```
 
-### Transaction Monitoring
+##### sponsorTransaction()
+
+High-level helper to make any transaction gasless.
 
 ```typescript
-// Submit transaction
-const result = await velumx.submitIntent(signedIntent);
-
-// Monitor status
-const status = await fetch(
-  `https://api.testnet.hiro.so/extended/v1/tx/${result.txid}`
-);
-
-const data = await status.json();
-console.log(`Status: ${data.tx_status}`);
+sponsorTransaction(params: {
+  transaction: any;
+  network: 'mainnet' | 'testnet';
+}): Promise<any>
 ```
 
-### Error Handling
+**Parameters**:
+- `transaction`: Unsigned Stacks transaction
+- `network`: Target network
+
+**Returns**: Transaction with `sponsored: true` flag
+
+**Example**:
+```typescript
+import { makeContractCall } from '@stacks/transactions';
+
+const unsignedTx = await makeContractCall({...});
+
+const sponsored = await velumx.sponsorTransaction({
+  transaction: unsignedTx,
+  network: 'testnet'
+});
+
+// User signs and broadcasts
+const result = await openContractCall(sponsored);
+```
+
+## Use Cases
+
+### 1. Gasless Bridge
+
+Bridge USDC from Ethereum to Stacks without needing STX.
+
+```typescript
+import { getVelumXClient } from '@velumx/sdk';
+import { openContractCall } from '@stacks/connect';
+import { Cl } from '@stacks/transactions';
+import { parseUnits } from 'viem';
+
+async function gaslessBridge(amount: string, recipient: string) {
+  const velumx = getVelumXClient();
+  
+  // 1. Estimate fee
+  const estimate = await velumx.estimateFee({
+    estimatedGas: 100000
+  });
+  
+  // 2. Encode Ethereum address
+  const recipientBytes = encodeEthereumAddress(recipient);
+  
+  // 3. Execute gasless bridge
+  const result = await openContractCall({
+    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractName: 'simple-paymaster-v1',
+    functionName: 'bridge-gasless',
+    functionArgs: [
+      Cl.uint(parseUnits(amount, 6)),
+      Cl.buffer(recipientBytes),
+      Cl.uint(estimate.maxFeeUSDCx),
+      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+      Cl.principal('ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
+    ],
+    sponsored: true,
+    network: 'testnet',
+    onFinish: async (data) => {
+      const tx = await velumx.submitRawTransaction(data.txRaw);
+      console.log(`Bridge transaction: ${tx.txid}`);
+    }
+  });
+}
+
+// Helper function
+function encodeEthereumAddress(address: string): Uint8Array {
+  const hex = address.startsWith('0x') ? address.slice(2) : address;
+  const paddedHex = hex.padStart(64, '0');
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(paddedHex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+```
+
+### 2. Gasless Swap
+
+Swap tokens without holding STX.
+
+```typescript
+async function gaslessSwap(
+  tokenIn: string,
+  tokenOut: string,
+  amountIn: string,
+  minOut: string
+) {
+  const velumx = getVelumXClient();
+  
+  // 1. Estimate fee
+  const estimate = await velumx.estimateFee({
+    estimatedGas: 150000
+  });
+  
+  // 2. Execute gasless swap
+  const result = await openContractCall({
+    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractName: 'simple-paymaster-v1',
+    functionName: 'swap-gasless',
+    functionArgs: [
+      Cl.principal(tokenIn),
+      Cl.principal(tokenOut),
+      Cl.uint(parseUnits(amountIn, 6)),
+      Cl.uint(parseUnits(minOut, 6)),
+      Cl.uint(estimate.maxFeeUSDCx),
+      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+      Cl.principal('ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
+    ],
+    sponsored: true,
+    network: 'testnet',
+    onFinish: async (data) => {
+      const tx = await velumx.submitRawTransaction(data.txRaw);
+      console.log(`Swap transaction: ${tx.txid}`);
+    }
+  });
+}
+```
+
+### 3. Custom Gasless Transaction
+
+Make any contract call gasless.
+
+```typescript
+async function customGaslessTransaction() {
+  const velumx = getVelumXClient();
+  
+  // 1. Estimate fee
+  const estimate = await velumx.estimateFee({
+    estimatedGas: 120000
+  });
+  
+  // 2. Your custom contract call
+  const result = await openContractCall({
+    contractAddress: 'YOUR_CONTRACT_ADDRESS',
+    contractName: 'your-contract',
+    functionName: 'your-function',
+    functionArgs: [
+      // Your function args
+      Cl.uint(estimate.maxFeeUSDCx),  // Include fee
+      // More args...
+    ],
+    sponsored: true,  // Enable gasless
+    network: 'testnet',
+    onFinish: async (data) => {
+      const tx = await velumx.submitRawTransaction(data.txRaw);
+      console.log(`Transaction: ${tx.txid}`);
+    }
+  });
+}
+```
+
+## Smart Contract Integration
+
+To make your contract gasless-compatible, accept a fee parameter and transfer it to the relayer:
+
+```clarity
+(define-public (your-gasless-function
+    (amount uint)
+    (fee-usdcx uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    ;; 1. Transfer fee from user to relayer
+    (try! (contract-call? fee-token transfer 
+      fee-usdcx tx-sender relayer none))
+    
+    ;; 2. Your contract logic
+    (try! (your-logic amount))
+    
+    (ok true)
+  )
+)
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Frontend (.env.local)
+NEXT_PUBLIC_STACKS_NETWORK=testnet
+NEXT_PUBLIC_STACKS_API_URL=https://api.testnet.hiro.so
+NEXT_PUBLIC_VELUMX_RELAYER_URL=https://sgal-relayer.onrender.com/api/v1
+
+# Contracts
+NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1
+NEXT_PUBLIC_STACKS_USDCX_ADDRESS=ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx
+```
+
+### Network Configuration
+
+```typescript
+// Testnet (default)
+const velumx = getVelumXClient();
+
+// Mainnet
+const velumx = new VelumXClient({
+  coreApiUrl: 'https://api.mainnet.hiro.so',
+  network: 'mainnet',
+  paymasterUrl: 'https://mainnet-relayer.velumx.com/api/v1'
+});
+```
+
+## Error Handling
 
 ```typescript
 try {
-  const result = await velumx.submitIntent(signedIntent);
+  const estimate = await velumx.estimateFee({
+    estimatedGas: 100000
+  });
+  
+  const result = await openContractCall({
+    // ... transaction params
+    onFinish: async (data) => {
+      try {
+        const tx = await velumx.submitRawTransaction(data.txRaw);
+        console.log(`Success: ${tx.txid}`);
+      } catch (error) {
+        if (error.message.includes('insufficient balance')) {
+          console.error('User needs more USDCx for fees');
+        } else if (error.message.includes('invalid signature')) {
+          console.error('Signature verification failed');
+        } else {
+          console.error('Transaction failed:', error);
+        }
+      }
+    },
+    onCancel: () => {
+      console.log('User cancelled transaction');
+    }
+  });
 } catch (error) {
-  if (error.message.includes('insufficient balance')) {
-    console.error('User needs more USDCx for fees');
-  } else if (error.message.includes('invalid signature')) {
-    console.error('Signature verification failed');
-  } else {
-    console.error('Transaction failed:', error);
-  }
+  console.error('Failed to estimate fee:', error);
 }
 ```
 
-## 📖 Examples
+## Testing
 
-Check out complete examples:
-- [Bridge dApp](../examples/bridge)
-- [DEX Integration](../examples/swap)
-- [NFT Marketplace](../examples/nft)
+### Unit Tests
 
-## 🤝 Support
+```bash
+npm test
+```
+
+### Integration Tests
+
+```bash
+npm run test:integration
+```
+
+### Example Test
+
+```typescript
+import { getVelumXClient } from '@velumx/sdk';
+
+describe('VelumX SDK', () => {
+  it('should estimate fee correctly', async () => {
+    const velumx = getVelumXClient();
+    
+    const estimate = await velumx.estimateFee({
+      estimatedGas: 100000
+    });
+    
+    expect(estimate.maxFeeUSDCx).toBeDefined();
+    expect(Number(estimate.maxFeeUSDCx)).toBeGreaterThan(0);
+  });
+});
+```
+
+## Deployed Contracts
+
+### Testnet
+
+**Simple Paymaster**
+```
+Address: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1
+Network: Stacks Testnet
+Explorer: https://explorer.hiro.so/txid/0x90c134205b04599405e3cccae6c86ed496ae2d81ef0392970e2c9a7acd3b2138?chain=testnet
+```
+
+**USDCx Token**
+```
+Address: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx
+Standard: SIP-010
+Decimals: 6
+```
+
+**Relayer**
+```
+URL: https://sgal-relayer.onrender.com/api/v1
+Status: https://sgal-relayer.onrender.com/api/v1/health
+```
+
+## FAQ
+
+### Q: Do users need STX?
+**A:** No! Users only need USDCx. The relayer pays STX fees.
+
+### Q: How much does it cost?
+**A:** Fees are calculated in real-time based on STX/USD rates with an 8% markup. Typically 0.001-0.01 USDCx per transaction.
+
+### Q: Is it secure?
+**A:** Yes! Uses Stacks' native sponsored transaction feature. No smart wallet complexity.
+
+### Q: What wallets are supported?
+**A:** Any Stacks wallet (Xverse, Leather, Hiro) that supports sponsored transactions.
+
+### Q: Can I use this in production?
+**A:** Currently on testnet. Mainnet launch pending security audit.
+
+### Q: How do I get an API key?
+**A:** Visit [https://velum-x-ssum.vercel.app](https://velum-x-ssum.vercel.app) to sign up and generate API keys.
+
+## Examples
+
+Complete examples available in the repository:
+
+- [Bridge Example](../examples/bridge)
+- [Swap Example](../examples/swap)
+- [Custom Integration](../examples/custom)
+
+## Support
 
 - **Documentation**: [docs.velumx.com](https://docs.velumx.com)
-- **Dashboard**: [dashboard.velumx.com](https://dashboard.velumx.com)
+- **Dashboard**: [https://velum-x-ssum.vercel.app](https://velum-x-ssum.vercel.app)
 - **Discord**: [discord.gg/velumx](https://discord.gg/velumx)
 - **Email**: support@velumx.com
+- **GitHub Issues**: [github.com/velumx/sdk/issues](https://github.com/velumx/sdk/issues)
 
-## 📄 License
+## Contributing
 
-MIT License - see [LICENSE](./LICENSE) for details
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
-## 🎉 Contributing
+## License
 
-We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+MIT License - see [LICENSE](./LICENSE) for details.
+
+## Changelog
+
+### v2.0.0 (Current)
+- ✅ Simplified architecture (removed smart wallets)
+- ✅ Native Stacks sponsored transactions
+- ✅ Simple paymaster contract
+- ✅ Improved performance and reliability
+
+### v1.0.0
+- Initial release with smart wallet pattern
 
 ---
 
