@@ -1,6 +1,18 @@
 /**
  * Simple Gasless Swap Helper
  * Uses Stacks-native sponsored transactions with simple-paymaster-v1
+ * 
+ * MULTI-TOKEN SUPPORT:
+ * The paymaster accepts ANY SIP-010 token for fees via the <sip-010-trait> parameter.
+ * To use a different token (e.g., sBTC, ALEX):
+ * 1. Convert the fee estimate to the desired token's units
+ * 2. Pass the token's contract address as the last parameter
+ * 
+ * Example with sBTC:
+ *   Cl.principal('SM3KNVZS30WM7F89SXKVVFY4SN9RMPZZ9FX929N0V.sbtc')
+ * 
+ * Example with ALEX:
+ *   Cl.principal('ALEX_TOKEN_ADDRESS')
  */
 
 import { getStacksConnect, getNetworkInstance } from '../stacks-loader';

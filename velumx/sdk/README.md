@@ -113,13 +113,28 @@ const result = await openContractCall({
 ### Fee Calculation
 
 ```
-Fee in USDCx = (Gas Cost in STX × STX/USD Rate × 1.08) / USDC/USD Rate
+Fee in any SIP-010 token = (Gas Cost in STX × STX/USD Rate × 1.08) / Token/USD Rate
 
-Example:
+Example with USDCx:
 - Gas: 100,000 units = 1 STX
 - STX/USD: $0.50
+- USDC/USD: $1.00
 - Markup: 8%
-- Fee: 1 × $0.50 × 1.08 = $0.54 = 0.54 USDCx
+- Fee: 1 × $0.50 × 1.08 / $1.00 = 0.54 USDCx
+
+Example with sBTC:
+- Gas: 100,000 units = 1 STX
+- STX/USD: $0.50
+- BTC/USD: $45,000
+- Markup: 8%
+- Fee: 1 × $0.50 × 1.08 / $45,000 = 0.000012 BTC (1,200 sats)
+
+Example with ALEX:
+- Gas: 100,000 units = 1 STX
+- STX/USD: $0.50
+- ALEX/USD: $0.10
+- Markup: 8%
+- Fee: 1 × $0.50 × 1.08 / $0.10 = 5.4 ALEX
 ```
 
 ## API Reference
@@ -368,6 +383,85 @@ async function customGaslessTransaction() {
 }
 ```
 
+### 4. Using Different Fee Tokens
+
+Pay fees in sBTC, ALEX, or any SIP-010 token.
+
+```typescript
+async function gaslessWithSBTC(amount: string) {
+  const velumx = getVelumXClient();
+  
+  // 1. Estimate fee (returns USDCx equivalent)
+  const estimate = await velumx.estimateFee({
+    estimatedGas: 100000
+  });
+  
+  // 2. Convert fee to sBTC (example: 0.54 USDCx → 0.000012 BTC)
+  const feeInSBTC = convertToSBTC(estimate.maxFeeUSDCx);
+  
+  // 3. Execute with sBTC as fee token
+  const result = await openContractCall({
+    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractName: 'simple-paymaster-v1',
+    functionName: 'bridge-gasless',
+    functionArgs: [
+      Cl.uint(parseUnits(amount, 6)),
+      Cl.buffer(recipientBytes),
+      Cl.uint(feeInSBTC),  // Fee in sBTC
+      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+      Cl.principal('SM3KNVZS30WM7F89SXKVVFY4SN9RMPZZ9FX929N0V.sbtc')  // sBTC token
+    ],
+    sponsored: true,
+    network: 'testnet',
+    onFinish: async (data) => {
+      const tx = await velumx.submitRawTransaction(data.txRaw);
+      console.log(`Transaction: ${tx.txid}`);
+    }
+  });
+}
+
+// Helper: Convert USDCx fee to sBTC
+function convertToSBTC(feeInUSDCx: string): string {
+  // Example conversion (fetch real rates from API)
+  const usdcAmount = Number(feeInUSDCx) / 1_000_000; // 0.54 USDC
+  const btcPrice = 45000; // $45,000 per BTC
+  const btcAmount = usdcAmount / btcPrice; // 0.000012 BTC
+  const satoshis = Math.ceil(btcAmount * 100_000_000); // 1,200 sats
+  return satoshis.toString();
+}
+
+// Using ALEX token
+async function gaslessWithALEX(amount: string) {
+  const velumx = getVelumXClient();
+  
+  const estimate = await velumx.estimateFee({
+    estimatedGas: 100000
+  });
+  
+  // Convert to ALEX (example: 0.54 USDCx → 5.4 ALEX)
+  const feeInALEX = convertToALEX(estimate.maxFeeUSDCx);
+  
+  const result = await openContractCall({
+    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractName: 'simple-paymaster-v1',
+    functionName: 'bridge-gasless',
+    functionArgs: [
+      Cl.uint(parseUnits(amount, 6)),
+      Cl.buffer(recipientBytes),
+      Cl.uint(feeInALEX),  // Fee in ALEX
+      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+      Cl.principal('ALEX_TOKEN_ADDRESS')  // ALEX token
+    ],
+    sponsored: true,
+    network: 'testnet',
+    onFinish: async (data) => {
+      const tx = await velumx.submitRawTransaction(data.txRaw);
+      console.log(`Transaction: ${tx.txid}`);
+    }
+  });
+}
+```
+
 ## Smart Contract Integration
 
 To make your contract gasless-compatible, accept a fee parameter and transfer it to the relayer:
@@ -392,6 +486,55 @@ To make your contract gasless-compatible, accept a fee parameter and transfer it
 ```
 
 ## Configuration
+
+### Supported Fee Tokens
+
+VelumX accepts ANY SIP-010 token for gas fees. The paymaster contract uses the `<sip-010-trait>` parameter for universal compatibility.
+
+**Popular Tokens:**
+
+| Token | Contract Address | Decimals | Use Case |
+|-------|-----------------|----------|----------|
+| USDCx | `ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx` | 6 | Stablecoin fees |
+| sBTC | `SM3KNVZS30WM7F89SXKVVFY4SN9RMPZZ9FX929N0V.sbtc` | 8 | Bitcoin fees |
+| ALEX | `ALEX_TOKEN_ADDRESS` | 6 | DeFi token fees |
+| STX | Native | 6 | Native token fees |
+
+**Exchange Rate Calculation:**
+
+```typescript
+// Fetch real-time exchange rates
+async function calculateFeeInToken(
+  feeInUSDCx: string,
+  targetToken: 'sBTC' | 'ALEX' | 'STX'
+): Promise<string> {
+  const usdcAmount = Number(feeInUSDCx) / 1_000_000;
+  
+  // Fetch rates from price oracle or API
+  const rates = await fetchExchangeRates();
+  
+  switch (targetToken) {
+    case 'sBTC':
+      const btcAmount = usdcAmount / rates.BTC_USD;
+      return Math.ceil(btcAmount * 100_000_000).toString(); // Convert to satoshis
+    
+    case 'ALEX':
+      const alexAmount = usdcAmount / rates.ALEX_USD;
+      return Math.ceil(alexAmount * 1_000_000).toString(); // Convert to micro-ALEX
+    
+    case 'STX':
+      const stxAmount = usdcAmount / rates.STX_USD;
+      return Math.ceil(stxAmount * 1_000_000).toString(); // Convert to micro-STX
+    
+    default:
+      return feeInUSDCx;
+  }
+}
+
+// Example usage
+const estimate = await velumx.estimateFee({ estimatedGas: 100000 });
+const feeInSBTC = await calculateFeeInToken(estimate.maxFeeUSDCx, 'sBTC');
+```
 
 ### Environment Variables
 
@@ -513,10 +656,13 @@ Status: https://sgal-relayer.onrender.com/api/v1/health
 ## FAQ
 
 ### Q: Do users need STX?
-**A:** No! Users only need USDCx. The relayer pays STX fees.
+**A:** No! Users only need any SIP-010 token (USDCx, sBTC, ALEX, etc.). The relayer pays STX fees.
+
+### Q: What tokens can I use for fees?
+**A:** Any SIP-010 compliant token! Popular options include USDCx, sBTC, ALEX, and STX. The paymaster contract uses the `<sip-010-trait>` parameter for universal compatibility.
 
 ### Q: How much does it cost?
-**A:** Fees are calculated in real-time based on STX/USD rates with an 8% markup. Typically 0.001-0.01 USDCx per transaction.
+**A:** Fees are calculated in real-time based on STX/USD rates with an 8% markup. Typically 0.001-0.01 USDCx (or equivalent in other tokens) per transaction.
 
 ### Q: Is it secure?
 **A:** Yes! Uses Stacks' native sponsored transaction feature. No smart wallet complexity.

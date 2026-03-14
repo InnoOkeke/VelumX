@@ -1,6 +1,6 @@
 # VelumX
 
-> Gasless transaction infrastructure for Stacks - Pay fees in USDCx, not STX
+> Gasless transaction infrastructure for Stacks - Pay fees in any SIP-010 token, not STX
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Stacks](https://img.shields.io/badge/Stacks-Testnet-5546FF)](https://www.stacks.co/)
@@ -8,24 +8,25 @@
 
 ## What is VelumX?
 
-VelumX eliminates the need for users to hold STX tokens by allowing them to pay transaction fees in USDCx. Built on Stacks (Bitcoin L2), VelumX makes DeFi accessible to anyone who bridges USDC from Ethereum.
+VelumX eliminates the need for users to hold STX tokens by allowing them to pay transaction fees in any SIP-010 token (USDCx, sBTC, ALEX, etc.). Built on Stacks (Bitcoin L2), VelumX makes DeFi accessible to anyone with any token.
 
 ## The Problem
 
-When users bridge USDC to Stacks, they can't use it until they acquire STX for gas fees. This creates friction and limits adoption.
+When users bridge assets to Stacks, they can't use them until they acquire STX for gas fees. This creates friction and limits adoption.
 
 ## The Solution
 
-VelumX uses a paymaster pattern with sponsored transactions:
-- Users pay fees in USDCx
+VelumX uses a universal paymaster pattern with sponsored transactions:
+- Users pay fees in any SIP-010 token (USDCx, sBTC, ALEX, etc.)
 - Relayer sponsors transactions with STX
 - Seamless UX without native token requirements
 
 ## Features
 
-- 🚀 **Gasless Transactions** - Pay all fees in USDCx
+- 🚀 **Gasless Transactions** - Pay fees in any SIP-010 token
+- 💰 **Multi-Token Support** - USDCx, sBTC, ALEX, or any SIP-010 token
 - 🌉 **Cross-Chain Bridge** - USDC ↔ USDCx (Ethereum ↔ Stacks)
-- 🔄 **Token Swaps** - Swap USDCx for STX and other tokens
+- 🔄 **Token Swaps** - Swap any tokens without STX
 - 👛 **Multi-Wallet** - MetaMask, Rabby, Xverse, Leather, Hiro
 - 🛠️ **Developer SDK** - Easy integration with `@velumx/sdk`
 
@@ -81,6 +82,18 @@ VelumX/
 - **Blockchain**: Stacks (Clarity), Ethereum (Solidity)
 - **Auth**: Supabase Auth (Email + GitHub OAuth)
 
+## Supported Fee Tokens
+
+VelumX accepts ANY SIP-010 token for gas fees. Popular options include:
+
+- **USDCx** - Bridged USDC stablecoin
+- **sBTC** - Bitcoin on Stacks
+- **ALEX** - Native DeFi token
+- **STX** - Native Stacks token
+- **Any SIP-010 Token** - Custom tokens supported
+
+The paymaster contract uses the `<sip-010-trait>` parameter, making it compatible with any compliant token without requiring contract modifications.
+
 ## Deployed Contracts (Testnet)
 
 **Simple Paymaster**
@@ -91,6 +104,11 @@ STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1
 **USDCx Token**
 ```
 ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx
+```
+
+**sBTC Token**
+```
+SM3KNVZS30WM7F89SXKVVFY4SN9RMPZZ9FX929N0V.sbtc
 ```
 
 ## Local Development

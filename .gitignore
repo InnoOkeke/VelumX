@@ -26,6 +26,7 @@ out/
 /log/
 *.log
 details.md
+/video/
 
 # IDE
 .vscode/

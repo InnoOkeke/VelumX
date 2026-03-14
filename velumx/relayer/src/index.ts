@@ -22,12 +22,19 @@ const port = process.env.PORT || 4000;
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow all origins in development/preview to support Vercel dynamic URLs
-        // and local testing. In production, we can lock this down further if needed.
-        if (!origin || origin.includes('vercel.app') || origin.includes('localhost') || origin.includes('onrender.com')) {
+        // Allow all origins in development (no origin) or specific trusted domains
+        const allowedPatterns = [
+            /localhost:\d+$/,
+            /\.vercel\.app$/,
+            /sgal-relayer\.onrender\.com$/
+        ];
+
+        if (!origin || allowedPatterns.some(pattern => pattern.test(origin))) {
             callback(null, true);
         } else {
-            callback(null, true); // Fallback to true for simplicity in this integration phase
+            // Reject unauthorized origins in production
+            console.warn(`CORS: Blocked request from unauthorized origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
