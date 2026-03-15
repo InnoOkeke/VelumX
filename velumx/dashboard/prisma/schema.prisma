@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// VelumX Models
 model ApiKey {
   id          String    @id @default(cuid())
   userId      String?   // Associated Supabase User ID
