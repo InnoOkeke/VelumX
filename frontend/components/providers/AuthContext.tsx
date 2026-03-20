@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function ensureProfile(user: User) {
     setLoading(true);
     // 1. Check if profile exists
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
@@ -79,12 +79,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // 2. If not, generate wallets automatically
-    console.log('Generating wallets for new user...');
-    const mnemonic = generateUserMnemonic();
-    const { ethAddress, stacksAddress } = await deriveWalletsFromMnemonic(mnemonic);
+    // 2. If not, try to generate wallets automatically
+    let ethAddress: string | null = null;
+    let stacksAddress: string | null = null;
 
-    // 3. Create profile
+    try {
+      console.log('Generating wallets for new user...');
+      const mnemonic = generateUserMnemonic();
+      const wallets = await deriveWalletsFromMnemonic(mnemonic);
+      ethAddress = wallets.ethAddress;
+      stacksAddress = wallets.stacksAddress;
+      console.log('Wallets generated successfully:', { ethAddress, stacksAddress });
+    } catch (walletError) {
+      console.error('Wallet generation failed:', walletError);
+      // Still create the profile without wallet addresses
+    }
+
+    // 3. Create profile (even if wallet generation failed)
     const { data: newProfile, error: createError } = await supabase
       .from('profiles')
       .insert([
@@ -101,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (createError) {
       console.error('Error creating profile:', createError);
     } else {
+      console.log('Profile created successfully:', newProfile);
       setProfile(newProfile);
     }
     setLoading(false);
