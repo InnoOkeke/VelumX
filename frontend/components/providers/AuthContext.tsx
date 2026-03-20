@@ -65,57 +65,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function ensureProfile(user: User) {
+    console.log('[AuthContext] ensureProfile started for user:', user.id);
     setLoading(true);
-    // 1. Check if profile exists
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (data) {
-      setProfile(data);
-      setLoading(false);
-      return;
-    }
-
-    // 2. If not, try to generate wallets automatically
-    let ethAddress: string | null = null;
-    let stacksAddress: string | null = null;
-
+    
     try {
-      console.log('Generating wallets for new user...');
-      const mnemonic = generateUserMnemonic();
-      const wallets = await deriveWalletsFromMnemonic(mnemonic);
-      ethAddress = wallets.ethAddress;
-      stacksAddress = wallets.stacksAddress;
-      console.log('Wallets generated successfully:', { ethAddress, stacksAddress });
-    } catch (walletError) {
-      console.error('Wallet generation failed:', walletError);
-      // Still create the profile without wallet addresses
-    }
+      // 1. Check if profile exists
+      const { data, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-    // 3. Create profile (even if wallet generation failed)
-    const { data: newProfile, error: createError } = await supabase
-      .from('profiles')
-      .insert([
-        { 
-          id: user.id, 
-          email: user.email, 
-          eth_address: ethAddress, 
-          stx_address: stacksAddress 
-        }
-      ])
-      .select()
-      .single();
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows found"
+        console.error('[AuthContext] Error fetching profile:', fetchError);
+      }
 
-    if (createError) {
-      console.error('Error creating profile:', createError);
-    } else {
-      console.log('Profile created successfully:', newProfile);
-      setProfile(newProfile);
+      if (data) {
+        console.log('[AuthContext] Profile found, setting state.');
+        setProfile(data);
+        setLoading(false);
+        return;
+      }
+
+      console.log('[AuthContext] No profile found, proceeding to creation.');
+
+      // 2. Try to generate wallets automatically
+      let ethAddress: string | null = null;
+      let stacksAddress: string | null = null;
+
+      try {
+        console.log('[AuthContext] Generating wallets...');
+        const mnemonic = generateUserMnemonic();
+        const wallets = await deriveWalletsFromMnemonic(mnemonic);
+        ethAddress = wallets.ethAddress;
+        stacksAddress = wallets.stacksAddress;
+        console.log('[AuthContext] Wallets generated:', { ethAddress, stacksAddress });
+      } catch (walletError) {
+        console.error('[AuthContext] Wallet generation failed:', walletError);
+      }
+
+      // 3. Create profile
+      console.log('[AuthContext] Inserting profile into database...');
+      const profileData = { 
+        id: user.id, 
+        email: user.email, 
+        eth_address: ethAddress, 
+        stx_address: stacksAddress 
+      };
+      
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert([profileData])
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('[AuthContext] Error inserting profile:', createError);
+        console.error('[AuthContext] Error details:', {
+          code: createError.code,
+          message: createError.message,
+          details: createError.details
+        });
+      } else {
+        console.log('[AuthContext] Profile created successfully:', newProfile);
+        setProfile(newProfile);
+      }
+    } catch (err) {
+      console.error('[AuthContext] Unexpected error in ensureProfile:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const signOut = async () => {
