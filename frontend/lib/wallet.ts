@@ -44,3 +44,104 @@ export async function deriveWalletsFromMnemonic(mnemonic: string, isMainnet: boo
     mnemonic
   };
 }
+
+/**
+ * Simple encryption for mnemonics before storing in Supabase.
+ * NOTE: For production, consider a more robust KMS or HSM solution.
+ */
+export async function encryptMnemonic(mnemonic: string): Promise<string> {
+  const encryptionKey = process.env.NEXT_PUBLIC_WALLET_ENCRYPTION_KEY;
+  if (!encryptionKey) {
+    console.warn('Encryption key missing, storing unencrypted (STRICTLY FOR TESTING)');
+    return mnemonic;
+  }
+
+  try {
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      "raw",
+      enc.encode(encryptionKey),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+
+    const key = await window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("velumx-salt"),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      enc.encode(mnemonic)
+    );
+
+    const resultArray = new Uint8Array(iv.length + encrypted.byteLength);
+    resultArray.set(iv, 0);
+    resultArray.set(new Uint8Array(encrypted), iv.length);
+
+    return Buffer.from(resultArray).toString('base64');
+  } catch (error) {
+    console.error('Encryption failed:', error);
+    return mnemonic;
+  }
+}
+
+/**
+ * Decrypts a mnemonic retrieved from Supabase.
+ */
+export async function decryptMnemonic(encryptedData: string): Promise<string> {
+  const encryptionKey = process.env.NEXT_PUBLIC_WALLET_ENCRYPTION_KEY;
+  if (!encryptionKey || !encryptedData.includes(' ')) { // Simple check if it's already a mnemonic
+    if (encryptedData.split(' ').length === 12) return encryptedData;
+  }
+
+  try {
+    const data = Buffer.from(encryptedData, 'base64');
+    const iv = data.slice(0, 12);
+    const encrypted = data.slice(12);
+
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      "raw",
+      enc.encode(encryptionKey!),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+
+    const key = await window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("velumx-salt"),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encrypted
+    );
+
+    return new TextDecoder().decode(decrypted);
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    return encryptedData;
+  }
+}

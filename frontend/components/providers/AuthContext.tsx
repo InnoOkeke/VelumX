@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createSupabaseClient } from '@/lib/supabase';
-import { generateUserMnemonic, deriveWalletsFromMnemonic } from '@/lib/wallet';
+import { generateUserMnemonic, deriveWalletsFromMnemonic, encryptMnemonic, decryptMnemonic } from '@/lib/wallet';
+import { PolyfillProvider } from "@/components/providers/PolyfillProvider";
 
 interface AuthContextType {
   user: User | null;
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function fetchProfile(userId: string) {
+    console.log('[AuthContext] Fetching existing profile for recovery...');
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -59,7 +61,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (data) {
-      setProfile(data);
+      // If we have a mnemonic, re-derive wallets to be sure they are in state
+      if (data.mnemonic) {
+        try {
+          const decryptedMnemonic = await decryptMnemonic(data.mnemonic);
+          const wallets = await deriveWalletsFromMnemonic(decryptedMnemonic);
+          console.log('[AuthContext] Profile recovered with wallets:', { 
+            eth: wallets.ethAddress, 
+            stx: wallets.stacksAddress 
+          });
+          // Merge derived wallets into profile state for the UI
+          setProfile({ ...data, eth_address: wallets.ethAddress, stx_address: wallets.stacksAddress });
+        } catch (recoverError) {
+          console.error('[AuthContext] Failed to recover wallets from saved mnemonic:', recoverError);
+          setProfile(data);
+        }
+      } else {
+        setProfile(data);
+      }
     }
     setLoading(false);
   }
@@ -92,10 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 2. Try to generate wallets automatically
       let ethAddress: string | null = null;
       let stacksAddress: string | null = null;
+      let mnemonic: string | null = null;
 
       try {
         console.log('[AuthContext] Generating wallets...');
-        const mnemonic = generateUserMnemonic();
+        mnemonic = generateUserMnemonic();
         const wallets = await deriveWalletsFromMnemonic(mnemonic);
         ethAddress = wallets.ethAddress;
         stacksAddress = wallets.stacksAddress;
@@ -105,12 +125,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // 3. Create profile
+      let encryptedMnemonic: string | null = null;
+      if (mnemonic) {
+        console.log('[AuthContext] Encrypting mnemonic for storage...');
+        encryptedMnemonic = await encryptMnemonic(mnemonic);
+      }
+
       console.log('[AuthContext] Inserting profile into database...');
       const profileData = { 
         id: user.id, 
         email: user.email, 
         eth_address: ethAddress, 
-        stx_address: stacksAddress 
+        stx_address: stacksAddress,
+        mnemonic: encryptedMnemonic
       };
       
       const { data: newProfile, error: createError } = await supabase
