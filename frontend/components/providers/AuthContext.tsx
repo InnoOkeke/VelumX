@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createSupabaseClient();
+  const supabase = React.useMemo(() => createSupabaseClient(), []);
 
   useEffect(() => {
     // Get initial session
@@ -119,7 +119,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+      // Manually clear state to ensure UI updates immediately
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      console.log('Signed out successfully');
+      // Optional: Refresh to clear any other state
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error signing out:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
