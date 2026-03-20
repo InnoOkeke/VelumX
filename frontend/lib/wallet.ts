@@ -1,5 +1,6 @@
 import { mnemonicToAccount } from 'viem/accounts';
 import { generateMnemonic } from 'bip39';
+import { Buffer } from 'buffer';
 import { getAddressFromPrivateKey } from '@stacks/transactions';
 import { generateWallet, deriveStxPrivateKey, getRootNode } from '@stacks/wallet-sdk';
 

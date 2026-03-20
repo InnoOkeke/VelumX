@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "../lib/hooks/useWallet";
 import { AuthProvider } from "@/components/providers/AuthContext";
+import { PolyfillProvider } from "@/components/providers/PolyfillProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,11 +48,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <WalletProvider>
-            {children}
-          </WalletProvider>
-        </AuthProvider>
+        <PolyfillProvider>
+          <AuthProvider>
+            <WalletProvider>
+              {children}
+            </WalletProvider>
+          </AuthProvider>
+        </PolyfillProvider>
       </body>
     </html>
   );
