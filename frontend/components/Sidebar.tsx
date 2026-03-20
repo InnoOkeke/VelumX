@@ -21,6 +21,7 @@ import {
 import dynamic from 'next/dynamic';
 
 const WalletButton = dynamic(() => import('./WalletButton').then(mod => mod.WalletButton), { ssr: false });
+import { useAuth } from './providers/AuthContext';
 
 interface SidebarProps {
     activeTab: 'bridge' | 'swap' | 'liquidity' | 'pools' | 'history';
@@ -32,6 +33,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, isOpen = false, onClose }: SidebarProps) {
+    const { user, profile } = useAuth();
     const menuItems = [
         { id: 'bridge', label: 'Bridge', icon: ArrowLeftRight },
         { id: 'swap', label: 'Swap', icon: Repeat },
@@ -130,6 +132,28 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
                         </a>
                     </div>
                 </div>
+
+                {/* User Profile Info (if logged in via Social) */}
+                {user && (
+                    <div className="mx-2 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-indigo-500">{user.email?.[0].toUpperCase()}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-indigo-400 truncate">{user.email}</span>
+                        </div>
+                        <div className="pt-2 border-t border-indigo-500/10 space-y-2">
+                            <div className="flex flex-col">
+                                <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">ETH Wallet</span>
+                                <span className="text-[10px] text-slate-400 font-mono truncate">{profile?.eth_address || '---'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">STX Wallet</span>
+                                <span className="text-[10px] text-slate-400 font-mono truncate">{profile?.stx_address || '---'}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Version */}
                 <div className="px-4 text-center">
