@@ -14,6 +14,7 @@ import { TransactionHistory } from './TransactionHistory';
 import { Shield, Zap, Repeat, UserCircle, LogOut } from 'lucide-react';
 import { useAuth } from './providers/AuthContext';
 import { AuthModal } from './auth/AuthModal';
+import React from 'react';
 
 // Dynamically import interfaces to resolve Turbopack module factory issues with Stacks libraries
 const BridgeInterface = dynamic(() => import('./BridgeInterface').then(mod => mod.BridgeInterface), { ssr: false });
@@ -50,6 +51,13 @@ export default function HomePage() {
       document.documentElement.classList.remove('dark');
     }
   };
+
+  // Auto-close modal when user is authenticated
+  React.useEffect(() => {
+    if (user && showAuthModal) {
+      setShowAuthModal(false);
+    }
+  }, [user, showAuthModal]);
 
   return (
     <div className="min-h-screen flex mesh-gradient transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)' }}>
