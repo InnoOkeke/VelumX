@@ -100,8 +100,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data) {
-        console.log('[AuthContext] Profile found, setting state.');
-        setProfile(data);
+        console.log('[AuthContext] Profile found.');
+        
+        // AUTO-PATCH: If profile exists but mnemonic is missing, generate one
+        if (!data.mnemonic) {
+          console.log('[AuthContext] Existing profile missing mnemonic. Patching now...');
+          const mnemonic = generateUserMnemonic();
+          const wallets = await deriveWalletsFromMnemonic(mnemonic);
+          const encryptedMnemonic = await encryptMnemonic(mnemonic);
+          
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from('profiles')
+            .update({ 
+              mnemonic: encryptedMnemonic,
+              eth_address: wallets.ethAddress,
+              stx_address: wallets.stacksAddress
+            })
+            .eq('id', user.id)
+            .select()
+            .single();
+            
+          if (updateError) {
+            console.error('[AuthContext] Failed to patch existing profile:', updateError);
+            setProfile(data);
+          } else {
+            console.log('[AuthContext] Profile patched successfully with new wallet.');
+            setProfile(updatedProfile);
+          }
+        } else {
+          setProfile(data);
+        }
+        
         setLoading(false);
         return;
       }
