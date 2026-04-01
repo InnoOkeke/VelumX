@@ -10,7 +10,6 @@ import { createWalletClient, createPublicClient, custom, http, formatUnits } fro
 import { sepolia } from 'viem/chains';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
 import { getStacksConnect, getStacksTransactions } from '../stacks-loader';
-import { useAuth } from '@/components/providers/AuthContext';
 
 export type EthereumWalletType = 'rabby' | 'metamask' | 'injected';
 export type StacksWalletType = 'xverse' | 'leather' | 'hiro';
@@ -171,26 +170,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [config.stacksUsdcxAddress, config.stacksVexAddress]);
 
-  // Initial restoration and Profile Sync
-  const { profile } = useAuth();
-
   useEffect(() => {
-    // If we have a profile from social login, use those addresses
-    if (profile) {
-      setState(prev => ({
-        ...prev,
-        ethereumAddress: profile.eth_address || prev.ethereumAddress,
-        ethereumConnected: !!profile.eth_address || prev.ethereumConnected,
-        stacksAddress: profile.stx_address || prev.stacksAddress,
-        stacksConnected: !!profile.stx_address || prev.stacksConnected,
-      }));
-      
-      if (profile.eth_address) fetchEthereumBalances(profile.eth_address);
-      if (profile.stx_address) fetchStacksBalances(profile.stx_address);
-      return;
-    }
-
-    // Otherwise, fallback to local storage for manual wallets
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return;
     try {
@@ -203,7 +183,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       localStorage.removeItem(STORAGE_KEY);
     }
-  }, [profile, fetchEthereumBalances, fetchStacksBalances]);
+  }, [fetchEthereumBalances, fetchStacksBalances]);
 
   // Persistence
   useEffect(() => {

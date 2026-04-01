@@ -11,9 +11,7 @@ import { Sidebar } from './Sidebar';
 import { NotificationContainer } from './NotificationContainer';
 import { PoolBrowser } from './PoolBrowser';
 import { TransactionHistory } from './TransactionHistory';
-import { Shield, Zap, Repeat, UserCircle, LogOut } from 'lucide-react';
-import { useAuth } from './providers/AuthContext';
-import { AuthModal } from './auth/AuthModal';
+import { Shield, Zap, Repeat } from 'lucide-react';
 import React from 'react';
 
 // Dynamically import interfaces to resolve Turbopack module factory issues with Stacks libraries
@@ -24,8 +22,6 @@ const LiquidityInterface = dynamic(() => import('./LiquidityInterface').then(mod
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'liquidity' | 'pools' | 'history'>('bridge');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const { user, profile, signOut, loading: authLoading } = useAuth();
 
   // Initialize dark mode from localStorage
   useState(() => {
@@ -51,13 +47,6 @@ export default function HomePage() {
       document.documentElement.classList.remove('dark');
     }
   };
-
-  // Auto-close modal when user is authenticated
-  React.useEffect(() => {
-    if (user && showAuthModal) {
-      setShowAuthModal(false);
-    }
-  }, [user, showAuthModal]);
 
   return (
     <div className="min-h-screen flex mesh-gradient transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)' }}>
@@ -96,29 +85,7 @@ export default function HomePage() {
           </button>
 
           <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:flex flex-col items-end">
-                  <span className="text-[10px] font-bold text-white uppercase tracking-wider">{user.email?.split('@')[0]}</span>
-                  <span className="text-[9px] text-slate-400 font-medium">Social Account</span>
-                </div>
-                <button 
-                  onClick={signOut}
-                  className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-rose-500/10 hover:border-rose-500/50 transition-all group"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/20"
-              >
-                <UserCircle className="w-4 h-4" />
-                SIGN IN
-              </button>
-            )}
+
             
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -213,41 +180,7 @@ export default function HomePage() {
             </div>
           </div>
         </footer>
-        {/* Auth Modal Overlay */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowAuthModal(false)} />
-          <div className="relative w-full max-w-md animate-in fade-in zoom-in duration-300">
-            <AuthModal />
-            <button 
-              onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
 
-      {user && !showAuthModal && (
-        <div className="fixed bottom-8 right-8 z-40 animate-in slide-in-from-right duration-500">
-          <div className="bg-slate-900/90 backdrop-blur-xl border border-indigo-500/30 rounded-2xl p-4 shadow-2xl shadow-indigo-500/20 max-w-xs">
-            <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">Connected Wallets</h4>
-            <div className="space-y-2">
-              <div className="flex flex-col">
-                <span className="text-[9px] text-slate-500 uppercase font-semibold">Ethereum</span>
-                <span className="text-[11px] text-white font-mono truncate">{profile?.eth_address || 'Generating...'}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] text-slate-500 uppercase font-semibold">Stacks</span>
-                <span className="text-[11px] text-white font-mono truncate">{profile?.stx_address || 'Generating...'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
     </div>
   );
