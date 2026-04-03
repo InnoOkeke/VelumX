@@ -15,6 +15,11 @@ export interface SignedIntent extends WalletIntent {
 export interface NetworkConfig {
     coreApiUrl: string;
     network: 'mainnet' | 'testnet' | 'devnet';
-    paymasterUrl?: string; // URL for the SGAL relayer service
-    apiKey?: string; // SGAL API Key
+    paymasterUrl?: string; // URL for the VelumX relayer service
+    apiKey?: string; // VelumX API Key
+}
+
+export interface SponsorshipOptions {
+    userId?: string;
+    feeAmount?: string;
 }

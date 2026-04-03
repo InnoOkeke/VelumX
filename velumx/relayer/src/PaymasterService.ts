@@ -177,7 +177,7 @@ export class PaymasterService {
     /**
      * Sponsor a raw Stacks transaction hex
      */
-    public async sponsorRawTransaction(txHex: string, apiKeyId?: string, userId?: string) {
+    public async sponsorRawTransaction(txHex: string, apiKeyId: string, userId: string, reportedFee?: string) {
         const activeKey = userId ? this.getUserRelayerKey(userId) : this.relayerKey;
         if (!activeKey) throw new Error("Relayer key not configured");
 

@@ -1,32 +1,45 @@
-import { VelumXClient } from '@velumx/sdk';
 import { getConfig } from './config';
 
 /**
- * Shared VelumX Client for Frontend
- * Points to our internal Next.js API proxy which ensures
- * correct network and relayer configuration.
+ * VelumX SDK Wrapper
+ * This handles secure sponsorship requests through our server-side proxy.
+ * It allows developers to report dynamic fees per transaction.
  */
-let client: VelumXClient | null = null;
+class VelumXFrontendClient {
+    private baseUrl: string = '/api/velumx/proxy';
 
-export function getVelumXClient() {
-    if (!client) {
-        const config = getConfig();
-        const coreApiUrl = config.stacksNetwork === 'mainnet'
-            ? 'https://api.mainnet.hiro.so'
-            : 'https://api.testnet.hiro.so';
-
-        // Secure Proxy Integration:
-        // Use our internal Next.js API route as the paymasterUrl.
-        // This keeps the VELUMX_API_KEY hidden on the server.
-        const paymasterUrl = '/api/velumx/proxy';
-
-        client = new VelumXClient({
-            coreApiUrl,
-            paymasterUrl,
-            network: config.stacksNetwork,
-            apiKey: 'proxied' // Token value to satisfy SDK requirement (real key added by server)
+    /**
+     * Request gas sponsorship for a transaction
+     * @param txHex The raw transaction hex
+     * @param feeAmount Optional: The specific fee (in 6-decimal units) collected by the dApp
+     * @param userId Optional: The developer's unique userId for derived wallet management
+     */
+    async sponsor(txHex: string, userId?: string, feeAmount?: string): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/api/v1/broadcast`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                txHex,
+                userId,
+                feeAmount // Dynamically reported fee for the dashboard
+            })
         });
 
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'VelumX Sponsorship Failed');
+        }
+        return data;
     }
-    return client;
+}
+
+let clientInstance: VelumXFrontendClient | null = null;
+
+export function getVelumXClient() {
+    if (!clientInstance) {
+        clientInstance = new VelumXFrontendClient();
+    }
+    return clientInstance;
 }

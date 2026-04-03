@@ -1,11 +1,11 @@
-import { SignedIntent, NetworkConfig } from './types';
+import { SignedIntent, NetworkConfig, SponsorshipOptions } from './types';
 
 export class VelumXClient {
     private config: NetworkConfig;
     private relayerUrl: string;
 
     constructor(config: NetworkConfig) {
-        if (!config.apiKey) {
+        if (!config.apiKey && !config.paymasterUrl?.includes('/api/velumx/proxy')) {
             throw new Error("VelumX Client Error: API Key is required. Please obtain your key from the VelumX Developer Dashboard.");
         }
         this.config = config;
@@ -14,12 +14,12 @@ export class VelumXClient {
     }
 
     /**
-     * Get a fee estimation from the SGAL relayer for a specific intent
+     * Get a fee estimation from the relayer for a specific intent
      */
     public async estimateFee(intent: any): Promise<{ maxFeeUSDCx: string, estimatedGas: number }> {
         try {
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (this.config.apiKey) {
+            if (this.config.apiKey && this.config.apiKey !== 'proxied') {
                 headers['x-api-key'] = this.config.apiKey;
             }
 
@@ -47,7 +47,7 @@ export class VelumXClient {
     public async submitIntent(signedIntent: SignedIntent): Promise<{ txid: string, status: string }> {
         try {
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (this.config.apiKey) {
+            if (this.config.apiKey && this.config.apiKey !== 'proxied') {
                 headers['x-api-key'] = this.config.apiKey;
             }
 
@@ -70,19 +70,32 @@ export class VelumXClient {
     }
 
     /**
+     * [New Recommended Method] Request sponsorship for a Stacks transaction
+     * @param txHex The raw transaction hex
+     * @param options Metadata like developer-reported fee and userId
+     */
+    public async sponsor(txHex: string, options?: SponsorshipOptions): Promise<{ txid: string, status: string }> {
+        return this.submitRawTransaction(txHex, options);
+    }
+
+    /**
      * Submit a raw Stacks transaction hex for native sponsorship
      */
-    public async submitRawTransaction(txHex: string): Promise<{ txid: string, status: string }> {
+    public async submitRawTransaction(txHex: string, options?: SponsorshipOptions): Promise<{ txid: string, status: string }> {
         try {
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (this.config.apiKey) {
+            if (this.config.apiKey && this.config.apiKey !== 'proxied') {
                 headers['x-api-key'] = this.config.apiKey;
             }
 
             const response = await fetch(`${this.relayerUrl}/broadcast`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ txHex })
+                body: JSON.stringify({ 
+                    txHex,
+                    userId: options?.userId,
+                    feeAmount: options?.feeAmount
+                })
             });
 
             if (!response.ok) {
