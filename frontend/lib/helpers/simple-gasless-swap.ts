@@ -102,7 +102,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
 
   // If we have txRaw, broadcast it via relayer
   if (result.txRaw) {
-    const broadcastResult = await velumx.submitRawTransaction(result.txRaw);
+    const broadcastResult = await velumx.sponsor(result.txRaw, undefined, feeInMicro.toString());
     console.log('Swap broadcast result:', broadcastResult);
     return broadcastResult.txid;
   }
