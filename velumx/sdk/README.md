@@ -23,234 +23,79 @@ VelumX SDK enables gasless transactions on Stacks blockchain. Users pay transact
 npm install @velumx/sdk
 ```
 
-## Quick Start
+## Quick Start (Production Pattern)
 
-### 1. Initialize Client
-
-```typescript
-import { getVelumXClient } from '@velumx/sdk';
-
-const velumx = getVelumXClient();
-```
-
-### 2. Estimate Fee
+### 1. Initialize Client via Proxy
+For production dApps, initialize the client pointing to your backend proxy to keep your API key secure.
 
 ```typescript
-const estimate = await velumx.estimateFee({
-  estimatedGas: 100000
-});
+import { VelumXClient } from '@velumx/sdk';
 
-console.log(`Fee: ${estimate.maxFeeUSDCx} micro-USDCx`);
-// Output: Fee: 540000 micro-USDCx (0.54 USDCx)
-```
-
-### 3. Execute Gasless Transaction
-
-```typescript
-import { openContractCall } from '@stacks/connect';
-import { Cl } from '@stacks/transactions';
-
-// Call paymaster contract with sponsored=true
-const result = await openContractCall({
-  contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
-  contractName: 'simple-paymaster-v1',
-  functionName: 'bridge-gasless',
-  functionArgs: [
-    Cl.uint(10000000),  // 10 USDCx
-    Cl.buffer(recipientBytes),
-    Cl.uint(estimate.maxFeeUSDCx),
-    Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
-    Cl.principal('ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
-  ],
-  sponsored: true,  // Enable gasless mode
-  network: 'testnet',
-  onFinish: async (data) => {
-    // Submit to relayer for sponsorship
-    const tx = await velumx.submitRawTransaction(data.txRaw);
-    console.log(`Transaction: ${tx.txid}`);
-  }
+const velumx = new VelumXClient({
+  paymasterUrl: '/api/velumx/proxy', // Your secure backend proxy
+  network: 'mainnet'
 });
 ```
 
-## How It Works
+### 2. Request Sponsorship
+Use the **`.sponsor()`** method to request gas sponsorship while reporting your custom fee for the VelumX Dashboard.
 
-### Architecture
+```typescript
+// Report your dApp's specific fee and a unique user ID for tracking
+const result = await velumx.sponsor(txRaw, {
+  feeAmount: '250000', // 0.25 USDCx (6 decimals)
+  userId: 'user_12345'
+});
 
-```
-┌──────────┐                                      ┌──────────┐
-│   User   │                                      │ Relayer  │
-└────┬─────┘                                      └────┬─────┘
-     │                                                  │
-     │ 1. Request fee estimate                         │
-     ├──────────────────────────────────────────────►  │
-     │                                                  │
-     │ 2. Return fee in USDCx                          │
-     │ ◄──────────────────────────────────────────────┤
-     │                                                  │
-     │ 3. Sign transaction (sponsored=true)            │
-     │                                                  │
-     │ 4. Submit signed transaction                    │
-     ├──────────────────────────────────────────────►  │
-     │                                                  │
-     │                                                  │ 5. Sponsor with STX
-     │                                                  │    & broadcast
-     │                                                  │
-     │ 6. Return transaction ID                        │
-     │ ◄──────────────────────────────────────────────┤
-     │                                                  │
-     ▼                                                  ▼
-
-┌─────────────────────────────────────────────────────┐
-│              Stacks Blockchain                       │
-│                                                      │
-│  simple-paymaster-v1::bridge-gasless                │
-│  • Transfer USDCx fee from user to relayer          │
-│  • Execute core logic (burn/swap)                   │
-│  • Transaction confirmed ✓                          │
-└─────────────────────────────────────────────────────┘
+console.log(`Transaction Sponsored: ${result.txid}`);
 ```
 
-### Fee Calculation
+## Security Best Practice: The Proxy Pattern
 
-```
-Fee in any SIP-010 token = (Gas Cost in STX × STX/USD Rate × 1.08) / Token/USD Rate
+**NEVER** expose your `VELUMX_API_KEY` in the browser. Instead, create a simple backend route that injects the key and forwards the request to the VelumX Relayer.
 
-Example with USDCx:
-- Gas: 100,000 units = 1 STX
-- STX/USD: $0.50
-- USDC/USD: $1.00
-- Markup: 8%
-- Fee: 1 × $0.50 × 1.08 / $1.00 = 0.54 USDCx
+### Example Next.js Proxy Route
+```typescript
+// app/api/velumx/proxy/[...path]/route.ts
+export async function POST(req: Request, { params }) {
+  const { path } = params;
+  const apiKey = process.env.VELUMX_API_KEY; // Securely stored on server
+  const targetUrl = `https://relayer.velumx.com/api/v1/${path.join('/')}`;
 
-Example with sBTC:
-- Gas: 100,000 units = 1 STX
-- STX/USD: $0.50
-- BTC/USD: $45,000
-- Markup: 8%
-- Fee: 1 × $0.50 × 1.08 / $45,000 = 0.000012 BTC (1,200 sats)
+  const body = await req.json();
+  const response = await fetch(targetUrl, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey 
+    },
+    body: JSON.stringify(body),
+  });
 
-Example with ALEX:
-- Gas: 100,000 units = 1 STX
-- STX/USD: $0.50
-- ALEX/USD: $0.10
-- Markup: 8%
-- Fee: 1 × $0.50 × 1.08 / $0.10 = 5.4 ALEX
+  return Response.json(await response.json());
+}
 ```
 
 ## API Reference
 
 ### VelumXClient
 
-#### Configuration
-
-```typescript
-interface NetworkConfig {
-  coreApiUrl: string;      // Stacks API URL
-  network: 'mainnet' | 'testnet' | 'devnet';
-  paymasterUrl?: string;   // Relayer URL (optional)
-}
-```
-
-**Default Configuration**:
-```typescript
-{
-  coreApiUrl: 'https://api.testnet.hiro.so',
-  network: 'testnet',
-  paymasterUrl: 'https://sgal-relayer.onrender.com/api/v1'
-}
-```
-
 #### Methods
 
-##### estimateFee()
+##### `.sponsor(txHex, options)`
+The recommended method for Stacks-native sponsorship.
 
-Get fee estimate in USDCx for a transaction.
+- `txHex`: The raw hex string of the signed transaction.
+- `options`:
+    - `feeAmount`: (Optional) The specific fee collected by your contract (e.g., "250000").
+    - `userId`: (Optional) A unique identifier for your user to enable multi-tenant wallet tracking.
 
-```typescript
-estimateFee(params: {
-  estimatedGas: number
-}): Promise<FeeEstimate>
-```
+##### `.estimateFee(intent)`
+Get a real-time USDCx fee estimation for a transaction intent.
+- `intent`: The transaction details (target, function, args).
 
-**Parameters**:
-- `estimatedGas`: Estimated gas units (e.g., 100000)
-
-**Returns**:
-```typescript
-interface FeeEstimate {
-  maxFeeUSDCx: string;    // Fee in micro-USDCx
-  estimatedGas: number;    // Gas units
-  stxToUsd?: number;       // Exchange rate
-  markup?: number;         // Fee markup (0.08 = 8%)
-}
-```
-
-**Example**:
-```typescript
-const estimate = await velumx.estimateFee({
-  estimatedGas: 100000
-});
-
-console.log(`Fee: ${estimate.maxFeeUSDCx} micro-USDCx`);
-// Fee: 540000 micro-USDCx (0.54 USDCx)
-```
-
-##### submitRawTransaction()
-
-Submit a signed transaction for sponsorship.
-
-```typescript
-submitRawTransaction(txRaw: string): Promise<TransactionResult>
-```
-
-**Parameters**:
-- `txRaw`: Hex-encoded signed transaction from wallet
-
-**Returns**:
-```typescript
-interface TransactionResult {
-  txid: string;           // Transaction ID
-  status: string;         // Status (pending/success/failed)
-}
-```
-
-**Example**:
-```typescript
-const result = await velumx.submitRawTransaction(data.txRaw);
-console.log(`Transaction ID: ${result.txid}`);
-```
-
-##### sponsorTransaction()
-
-High-level helper to make any transaction gasless.
-
-```typescript
-sponsorTransaction(params: {
-  transaction: any;
-  network: 'mainnet' | 'testnet';
-}): Promise<any>
-```
-
-**Parameters**:
-- `transaction`: Unsigned Stacks transaction
-- `network`: Target network
-
-**Returns**: Transaction with `sponsored: true` flag
-
-**Example**:
-```typescript
-import { makeContractCall } from '@stacks/transactions';
-
-const unsignedTx = await makeContractCall({...});
-
-const sponsored = await velumx.sponsorTransaction({
-  transaction: unsignedTx,
-  network: 'testnet'
-});
-
-// User signs and broadcasts
-const result = await openContractCall(sponsored);
-```
+##### `.submitIntent(signedIntent)`
+Submit a SIP-018 signed intent for legacy smart-wallet sponsorship.
 
 ## Use Cases
 
@@ -540,13 +385,13 @@ const feeInSBTC = await calculateFeeInToken(estimate.maxFeeUSDCx, 'sBTC');
 
 ```bash
 # Frontend (.env.local)
-NEXT_PUBLIC_STACKS_NETWORK=testnet
-NEXT_PUBLIC_STACKS_API_URL=https://api.testnet.hiro.so
-NEXT_PUBLIC_VELUMX_RELAYER_URL=https://sgal-relayer.onrender.com/api/v1
+NEXT_PUBLIC_STACKS_NETWORK=mainnet
+NEXT_PUBLIC_STACKS_API_URL=https://api.mainnet.hiro.so
+NEXT_PUBLIC_VELUMX_RELAYER_URL=https://your-relayer-proxy.com
 
 # Contracts
-NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1
-NEXT_PUBLIC_STACKS_USDCX_ADDRESS=ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx
+NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS=SP...YOUR_PAYMASTER_ADDRESS
+NEXT_PUBLIC_STACKS_USDCX_ADDRESS=SP...YOUR_USDCX_ADDRESS
 ```
 
 ### Network Configuration
@@ -637,7 +482,7 @@ describe('VelumX SDK', () => {
 ```
 Address: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1
 Network: Stacks Testnet
-Explorer: https://explorer.hiro.so/txid/0x90c134205b04599405e3cccae6c86ed496ae2d81ef0392970e2c9a7acd3b2138?chain=testnet
+Explorer: https://explorer.hiro.so/txid/[TRANSACTION_ID]?chain=testnet
 ```
 
 **USDCx Token**

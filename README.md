@@ -23,12 +23,11 @@ VelumX uses a universal paymaster pattern with sponsored transactions:
 
 ## Features
 
-- 🚀 **Gasless Transactions** - Pay fees in any SIP-010 token
+- 🚀 **Gasless Transactions** - Pay fees in any SIP-010 token with optimized 0.001 STX sponsorship
 - 💰 **Multi-Token Support** - USDCx, sBTC, ALEX, or any SIP-010 token
-- 🌉 **Cross-Chain Bridge** - USDC ↔ USDCx (Ethereum ↔ Stacks)
-- 🔄 **Token Swaps** - Swap any tokens without STX
-- 👛 **Multi-Wallet** - MetaMask, Rabby, Xverse, Leather, Hiro
-- 🛠️ **Developer SDK** - Easy integration with `@velumx/sdk`
+- 🛡️ **Developer Dashboard** - Manage API keys, track revenue, and monitor sponsorship health
+- 👛 **Relayer Wallet** - View sponsorship addresses and export private keys to Leather/Xverse
+- 🛠️ **Modern SDK** - Simple integration with `@velumx/sdk@2.2.0` and secure proxy support
 
 ## Quick Start
 
@@ -36,44 +35,55 @@ VelumX uses a universal paymaster pattern with sponsored transactions:
 
 1. Visit [velumx.vercel.app](https://velumx.vercel.app)
 2. Connect your Ethereum and Stacks wallets
-3. Bridge USDC from Ethereum to Stacks
+3. Bridge USDC from Ethereum to Stacks (Fee: 0.25 USDCx)
 4. Use DeFi features without needing STX!
 
-### For Developers
+### For Developers (Infrastructure)
+
+VelumX provides a secure, multi-tenant infrastructure for any Stacks dApp.
 
 ```bash
 # Install SDK
 npm install @velumx/sdk
+```
 
-# Use in your dApp
-import { sponsorTransaction } from '@velumx/sdk';
+**Secure Sponsorship Example:**
 
-const sponsored = await sponsorTransaction({
-  transaction: unsignedTx,
-  network: 'testnet'
+```typescript
+import { getVelumXClient } from '@velumx/sdk';
+
+const velumx = new VelumXClient({ 
+  paymasterUrl: '/api/velumx/proxy', // Use a secure server-side proxy
+  network: 'mainnet' 
+});
+
+// Sponsor a transaction and report your custom fee for the dashboard
+const result = await velumx.sponsor(txHex, { 
+  feeAmount: '250000', // e.g., 0.25 USDCx
+  userId: 'user-unique-id' 
 });
 ```
 
-Get your API key at [velum-x-ssum.vercel.app/](https://velum-x-ssum.vercel.app/)
+Get your API key at [velumx.xyz/dashboard](https://velumx.xyz/dashboard)
 
 ## Project Structure
 
 ```
 VelumX/
-├── frontend/              # DeFi application (Next.js)
+├── frontend/              # DeFi application (Next.js) - Bridge Example
 ├── velumx/
-│   ├── sdk/              # @velumx/sdk package
-│   ├── contracts/        # Clarity smart contracts
-│   ├── relayer/          # Backend sponsorship service
-│   └── dashboard/        # Developer portal
+│   ├── sdk/              # @velumx/sdk package (@2.2.0)
+│   ├── relayer/          # Multi-tenant sponsorship engine
+│   └── dashboard/        # Developer portal & analytics
 └── docs/                 # Technical documentation
 ```
 
 ## Documentation
 
-- **[Technical Documentation](./docs/TECHNICAL_DOCUMENTATION.md)** - Complete technical guide
+- **[Technical Documentation](./docs/TECHNICAL_DOCUMENTATION.md)** - System architecture & multi-tenant design
+- **[Developer's Guide](./docs/DEVELOPERS_GUIDE.md)** - Step-by-step integration guide
 - **[SDK Reference](./velumx/sdk/README.md)** - SDK API documentation
-- **[Dashboard Setup](./velumx/dashboard/SETUP.md)** - Developer dashboard guide
+- **[Relayer Wallet Export](./velumx/dashboard/README.md)** - How to manage your sponsorship funds
 
 ## Technology
 

@@ -24,21 +24,21 @@ Create `.env.local` file:
 
 ```bash
 # Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://yjbsdesjzvuagcxntscd.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # Database (Supabase PostgreSQL)
-DATABASE_URL=""
+DATABASE_URL="postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres"
 
 # VelumX Relayer
-NEXT_PUBLIC_VELUMX_RELAYER_URL=https://sgal-relayer.onrender.com
+NEXT_PUBLIC_VELUMX_RELAYER_URL=https://your-relayer-url.onrender.com
 ```
 
 ### 3. Get Supabase Credentials
 
 1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project: `yjbsdesjzvuagcxntscd`
+2. Select your project.
 3. Go to **Settings > API**
 4. Copy:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
@@ -147,7 +147,7 @@ velumx/dashboard/
 import { VelumXClient } from '@velumx/sdk'
 
 const client = new VelumXClient({
-  apiKey: process.env.VELUMX_API_KEY, // vx_...
+  apiKey: process.env.VELUMX_API_KEY, // sg_...
   network: 'testnet'
 })
 
@@ -158,14 +158,30 @@ const sponsored = await client.sponsorTransaction(unsignedTx)
 5. **Monitor**: View usage logs in the dashboard
 6. **Fund**: Add STX to your relayer balance for sponsoring transactions
 
+## Relayer Wallet & Funding
+
+Every developer on VelumX gets a dedicated **Relayer Wallet**. This wallet is used to pay the STX gas fees for your users' transactions.
+
+### How to Fund
+1. Copy your **Relayer Address** from the dashboard.
+2. Send at least **5-10 STX** to this address from Leather or Xverse.
+3. Your dashboard will update with the live balance, and you can start sponsoring!
+
+### Private Key Export
+For advanced users, you can export your Relayer's private key directly from the **API Keys** page. This allows you to:
+- Sweep funds if you decide to stop using the platform.
+- Manually manage the wallet in a standard Stacks wallet like Leather.
+
+## Multi-Tenant Revenue Tracking
+
+When using the `@velumx/sdk`, ensure you report your dApp's fee (e.g., 0.25 USDCx) during sponsorship. The dashboard will automatically aggregate these fees into your **Total USDCx Revenue** chart, giving you a clear view of your platform's profitability.
+
 ## Security
 
-- ✅ API keys are prefixed with `vx_` for easy identification
-- ✅ Service role key is server-side only
-- ✅ Middleware protects dashboard routes
-- ✅ Supabase handles authentication securely
-- ⚠️ Consider implementing Row Level Security (RLS) in Supabase
-- ⚠️ Consider hashing API keys in production
+- ✅ API keys are prefixed with `sgal_live_` for production identification
+- ✅ **Private Key Export** is gated behind secure session verification
+- ✅ Sensitive service roles are never exposed to the client-side
+- ✅ All sponsorship requests are validated against active API keys
 
 ## Deployment
 
