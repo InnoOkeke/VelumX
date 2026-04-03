@@ -5,6 +5,9 @@ export class VelumXClient {
     private relayerUrl: string;
 
     constructor(config: NetworkConfig) {
+        if (!config.apiKey) {
+            throw new Error("VelumX Client Error: API Key is required. Please obtain your key from the VelumX Developer Dashboard.");
+        }
         this.config = config;
         // Default to a hosted relayer if not provided
         this.relayerUrl = config.paymasterUrl || 'https://relayer.velumx.com/api/v1';

@@ -54,8 +54,47 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'VelumX Relayer' });
 });
 
-// Estimate Fee Endpoint
-app.post('/api/v1/estimate', async (req, res) => {
+// Authentication Middleware for SDK Integration
+interface ApiKeyRequest extends express.Request {
+    apiKeyId?: string;
+    userId?: string;
+}
+
+const validateApiKey = async (req: ApiKeyRequest, res: express.Response, next: express.NextFunction) => {
+    const apiKey = req.headers['x-api-key'] as string;
+
+    if (!apiKey) {
+        return res.status(401).json({ 
+            error: "Unauthorized: Missing x-api-key header", 
+            message: "This SDK feature is gated. Please get your API key from the VelumX Developer Dashboard." 
+        });
+    }
+
+    try {
+        const keyRecord = await (prisma.apiKey as any).findUnique({
+            where: { key: apiKey },
+            select: { id: true, userId: true, status: true }
+        });
+
+        if (!keyRecord) {
+            return res.status(401).json({ error: "Unauthorized: Invalid API key" });
+        }
+
+        if (keyRecord.status !== 'Active') {
+            return res.status(403).json({ error: "Forbidden: API key is disabled or revoked" });
+        }
+
+        req.apiKeyId = keyRecord.id;
+        req.userId = keyRecord.userId || undefined;
+        next();
+    } catch (error) {
+        console.error("Auth Middleware Error:", error);
+        res.status(500).json({ error: "Security check failed" });
+    }
+};
+
+// Estimate Fee Endpoint (Gated)
+app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res) => {
     try {
         const { intent } = req.body;
         if (!intent) return res.status(400).json({ error: "Missing intent" });
@@ -68,32 +107,16 @@ app.post('/api/v1/estimate', async (req, res) => {
     }
 });
 
-// Sponsor and Submit Intent Endpoint
-app.post('/api/v1/sponsor', async (req, res) => {
+// Sponsor and Submit Intent Endpoint (Gated)
+app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res) => {
     try {
         const { intent } = req.body;
-        const apiKey = req.headers['x-api-key'] as string;
 
         if (!intent || !intent.signature) {
             return res.status(400).json({ error: "Missing signed intent" });
         }
 
-        // Resolve API Key to find the owner (userId)
-        let userId: string | undefined;
-        let apiKeyId: string | undefined;
-
-        if (apiKey) {
-            const keyRecord = await (prisma.apiKey as any).findUnique({
-                where: { key: apiKey },
-                select: { id: true, userId: true }
-            });
-            if (keyRecord) {
-                userId = keyRecord.userId || undefined;
-                apiKeyId = keyRecord.id;
-            }
-        }
-
-        const result = await paymasterService.sponsorIntent(intent, apiKeyId, userId);
+        const result = await paymasterService.sponsorIntent(intent, req.apiKeyId, req.userId);
         res.json(result);
     } catch (error: any) {
         console.error("Sponsorship Error:", error);
@@ -101,27 +124,16 @@ app.post('/api/v1/sponsor', async (req, res) => {
     }
 });
 
-// Broadcast Raw Transaction (Native Sponsorship)
-app.post('/api/v1/broadcast', async (req, res) => {
+// Broadcast Raw Transaction (Gated Native Sponsorship)
+app.post('/api/v1/broadcast', validateApiKey, async (req: ApiKeyRequest, res) => {
     try {
         const { txHex } = req.body;
-        const apiKey = req.headers['x-api-key'] as string;
 
         if (!txHex) {
             return res.status(400).json({ error: "Missing transaction hex" });
         }
 
-        // Resolve API Key to find the owner (userId)
-        let userId: string | undefined;
-        if (apiKey) {
-            const keyRecord = await (prisma.apiKey as any).findUnique({
-                where: { key: apiKey },
-                select: { userId: true }
-            });
-            userId = keyRecord?.userId || undefined;
-        }
-
-        const result = await paymasterService.sponsorRawTransaction(txHex, userId);
+        const result = await paymasterService.sponsorRawTransaction(txHex, req.userId);
         res.json(result);
     } catch (error: any) {
         console.error("Broadcast Error:", error);
