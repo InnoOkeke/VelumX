@@ -30,6 +30,7 @@ export default function ApiKeysPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [showNewKeyModal, setShowNewKeyModal] = useState(false);
     const [newKeyName, setNewKeyName] = useState('');
+    const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
     const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
     const [relayerInfo, setRelayerInfo] = useState<{ address: string; key: string } | null>(null);
     const [isRelayerKeyVisible, setIsRelayerKeyVisible] = useState(false);

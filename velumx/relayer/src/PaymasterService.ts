@@ -189,9 +189,13 @@ export class PaymasterService {
             let feeAmount = '0';
 
             try {
-                // Sender address
-                const { getAddressFromPrivateKey } = await import('@stacks/transactions');
-                userAddress = transaction.auth.originAddress;
+                // Sender address: Use a more resilient way to find the signer's address
+                const auth = transaction.auth as any;
+                if (auth.originAddress) {
+                    userAddress = auth.originAddress;
+                } else if (auth.spendingCondition && auth.spendingCondition.signer) {
+                    userAddress = auth.spendingCondition.signer;
+                }
 
                 // Fee Amount (If it's a contract call to our paymaster)
                 if (transaction.payload.payloadType === 2) { // 2 = ContractCall (matches stacks-transactions)
