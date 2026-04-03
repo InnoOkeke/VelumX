@@ -33,7 +33,13 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("Dashboard API: Failed to fetch API keys:", error);
     return NextResponse.json(
-      { error: "Internal server error", details: error.message },
+      { 
+        error: "Internal server error", 
+        message: error.message,
+        name: error.name,
+        code: error.code, // Useful for Prisma errors (P2021, etc)
+        stack: error.stack 
+      },
       { status: 500 }
     )
   }
