@@ -136,6 +136,7 @@ export class PaymasterService {
             network: this.network,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
+            fee: 1000n, // 0.001 STX (microSTX)
         };
 
         try {
@@ -213,7 +214,7 @@ export class PaymasterService {
             }
 
             // Sign as sponsor
-            const RELAYER_FEE = 50000n; // microSTX
+            const RELAYER_FEE = 1000n; // 0.001 STX (microSTX)
 
             const signedTx = await sponsorTransaction({
                 transaction,
