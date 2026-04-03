@@ -33,12 +33,16 @@ export default function ApiKeysPage() {
     const fetchKeys = async () => {
         try {
             const res = await fetch('/api/keys');
-            if (!res.ok) throw new Error('Failed to fetch keys');
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                console.error('Server Side Error:', errorData);
+                throw new Error(errorData.message || errorData.error || 'Failed to fetch keys');
+            }
             const data = await res.json();
             setKeys(Array.isArray(data.apiKeys) ? data.apiKeys : []);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching keys:', error);
-            toast.error('Failed to load API keys');
+            toast.error(error.message || 'Failed to load API keys');
         } finally {
             setIsLoading(false);
         }
