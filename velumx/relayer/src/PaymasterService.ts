@@ -176,12 +176,37 @@ export class PaymasterService {
     /**
      * Sponsor a raw Stacks transaction hex
      */
-    public async sponsorRawTransaction(txHex: string, userId?: string) {
+    public async sponsorRawTransaction(txHex: string, apiKeyId?: string, userId?: string) {
         const activeKey = userId ? this.getUserRelayerKey(userId) : this.relayerKey;
         if (!activeKey) throw new Error("Relayer key not configured");
 
         try {
-            const transaction = deserializeTransaction(txHex);
+            const cleanHex = txHex.replace(/^0x/, '');
+            const transaction = deserializeTransaction(cleanHex);
+
+            // Introspect: Try to find real address and fee
+            let userAddress = 'unknown';
+            let feeAmount = '0';
+
+            try {
+                // Sender address
+                const { getAddressFromPrivateKey } = await import('@stacks/transactions');
+                userAddress = transaction.auth.originAddress;
+
+                // Fee Amount (If it's a contract call to our paymaster)
+                if (transaction.payload.payloadType === 2) { // 2 = ContractCall (matches stacks-transactions)
+                    const args = (transaction.payload as any).functionArgs;
+                    if (args && args.length >= 3) {
+                        // In bridge-gasless, fee is index 2
+                        const feeArg = args[2];
+                        if (feeArg && feeArg.type === 1) { // 1 = uint
+                            feeAmount = feeArg.value.toString();
+                        }
+                    }
+                }
+            } catch (introError) {
+                console.warn("Relayer: Failed to introspect txHex", introError);
+            }
 
             // Sign as sponsor
             const RELAYER_FEE = 50000n; // microSTX
@@ -209,13 +234,16 @@ export class PaymasterService {
                     data: {
                         txid: txid,
                         type: 'Native Sponsorship',
-                        userAddress: 'unknown',
-                        feeAmount: '0',
+                        userAddress,
+                        feeAmount,
                         status: 'Pending',
-                        userId: userId || null
+                        userId: userId || null,
+                        apiKeyId: apiKeyId || null
                     }
                 });
-            } catch (e) { }
+            } catch (e) {
+                console.error("DB Save Error in sponsorRawTransaction:", e);
+            }
 
             return {
                 txid: txid,

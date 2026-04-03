@@ -8,7 +8,10 @@ import {
     Trash2,
     ShieldAlert,
     Eye,
-    EyeOff
+    EyeOff,
+    Wallet,
+    ExternalLink,
+    Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -27,8 +30,10 @@ export default function ApiKeysPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [showNewKeyModal, setShowNewKeyModal] = useState(false);
     const [newKeyName, setNewKeyName] = useState('');
-    const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
     const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+    const [relayerInfo, setRelayerInfo] = useState<{ address: string; key: string } | null>(null);
+    const [isRelayerKeyVisible, setIsRelayerKeyVisible] = useState(false);
+    const [isLoadingRelayer, setIsLoadingRelayer] = useState(true);
 
     const fetchKeys = async () => {
         try {
@@ -125,9 +130,24 @@ export default function ApiKeysPage() {
         toast.success('Copied to clipboard!');
     };
 
+    const fetchRelayerInfo = async () => {
+        try {
+            const res = await fetch('/api/relayer/export');
+            if (res.ok) {
+                const data = await res.json();
+                setRelayerInfo(data);
+            }
+        } catch (error) {
+            console.error('Error fetching relayer info:', error);
+        } finally {
+            setIsLoadingRelayer(false);
+        }
+    };
+
     useEffect(() => {
         setIsClient(true);
         fetchKeys();
+        fetchRelayerInfo();
     }, []);
 
     if (!isClient) return null;
@@ -149,11 +169,99 @@ export default function ApiKeysPage() {
                 </button>
             </div>
 
-            <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4 flex gap-4">
-                <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 text-white/60" />
-                <div className="text-sm">
-                    <p className="font-bold text-white mb-1">Secret keys grant access to your paymaster infrastructure.</p>
-                    <p className="text-white/40">Never share your secret keys or expose them in client-side code. Use them only on your secure backend server.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Security Warning */}
+                <div className="bg-white/[0.03] border border-white/10 rounded-xl p-6 flex gap-4 h-full">
+                    <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 text-white/60" />
+                    <div>
+                        <h3 className="font-bold text-white mb-2">Keep your keys secure</h3>
+                        <p className="text-sm text-white/40 leading-relaxed">
+                            Secret keys grant access to your paymaster infrastructure. 
+                            Never share your secret keys or expose them in client-side code. 
+                            Use them only on your secure backend server.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Relayer Wallet Info */}
+                <div className="bg-white/[0.03] border border-white/10 rounded-xl p-6 flex flex-col h-full">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+                            <Wallet className="w-5 h-5 text-white/60" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-white">Relayer Wallet</h3>
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Your Gas Deposit Address</p>
+                        </div>
+                    </div>
+
+                    {isLoadingRelayer ? (
+                        <div className="h-20 animate-pulse bg-white/5 rounded-lg mb-4" />
+                    ) : relayerInfo ? (
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex justify-between items-center mb-1.5 px-1">
+                                    <span className="text-[10px] font-bold text-white/40">STACKS ADDRESS</span>
+                                    <a 
+                                        href={`https://explorer.hiro.so/address/${relayerInfo.address}?chain=mainnet`}
+                                        target="_blank"
+                                        className="text-[10px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                                    >
+                                        VERIFY ON EXPLORER <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                </div>
+                                <div className="flex items-center gap-2 group">
+                                    <code className="flex-1 px-3 py-2 bg-black/40 rounded-lg text-xs text-white/60 font-mono border border-white/5 truncate">
+                                        {relayerInfo.address}
+                                    </code>
+                                    <button
+                                        onClick={() => copyToClipboard(relayerInfo.address)}
+                                        className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white/20 hover:text-white transition-all border border-white/5"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between items-center mb-1.5 px-1">
+                                    <span className="text-[10px] font-bold text-white/40">SECRET PRIVATE KEY</span>
+                                    <span className="text-[10px] font-bold text-rose-400/60 uppercase">Warning: Key revealed on screen</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 relative">
+                                        <code className="block w-full px-3 py-2 bg-black/40 rounded-lg text-xs text-white/60 font-mono border border-white/5 truncate">
+                                            {isRelayerKeyVisible ? relayerInfo.key : '••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••'}
+                                        </code>
+                                        {!isRelayerKeyVisible && (
+                                            <div className="absolute inset-x-0 inset-y-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center rounded-lg">
+                                                <Lock className="w-3 h-3 text-white/10" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => setIsRelayerKeyVisible(!isRelayerKeyVisible)}
+                                        className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white/20 hover:text-white transition-all border border-white/5"
+                                    >
+                                        {isRelayerKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                        onClick={() => copyToClipboard(relayerInfo.key)}
+                                        className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white/20 hover:text-white transition-all border border-white/5"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-white/20 mt-2 px-1 italic">
+                                    * Use this key to export your funds to Leather or Xverse at any time.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-400">
+                            Failed to load relayer wallet. Please check your relayer connection.
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -133,11 +133,29 @@ app.post('/api/v1/broadcast', validateApiKey, async (req: ApiKeyRequest, res) =>
             return res.status(400).json({ error: "Missing transaction hex" });
         }
 
-        const result = await paymasterService.sponsorRawTransaction(txHex, req.userId);
+        const result = await paymasterService.sponsorRawTransaction(txHex, req.apiKeyId, req.userId);
         res.json(result);
     } catch (error: any) {
         console.error("Broadcast Error:", error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Export Relayer Private Key (Authenticated Developer only)
+app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthRequest, res) => {
+    try {
+        const userId = req.userId!;
+        const key = paymasterService.getUserRelayerKey(userId);
+        
+        // Return both the address and the key
+        const { getAddressFromPrivateKey } = await import('@stacks/transactions');
+        const networkType = (process.env.NETWORK || 'testnet') as "mainnet" | "testnet";
+        const address = getAddressFromPrivateKey(key, networkType);
+
+        res.json({ address, key });
+    } catch (error: any) {
+        console.error("Export Key Error:", error);
+        res.status(500).json({ error: "Failed to export key" });
     }
 });
 
@@ -158,21 +176,23 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
             totalTransactions = await (prisma.transaction as any).count({ where: { userId } });
             activeKeys = await (prisma.apiKey as any).count({ where: { userId, status: 'Active' } });
 
-            // Sum total sponsored amount with sanitization
-            const transactions = await (prisma.transaction as any).findMany({ 
+            // Since feeAmount is currently a String, we fetch and sum manually for accurate results
+            const transactions = await (prisma.transaction as any).findMany({
                 where: { userId },
-                select: { feeAmount: true } 
+                select: { feeAmount: true }
             });
-            for (const tx of transactions) {
+
+            const total = transactions.reduce((acc: bigint, tx: any) => {
                 try {
-                    const amount = tx.feeAmount?.replace(/[^0-9]/g, '') || '0';
-                    totalSponsored += BigInt(amount);
+                    return acc + BigInt(tx.feeAmount || '0');
                 } catch (e) {
-                    console.error("Relayer Index: Error parsing feeAmount BigInt:", tx.feeAmount);
+                    return acc;
                 }
-            }
+            }, BigInt(0));
+
+            totalSponsored = total;
         } catch (dbError) {
-            console.error("Dashboard Stats: Database Error:", dbError);
+            console.error("Stats DB Error:", dbError);
         }
 
         // --- Relayer Health Metrics ---
