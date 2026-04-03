@@ -10,15 +10,19 @@ datasource db {
 
 model ApiKey {
   id          String    @id @default(cuid())
+  userId      String?   // Associated Supabase User ID
   name        String
   key         String    @unique
   status      String    @default("Active")
-  userId      String?   // Associated Supabase User ID
   lastUsedAt  DateTime?
   revokedAt   DateTime?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @updatedAt @default(now())
+  usageLogs   UsageLog[]
   transactions Transaction[]
+
+  @@index([userId])
+  @@index([key])
 }
 
 model Transaction {
@@ -30,7 +34,26 @@ model Transaction {
   status      String   @default("Pending")
   userId      String?  // Associated Supabase User ID
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @updatedAt @default(now())
   apiKey      ApiKey?  @relation(fields: [apiKeyId], references: [id])
   apiKeyId    String?
+
+  @@index([userId])
+  @@index([txid])
+}
+
+model UsageLog {
+  id           String   @id @default(cuid())
+  apiKeyId     String
+  apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  endpoint     String
+  method       String
+  statusCode   Int
+  responseTime Int
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([createdAt])
 }

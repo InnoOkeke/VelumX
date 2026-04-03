@@ -263,15 +263,3 @@ export default function DashboardOverview() {
     </div>
   );
 }
-function setIsLoading(arg0: boolean) {
-  throw new Error('Function not implemented.');
-}
-
-function setStatsData(stats: any) {
-  throw new Error('Function not implemented.');
-}
-
-function setLogs(logsData: any) {
-  throw new Error('Function not implemented.');
-}
-
