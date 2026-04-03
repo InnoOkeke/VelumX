@@ -8,9 +8,10 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const path = params.path.join('/');
+  const { path: pathSegments } = await params;
+  const path = pathSegments.join('/');
   const relayerUrl = process.env.VELUMX_RELAYER_URL || 'https://sgal-relayer.onrender.com';
   const apiKey = process.env.VELUMX_API_KEY;
 
@@ -43,9 +44,10 @@ export async function POST(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const path = params.path.join('/');
+  const { path: pathSegments } = await params;
+  const path = pathSegments.join('/');
   const relayerUrl = process.env.VELUMX_RELAYER_URL || 'https://sgal-relayer.onrender.com';
   const apiKey = process.env.VELUMX_API_KEY;
 
