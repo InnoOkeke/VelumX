@@ -54,8 +54,8 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   // Encode Ethereum address to bytes32
   const recipientBytes = encodeEthereumAddress(recipientAddress);
   
-  // Get relayer address from config or use default
-  const relayerAddress = 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'; // Relayer address
+  // Get relayer address from config
+  const relayerAddress = config.velumxRelayerAddress; 
   
   onProgress?.('Preparing transaction...');
   

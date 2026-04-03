@@ -35,9 +35,8 @@ export function getConfig(): FrontendConfig {
     ethereumDomainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_DOMAIN_ID || '0'), // Ethereum
     stacksDomainId: parseInt(process.env.NEXT_PUBLIC_STACKS_DOMAIN_ID || '10003'), // Stacks
 
-    // Explorer URLs
-    ethereumExplorerUrl: process.env.NEXT_PUBLIC_ETHEREUM_EXPLORER_URL || 'https://sepolia.etherscan.io',
-    stacksExplorerUrl: process.env.NEXT_PUBLIC_STACKS_EXPLORER_URL || 'https://explorer.hiro.so',
+    // VelumX Integration
+    velumxRelayerAddress: process.env.NEXT_PUBLIC_VELUMX_RELAYER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P', // Fallback to default if not set
   };
 }
 
