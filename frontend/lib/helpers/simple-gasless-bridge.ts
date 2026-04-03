@@ -56,6 +56,11 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   
   // Get relayer address from config
   const relayerAddress = config.velumxRelayerAddress; 
+
+  // SAFETY LOCK: Block the transaction if the address is not configured
+  if (!relayerAddress) {
+    throw new Error('VelumX Configuration Error: Relayer Address is not set. Please add NEXT_PUBLIC_VELUMX_RELAYER_ADDRESS to your environment variables.');
+  }
   
   onProgress?.('Preparing transaction...');
   

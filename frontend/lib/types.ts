@@ -30,6 +30,9 @@ export interface FrontendConfig {
   // Explorer URLs
   ethereumExplorerUrl: string;
   stacksExplorerUrl: string;
+
+  // VelumX Integration
+  velumxRelayerAddress: string;
 }
 
 // ============ Transaction Types ============
