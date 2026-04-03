@@ -15,15 +15,16 @@ export function getVelumXClient() {
             ? 'https://api.mainnet.hiro.so'
             : 'https://api.testnet.hiro.so';
 
-        // Use the direct relayer URL from environment variables for true integration.
-        // Fallback to the known stable relayer if no custom URL is provided.
-        const paymasterUrl = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'https://sgal-relayer.onrender.com/api/v1';
+        // Secure Proxy Integration:
+        // Use our internal Next.js API route as the paymasterUrl.
+        // This keeps the VELUMX_API_KEY hidden on the server.
+        const paymasterUrl = '/api/velumx/proxy';
 
         client = new VelumXClient({
             coreApiUrl,
             paymasterUrl,
             network: config.stacksNetwork,
-            apiKey: process.env.NEXT_PUBLIC_VELUMX_API_KEY
+            apiKey: 'proxied' // Token value to satisfy SDK requirement (real key added by server)
         });
 
     }
