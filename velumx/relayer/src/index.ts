@@ -173,18 +173,10 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
     try {
         const userId = req.userId!;
 
-        // --- Relayer Health Metrics ---
-        const relayerKey = paymasterService.getUserRelayerKey(userId);
-        
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
-            const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
-            let relayerAddress = "Not Configured";
-            let stxBalance = "0";
-            let totalTransactions = 0;
-            let totalSponsored = BigInt(0);
-
             try {
-                totalTransactions = await (prisma.transaction as any).count({ 
+                // 1. Database Stats
+                const totalTransactions = await (prisma.transaction as any).count({ 
                     where: { userId, network: networkType } 
                 });
 
@@ -193,7 +185,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                     select: { feeAmount: true }
                 });
 
-                totalSponsored = transactions.reduce((acc: bigint, tx: any) => {
+                const totalSponsored = transactions.reduce((acc: bigint, tx: any) => {
                     try {
                         return acc + BigInt(tx.feeAmount || '0');
                     } catch (e) {
@@ -201,26 +193,43 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                     }
                 }, BigInt(0));
 
-                if (relayerKey && relayerKey.length >= 64) {
-                    const cleanKey = relayerKey.replace(/^0x/, '');
-                    relayerAddress = getAddressFromPrivateKey(cleanKey, networkType);
+                // 2. On-Chain Metrics
+                const relayerKey = paymasterService.getUserRelayerKey(userId);
+                const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
 
-                    const url = `${network.client.baseUrl}/v2/accounts/${relayerAddress}`;
-                    const accountRes = await fetch(url);
-                    const accountData: any = await accountRes.json();
-                    stxBalance = accountData.balance || "0";
+                let relayerStxBalance = "0";
+                let relayerUsdcxBalance = "0";
+
+                try {
+                    const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
+                    const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
+                    
+                    if (balancesRes.ok) {
+                        const balances = await balancesRes.json();
+                        relayerStxBalance = balances.stx.balance;
+
+                        const usdcxToken = process.env.USDCX_TOKEN || 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx';
+                        const tokenBalance = balances.fungible_tokens[usdcxToken] || balances.fungible_tokens[`${usdcxToken}-v1`];
+                        
+                        if (tokenBalance) {
+                            relayerUsdcxBalance = tokenBalance.balance;
+                        }
+                    }
+                } catch (balanceError) {
+                    console.error(`Relayer Stat Error (${networkType}): Failed to fetch on-chain balances`, balanceError);
                 }
+
+                return {
+                    totalTransactions,
+                    totalSponsored: totalSponsored.toString(),
+                    relayerAddress,
+                    relayerStxBalance,
+                    relayerUsdcxBalance
+                };
             } catch (err) {
                 console.error(`Stats Error for ${networkType}:`, err);
+                return { totalTransactions: 0, totalSponsored: "0", relayerAddress: "Error", relayerStxBalance: "0", relayerUsdcxBalance: "0" };
             }
-
-            return {
-                totalTransactions,
-                totalSponsored: totalSponsored.toString(),
-                relayerAddress,
-                relayerStxBalance: stxBalance,
-                relayerUsdcxBalance: "0" // Future: Add USDCx balance fetch
-            };
         };
 
         const mainnet = await getNetworkStats('mainnet');
@@ -233,7 +242,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
         });
     } catch (error: any) {
         console.error("Dashboard Stats Critical Error:", error);
-        res.status(500).json({ error: "Internal Server Error during stats generation", details: error.message });
+        res.status(500).json({ error: "Internal Server Error during stats generation" });
     }
 });
 

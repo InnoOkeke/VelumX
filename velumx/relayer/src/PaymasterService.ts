@@ -199,16 +199,32 @@ export class PaymasterService {
                     userAddress = auth.spendingCondition.signer;
                 }
 
-                // Fee Amount (If it's a contract call to our paymaster)
+                // Fee Amount Introspection: Try to detect which function was called
                 if (transaction.payload.payloadType === 2) { // 2 = ContractCall (matches stacks-transactions)
-                    const args = (transaction.payload as any).functionArgs;
-                    if (args && args.length >= 3) {
-                        // In bridge-gasless, fee is index 2
-                        const feeArg = args[2];
-                        if (feeArg && feeArg.type === 1) { // 1 = uint
-                            feeAmount = feeArg.value.toString();
+                    const payload = transaction.payload as any;
+                    const functionName = payload.functionName;
+                    const args = payload.functionArgs;
+
+                    console.log(`Relayer: Introspecting fee for ${functionName}...`);
+
+                    if (args && args.length > 0) {
+                        let feeIndex = -1;
+                        if (functionName === 'bridge-gasless') feeIndex = 2;
+                        else if (functionName === 'swap-gasless') feeIndex = 4;
+                        else if (functionName === 'transfer-gasless') feeIndex = 3;
+                        else if (functionName === 'execute-gasless') feeIndex = 3;
+
+                        if (feeIndex !== -1 && args[feeIndex] && args[feeIndex].type === 1) { // 1 = uint
+                            feeAmount = args[feeIndex].value.toString();
+                            console.log(`Relayer: Successfully extracted fee ${feeAmount} from ${functionName}.`);
                         }
                     }
+                }
+
+                // Final Fallback: If introspection failed but SDK reported a fee, use it
+                if ((feeAmount === '0' || !feeAmount) && reportedFee) {
+                    feeAmount = reportedFee;
+                    console.log(`Relayer: Using reportedFee fallback: ${feeAmount}`);
                 }
             } catch (introError) {
                 console.warn("Relayer: Failed to introspect txHex", introError);

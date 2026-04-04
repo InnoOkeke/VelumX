@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@/components/providers/SessionProvider';
-import { Wallet, RefreshCcw, History } from 'lucide-react';
+import { Wallet, RefreshCcw, History, Activity } from 'lucide-react';
 import { useWallet } from '@/components/providers/WalletContext';
 
 import { RELAYER_URL } from '@/lib/config';
@@ -16,6 +16,7 @@ export default function FundingPage() {
         relayerStxBalance: '0',
         relayerUsdcxBalance: '0'
     });
+    const [logs, setLogs] = useState<any[]>([]);
     const [isFetching, setIsFetching] = useState(true);
 
     const fetchRelayerStatus = async () => {
@@ -46,6 +47,16 @@ export default function FundingPage() {
                     relayerStxBalance: (parseInt(currentStats.relayerStxBalance || '0') / 1_000_000).toFixed(2),
                     relayerUsdcxBalance: (parseInt(currentStats.relayerUsdcxBalance || '0') / 1_000_000).toFixed(2)
                 });
+
+                // --- Fetch Recent Logs for History ---
+                const logsRes = await fetch(`${RELAYER_URL}/api/dashboard/logs?network=${network}`, {
+                    cache: 'no-store',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (logsRes.ok) {
+                    const logsData = await logsRes.json();
+                    setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : []);
+                }
             } else {
                 console.warn('Relayer: Stats API returned non-ok status');
             }
@@ -164,8 +175,34 @@ export default function FundingPage() {
                     <History className="w-4 h-4 text-white/40" />
                     Operational History
                 </div>
-                <div className="w-full text-center py-16 text-white/20 text-xs font-medium uppercase tracking-widest">
-                    Relayer operational on {network === 'testnet' ? 'Stacks Testnet' : 'Stacks Mainnet'}.
+                <div className="space-y-3">
+                    {isFetching ? (
+                        <div className="w-full text-center py-12 text-white/10 text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                            Loading Operational History...
+                        </div>
+                    ) : logs.length === 0 ? (
+                        <div className="w-full text-center py-12 text-white/10 text-[10px] font-bold uppercase tracking-widest">
+                            No recent activity on {network === 'testnet' ? 'Stacks Testnet' : 'Stacks Mainnet'}.
+                        </div>
+                    ) : logs.map((log) => (
+                        <div key={log.id} className="flex justify-between items-center p-4 bg-white/[0.01] border border-white/5 rounded-xl hover:bg-white/[0.02] transition-colors group">
+                            <div className="flex items-center gap-4">
+                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+                                    <Activity className="w-3.5 h-3.5 text-white/40" />
+                                </div>
+                                <div>
+                                    <p className="text-white text-[11px] font-bold uppercase tracking-tight">{log.type}</p>
+                                    <p className="text-[10px] text-white/20 font-mono mt-0.5">{log.txid.substring(0, 16)}...</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-white text-[11px] font-bold font-mono">{(parseInt(log.feeAmount) / 1_000_000).toFixed(2)} <span className="opacity-40">USDCx</span></p>
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                    {log.status}
+                                </span>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
