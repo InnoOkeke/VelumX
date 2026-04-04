@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const apiKeys = await prisma.apiKey.findMany({
+    const apiKeys = await (prisma.apiKey as any).findMany({
       where: {
         userId: user.id,
         revokedAt: null,
@@ -21,6 +21,10 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         key: true,
+        sponsorshipPolicy: true,
+        markupPercentage: true,
+        maxSponsoredTxsPerUser: true,
+        monthlyLimitUsd: true,
         lastUsedAt: true,
         createdAt: true,
       },
@@ -56,6 +60,22 @@ export async function POST(req: NextRequest) {
 
     const { name } = await req.json()
 
+    // 1. Check for API key limit (e.g., 5 keys per user)
+    const MAX_KEYS = 5;
+    const existingKeysCount = await prisma.apiKey.count({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+      }
+    });
+
+    if (existingKeysCount >= MAX_KEYS) {
+      return NextResponse.json(
+        { error: `API key limit reached. You can only have a maximum of ${MAX_KEYS} active keys.` },
+        { status: 403 }
+      )
+    }
+
     if (!name || name.trim().length === 0) {
       return NextResponse.json(
         { error: "API key name is required" },
@@ -66,16 +86,24 @@ export async function POST(req: NextRequest) {
     // Generate a secure random API key
     const key = `vx_${crypto.randomBytes(32).toString("hex")}`
 
-    const apiKey = await prisma.apiKey.create({
+    const apiKey = await (prisma.apiKey as any).create({
       data: {
         userId: user.id,
         name: name.trim(),
         key,
+        sponsorshipPolicy: "DEVELOPER_SPONSORS", // Default as per project requirements
+        markupPercentage: 10,
+        maxSponsoredTxsPerUser: 5,
+        monthlyLimitUsd: 100.0,
       },
       select: {
         id: true,
         name: true,
         key: true,
+        sponsorshipPolicy: true,
+        markupPercentage: true,
+        maxSponsoredTxsPerUser: true,
+        monthlyLimitUsd: true,
         createdAt: true,
       },
     })

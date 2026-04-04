@@ -11,7 +11,12 @@ import {
     EyeOff,
     Wallet,
     ExternalLink,
-    Lock
+    Lock,
+    Settings,
+    Activity,
+    DollarSign,
+    Users,
+    X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useWallet } from '@/components/providers/WalletContext';
@@ -20,6 +25,10 @@ interface ApiKey {
     id: string;
     name: string;
     key: string;
+    sponsorshipPolicy: 'USER_PAYS' | 'DEVELOPER_SPONSORS';
+    markupPercentage: number;
+    maxSponsoredTxsPerUser: number;
+    monthlyLimitUsd: number;
     lastUsedAt: string | null;
     createdAt: string;
 }
@@ -37,6 +46,8 @@ export default function ApiKeysPage() {
     const [relayerInfo, setRelayerInfo] = useState<{ mainnetAddress: string; testnetAddress: string; key: string } | null>(null);
     const [isRelayerKeyVisible, setIsRelayerKeyVisible] = useState(false);
     const [isLoadingRelayer, setIsLoadingRelayer] = useState(true);
+    const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const fetchKeys = async () => {
         try {
@@ -89,6 +100,30 @@ export default function ApiKeysPage() {
         }
     };
 
+    const handleUpdateKey = async (id: string, updates: Partial<ApiKey>) => {
+        setIsUpdating(true);
+        const toastId = toast.loading('Updating settings...');
+        try {
+            const res = await fetch(`/api/keys/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+
+            if (res.ok) {
+                await fetchKeys();
+                toast.success('Settings updated successfully', { id: toastId });
+                setEditingKey(null);
+            } else {
+                throw new Error('Failed to update settings');
+            }
+        } catch (error: any) {
+            console.error('Error updating key:', error);
+            toast.error(error.message || 'Failed to update settings', { id: toastId });
+        } finally {
+            setIsUpdating(false);
+        }
+    };
     const handleRevokeKey = async (id: string, name: string) => {
         if (!confirm(`Are you sure you want to revoke "${name}"? This action cannot be undone.`)) {
             return;
@@ -163,13 +198,21 @@ export default function ApiKeysPage() {
                     <p className="text-white/40 text-sm">Manage your secret keys for authenticating with VelumX SDK.</p>
                 </div>
 
-                <button
-                    onClick={() => setShowNewKeyModal(true)}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-bold rounded-lg hover:bg-white/90 transition-all"
-                >
-                    <Plus className="w-4 h-4" />
-                    Generate New Key
-                </button>
+                <div className="flex items-center gap-4">
+                    <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg flex flex-col items-end">
+                        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">KEYS USED</span>
+                        <span className="text-sm font-bold text-white">{keys.length} <span className="text-white/20">/ 5</span></span>
+                    </div>
+
+                    <button
+                        onClick={() => setShowNewKeyModal(true)}
+                        disabled={keys.length >= 5}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-bold rounded-lg hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all h-full"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Generate New Key
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -405,13 +448,22 @@ export default function ApiKeysPage() {
                                         {new Date(k.createdAt).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button 
-                                            onClick={() => handleRevokeKey(k.id, k.name)}
-                                            className="text-white/20 hover:text-rose-400 transition-colors p-1"
-                                            title="Revoke key"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button 
+                                                onClick={() => setEditingKey(k)}
+                                                className="text-white/20 hover:text-white transition-colors p-1"
+                                                title="Sponsorship Settings"
+                                            >
+                                                <Settings className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleRevokeKey(k.id, k.name)}
+                                                className="text-white/20 hover:text-rose-400 transition-colors p-1"
+                                                title="Revoke key"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -419,6 +471,133 @@ export default function ApiKeysPage() {
                     </table>
                 </div>
             </div>
+
+            {/* Config Modal */}
+            {editingKey && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Sponsorship Settings</h3>
+                                <p className="text-xs text-white/40">{editingKey.name}</p>
+                            </div>
+                            <button onClick={() => setEditingKey(null)} className="p-2 hover:bg-white/5 rounded-lg text-white/20 hover:text-white transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6 space-y-6">
+                            {/* Policy Toggle */}
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">Sponsorship Policy</label>
+                                <div className="grid grid-cols-2 gap-2 bg-white/5 p-1 rounded-xl border border-white/5">
+                                    <button
+                                        onClick={() => setEditingKey({...editingKey, sponsorshipPolicy: 'DEVELOPER_SPONSORS'})}
+                                        className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                            editingKey.sponsorshipPolicy === 'DEVELOPER_SPONSORS' 
+                                            ? 'bg-white text-black shadow-lg' 
+                                            : 'text-white/40 hover:text-white'
+                                        }`}
+                                    >
+                                        <Activity className="w-3.5 h-3.5" />
+                                        Dev Sponsors
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingKey({...editingKey, sponsorshipPolicy: 'USER_PAYS'})}
+                                        className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                            editingKey.sponsorshipPolicy === 'USER_PAYS' 
+                                            ? 'bg-white text-black shadow-lg' 
+                                            : 'text-white/40 hover:text-white'
+                                        }`}
+                                    >
+                                        <Users className="w-3.5 h-3.5" />
+                                        User Pays
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-white/20 px-1 italic">
+                                    {editingKey.sponsorshipPolicy === 'DEVELOPER_SPONSORS' 
+                                        ? "* You will pay STX gas for your users automatically." 
+                                        : "* Users will pay fees in USDCx. You will collect the markup."}
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* Limits Area */}
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">Free Txs / User</label>
+                                        <div className="relative">
+                                            <Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
+                                            <input
+                                                type="number"
+                                                value={editingKey.maxSponsoredTxsPerUser}
+                                                onChange={(e) => setEditingKey({...editingKey, maxSponsoredTxsPerUser: parseInt(e.target.value) || 0})}
+                                                disabled={editingKey.sponsorshipPolicy === 'USER_PAYS'}
+                                                className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-white/20 transition-all disabled:opacity-20"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">Monthly Budget (USD)</label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
+                                            <input
+                                                type="number"
+                                                value={editingKey.monthlyLimitUsd}
+                                                onChange={(e) => setEditingKey({...editingKey, monthlyLimitUsd: parseFloat(e.target.value) || 0})}
+                                                className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-white/20 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Revenue Area */}
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">Markup Percentage</label>
+                                        <div className="relative">
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/20">%</div>
+                                            <input
+                                                type="number"
+                                                value={editingKey.markupPercentage}
+                                                onChange={(e) => setEditingKey({...editingKey, markupPercentage: parseInt(e.target.value) || 0})}
+                                                className="w-full px-4 py-2.5 bg-white/5 border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-white/20 transition-all font-mono"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl flex items-center justify-center">
+                                        <div className="text-center">
+                                            <div className="text-[10px] font-bold text-white/20 uppercase mb-1">Fee Model</div>
+                                            <div className="text-xs font-bold text-emerald-400">
+                                                {editingKey.sponsorshipPolicy === 'DEVELOPER_SPONSORS' ? 'Freemium' : 'Direct Pay'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-white/[0.02] border-t border-white/5 flex gap-3">
+                            <button
+                                onClick={() => setEditingKey(null)}
+                                className="flex-1 px-4 py-2.5 bg-white/5 text-white/60 text-xs font-bold rounded-xl hover:bg-white/10 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleUpdateKey(editingKey.id, editingKey)}
+                                disabled={isUpdating}
+                                className="flex-1 px-4 py-2.5 bg-white text-black text-xs font-bold rounded-xl hover:bg-white/90 transition-all disabled:opacity-50"
+                            >
+                                {isUpdating ? 'Saving...' : 'Save Settings'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

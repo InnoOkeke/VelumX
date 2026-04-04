@@ -140,7 +140,8 @@ export class PaymasterService {
             select: { 
                 sponsorshipPolicy: true, 
                 markupPercentage: true, 
-                maxSponsoredTxsPerUser: true 
+                maxSponsoredTxsPerUser: true,
+                monthlyLimitUsd: true
             }
         }) as any; 
 
@@ -151,10 +152,36 @@ export class PaymasterService {
 
         // 3. Handle 'Developer Sponsors' Policy
         if ((apiKey.sponsorshipPolicy as string) === 'DEVELOPER_SPONSORS') {
-            // Check Monthly sponsorship limit for this specific userAddress
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+            // 3a. Check Total Developer Monthly Budget
+            const monthlyTransactions = await prisma.transaction.findMany({
+                where: {
+                    apiKeyId,
+                    createdAt: { gte: startOfMonth },
+                    type: { contains: 'Sponsorship' },
+                    status: { notIn: ['Failed'] }
+                },
+                select: { feeAmount: true }
+            });
+
+            const totalMonthlySpendUSDCx = monthlyTransactions.reduce((acc, tx) => {
+                return acc + BigInt(tx.feeAmount || '0');
+            }, BigInt(0));
+
+            const monthlyLimitUSDCx = BigInt(Math.floor((apiKey.monthlyLimitUsd || 100) * 1_000_000));
+
+            if (totalMonthlySpendUSDCx >= monthlyLimitUSDCx) {
+                console.log(`Relayer: Developer ${apiKeyId} hit total monthly budget limit (${totalMonthlySpendUSDCx}/${monthlyLimitUSDCx}). Falling back to USER_PAYS.`);
+                // Return User-pays early
+                return {
+                    maxFeeUSDCx: "0", // Will be overridden below
+                    isLimitReached: true
+                };
+            }
+
+            // 3b. Check Per-User limit for this specific userAddress
             const sponsoredCount = await prisma.transaction.count({
                 where: {
                     apiKeyId,
@@ -172,7 +199,8 @@ export class PaymasterService {
                     maxFeeUSDCx: "0",
                     estimatedGas: intent.estimatedGas || 5000,
                     policy: "DEVELOPER_SPONSORS",
-                    remainingFreeInRange: apiKey.maxSponsoredTxsPerUser - sponsoredCount
+                    remainingFreeInRange: apiKey.maxSponsoredTxsPerUser - sponsoredCount,
+                    totalMonthlySpendUsd: Number(totalMonthlySpendUSDCx) / 1_000_000
                 };
             }
             

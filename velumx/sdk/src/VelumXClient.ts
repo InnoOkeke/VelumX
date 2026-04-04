@@ -26,7 +26,12 @@ export class VelumXClient {
             const response = await fetch(`${this.relayerUrl}/estimate`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ intent })
+                body: JSON.stringify({ 
+                    intent: { 
+                        ...intent, 
+                        network: this.config.network 
+                    } 
+                })
             });
 
             if (!response.ok) {
@@ -54,7 +59,12 @@ export class VelumXClient {
             const response = await fetch(`${this.relayerUrl}/sponsor`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ intent: signedIntent })
+                body: JSON.stringify({ 
+                    intent: { 
+                        ...signedIntent, 
+                        network: this.config.network 
+                    } 
+                })
             });
 
             if (!response.ok) {
@@ -94,7 +104,8 @@ export class VelumXClient {
                 body: JSON.stringify({ 
                     txHex,
                     userId: options?.userId,
-                    feeAmount: options?.feeAmount
+                    feeAmount: options?.feeAmount,
+                    network: this.config.network
                 })
             });
 

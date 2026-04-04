@@ -18,6 +18,8 @@ export interface SimplePaymasterConfig {
     paymasterContract: string; // e.g., 'DEPLOYER.simple-paymaster-v1'
     relayerAddress: string; // e.g., 'STKY...25E3P'
     usdcxContract: string; // e.g., 'ST1P...PGZGM.usdcx'
+    relayerUrl?: string; // Optional: URL of your VelumX Relayer
+    apiKey?: string;     // Optional: Your VelumX API Key
 }
 
 export interface BridgeParams {
@@ -181,13 +183,52 @@ export class SimplePaymaster {
     }
 
     /**
-     * Estimate fee for gasless transaction
+     * Estimate fee for gasless transaction by calling the Relayer API
      */
-    async estimateFee(estimatedGas: number = 100000): Promise<{ feeUsdcx: string }> {
-        // Simple fee calculation: ~0.25 USDCx per transaction
-        // In production, this would call the relayer API
-        return {
-            feeUsdcx: '250000' // 0.25 USDCx
+    async estimateFee(params: { 
+        estimatedGas?: number, 
+        userAddress?: string,
+        txType?: string 
+    } = {}): Promise<{ feeUsdcx: string; policy: string; isSponsored: boolean }> {
+        const { estimatedGas = 100000, userAddress = 'unknown', txType = 'generic' } = params;
+        
+        // Use provided relayerUrl or fallback to a default (if applicable)
+        const relayerUrl = this.config.relayerUrl || 'https://sgal-relayer.onrender.com';
+
+        try {
+            const res = await fetch(`${relayerUrl}/api/v1/estimate`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-api-key': this.config.apiKey || ''
+                },
+                body: JSON.stringify({
+                    intent: { 
+                        estimatedGas, 
+                        network: this.config.network,
+                        txType
+                    },
+                    userAddress
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                return {
+                    feeUsdcx: data.maxFeeUSDCx,
+                    policy: data.policy || 'UNKNOWN',
+                    isSponsored: data.maxFeeUSDCx === "0"
+                };
+            }
+        } catch (e) {
+            console.error("VelumX SDK: Fee estimation failed, using fallback.", e);
+        }
+
+        // Final fallback: 0.25 USDCx if Relayer is unreachable
+        return { 
+            feeUsdcx: '250000', 
+            policy: 'USER_PAYS', 
+            isSponsored: false 
         };
     }
 
