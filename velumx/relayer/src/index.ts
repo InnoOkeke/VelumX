@@ -208,11 +208,19 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
 
+                        // Improved Token Search: USDCx balance
                         const usdcxToken = process.env.USDCX_TOKEN || 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx';
-                        const tokenBalance = balances.fungible_tokens[usdcxToken] || balances.fungible_tokens[`${usdcxToken}-v1`];
                         
-                        if (tokenBalance) {
-                            relayerUsdcxBalance = tokenBalance.balance;
+                        // Hiro API keys FTs as "CONTRACT_PRINCIPAL::SYMBOL"
+                        // We check for exact match OR key starting with our contract address
+                        const tokenKey = Object.keys(balances.fungible_tokens).find(key => 
+                            key === usdcxToken || 
+                            key === `${usdcxToken}-v1` ||
+                            key.startsWith(`${usdcxToken}::`)
+                        );
+                        
+                        if (tokenKey) {
+                            relayerUsdcxBalance = balances.fungible_tokens[tokenKey].balance;
                         }
                     }
                 } catch (balanceError) {
