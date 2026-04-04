@@ -18,7 +18,7 @@ import { logger } from '@/lib/backend/logger';
 
 export class StacksMintService {
     private config = getBackendConfig();
-    private network = STACKS_TESTNET;
+    private network = STACKS_MAINNET;
 
     async fundNewAccount(recipientAddress: string): Promise<string | null> {
         try {

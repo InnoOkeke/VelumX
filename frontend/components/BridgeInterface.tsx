@@ -402,7 +402,7 @@ export function BridgeInterface() {
             Cl.uint("0"), // native-domain: 0 for Ethereum
             Cl.buffer(recipientBytes),
           ],
-          network: config.stacksNetwork === 'mainnet' ? 'mainnet' : 'testnet',
+          network: 'mainnet',
           anchorMode: 'any',
           postConditionMode: 'allow',
           postConditions: [],

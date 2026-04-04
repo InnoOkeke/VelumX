@@ -16,7 +16,7 @@ interface AttestationFetchOptions {
 export class AttestationService {
     private config = getBackendConfig();
     private readonly CIRCLE_ATTESTATION_API = 'https://iris-api-sandbox.circle.com/v1/attestations';
-    private readonly STACKS_ATTESTATION_API = 'https://api.testnet.hiro.so';
+    private readonly STACKS_ATTESTATION_API = 'https://api.mainnet.hiro.so';
 
     async fetchCircleAttestation(
         messageHash: string,

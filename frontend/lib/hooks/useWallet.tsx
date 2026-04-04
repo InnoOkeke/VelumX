@@ -7,7 +7,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { createWalletClient, createPublicClient, custom, http, formatUnits } from 'viem';
-import { sepolia } from 'viem/chains';
+import { mainnet } from 'viem/chains';
 import { useConfig, USDC_ABI, TOKEN_DECIMALS } from '../config';
 import { getStacksConnect, getStacksTransactions } from '../stacks-loader';
 
@@ -87,7 +87,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     isFetchingBalances: false,
   });
 
-  // Switch Ethereum network to Sepolia
+  // Switch Ethereum network to Mainnet
   const switchEthereumNetwork = useCallback(async () => {
     if (typeof window === 'undefined') return false;
     const ethereum = (window as any).ethereum;
@@ -100,7 +100,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       });
       return true;
     } catch (switchError: any) {
-      // Logic for adding network if it doesn't exist could go here
       console.error('Failed to switch network:', switchError);
       return false;
     }
@@ -111,7 +110,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!address) return;
     try {
       const publicClient = createPublicClient({
-        chain: sepolia,
+        chain: mainnet,
         transport: http(config.ethereumRpcUrl),
       });
       const ethBalance = await publicClient.getBalance({ address: address as `0x${string}` });
@@ -220,13 +219,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     setState(prev => ({ ...prev, isConnecting: true }));
     try {
-      const walletClient = createWalletClient({ chain: sepolia, transport: custom(provider) });
+      const walletClient = createWalletClient({ chain: mainnet, transport: custom(provider) });
       const [address] = await walletClient.requestAddresses();
       const chainId = await walletClient.getChainId();
 
       if (chainId !== config.ethereumChainId) {
         const switched = await switchEthereumNetwork();
-        if (!switched) throw new Error(`Please switch to Sepolia (Chain ID: ${config.ethereumChainId})`);
+        if (!switched) throw new Error(`Please switch to Ethereum Mainnet (Chain ID: ${config.ethereumChainId})`);
       }
 
       setState(prev => ({

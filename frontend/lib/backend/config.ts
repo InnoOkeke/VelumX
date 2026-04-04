@@ -68,7 +68,7 @@ export function getBackendConfig(): BackendConfig {
 
     return {
         ethereumRpcUrl: process.env.ETHEREUM_RPC_URL || 'https://ethereum-sepolia.publicnode.com',
-        stacksRpcUrl: process.env.STACKS_RPC_URL || 'https://api.testnet.hiro.so',
+        stacksRpcUrl: process.env.STACKS_RPC_URL || 'https://api.mainnet.hiro.so',
         ethereumUsdcAddress: process.env.ETHEREUM_USDC_ADDRESS || '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
         ethereumXReserveAddress: process.env.ETHEREUM_XRESERVE_ADDRESS || '0x008888878f94C0d87defdf0B07f46B93C1934442',
         stacksUsdcxAddress: process.env.STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',

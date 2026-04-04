@@ -12,9 +12,7 @@ export function getVelumXClient(): VelumXClient {
         const config = getConfig();
         clientInstance = new VelumXClient({
             network: config.stacksNetwork,
-            coreApiUrl: config.stacksNetwork === 'mainnet' 
-                ? 'https://api.mainnet.hiro.so' 
-                : 'https://api.testnet.hiro.so',
+            coreApiUrl: 'https://api.mainnet.hiro.so',
             paymasterUrl: '/api/velumx/proxy'
         });
     }

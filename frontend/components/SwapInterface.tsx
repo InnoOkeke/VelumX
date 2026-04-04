@@ -330,7 +330,7 @@ export function SwapInterface() {
             Cl.uint(amountInMicro.toString()),
             Cl.uint(minAmountOutMicro.toString())
           ],
-          network: config.stacksNetwork === 'mainnet' ? 'mainnet' : 'testnet',
+          network: 'mainnet',
           anchorMode: 'any',
           postConditionMode: 'allow',
           postConditions: [],
