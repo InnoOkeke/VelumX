@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
@@ -25,7 +25,7 @@ const port = process.env.PORT || 4000;
 };
 
 app.use(cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
         // Allow all origins in development (no origin) or specific trusted domains
         const allowedPatterns = [
             /localhost:\d+$/,
@@ -50,12 +50,12 @@ app.use(express.json());
 const paymasterService = new PaymasterService();
 
 // Root Route
-app.get('/', (req, res) => {
+app.get('/', (req: express.Request, res: express.Response) => {
     res.send('<h1>VelumX Relayer is Live</h1><p>Visit <a href="/health">/health</a> for status.</p>');
 });
 
 // Health Check
-app.get('/health', (req, res) => {
+app.get('/health', (req: express.Request, res: express.Response) => {
     res.json({ status: 'ok', service: 'VelumX Relayer' });
 });
 
@@ -99,7 +99,7 @@ const validateApiKey = async (req: ApiKeyRequest, res: express.Response, next: e
 };
 
 // Estimate Fee Endpoint (Gated)
-app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res) => {
+app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { intent } = req.body;
         if (!intent) return res.status(400).json({ error: "Missing intent" });
@@ -113,7 +113,7 @@ app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res) => 
 });
 
 // Sponsor and Submit Intent Endpoint (Gated)
-app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res) => {
+app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { intent } = req.body;
 
@@ -130,7 +130,7 @@ app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res) => {
 });
 
 // Broadcast Raw Transaction (Gated Native Sponsorship)
-app.post('/api/v1/broadcast', validateApiKey, async (req: ApiKeyRequest, res) => {
+app.post('/api/v1/broadcast', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { txHex, userId, feeAmount } = req.body;
         
@@ -147,7 +147,7 @@ app.post('/api/v1/broadcast', validateApiKey, async (req: ApiKeyRequest, res) =>
 });
 
 // Export Relayer Private Key (Authenticated Developer only)
-app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthRequest, res) => {
+app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const key = paymasterService.getUserRelayerKey(userId);
@@ -170,7 +170,7 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
 // ==========================================
 
 // Get Analytics Overview
-app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, res) => {
+app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
 
@@ -256,7 +256,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
 });
 
 // Get API Keys
-app.get('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res) => {
+app.get('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const keys = await (prisma.apiKey as any).findMany({
@@ -270,7 +270,7 @@ app.get('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res
 });
 
 // Generate new API Key
-app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res) => {
+app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const { name } = req.body;
@@ -293,7 +293,7 @@ app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, re
 });
 
 // Get Transaction Logs
-app.get('/api/dashboard/logs', verifySupabaseToken, async (req: AuthRequest, res) => {
+app.get('/api/dashboard/logs', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const { network } = req.query; // Optional filter
