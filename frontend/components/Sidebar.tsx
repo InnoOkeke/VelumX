@@ -57,7 +57,7 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
                         VelumX
                     </span>
                     <span className="text-[10px] font-bold tracking-widest text-orange-500 opacity-80">
-                        TESTNET
+                        MAINNET
                     </span>
                 </div>
             </div>
@@ -134,7 +134,7 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
                 {/* Version */}
                 <div className="px-4 text-center">
                     <p className="text-[10px] text-gray-500 font-medium tracking-tight">
-                        © 2024 VelumX Lab • v1.4.0-testnet
+                        © 2024 VelumX Lab • v1.4.0
                     </p>
                 </div>
             </div>

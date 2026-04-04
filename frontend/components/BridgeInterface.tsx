@@ -88,7 +88,7 @@ export function BridgeInterface() {
   }, [balances]);
 
   // Minimum bridge amounts
-  const MIN_BRIDGE_IN = config.stacksNetwork === 'mainnet' ? 10 : 1; // 10 USDC for mainnet, 1 for testnet
+  const MIN_BRIDGE_IN = 10; // 10 USDC for mainnet
   const MIN_BRIDGE_OUT = 4.80;     // 4.80 USDCx for peg-out (covers bridge fees)
 
   // Validate amount

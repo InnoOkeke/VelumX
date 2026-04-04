@@ -113,7 +113,7 @@ export function TransactionMonitor({ txHash, onClose }: TransactionMonitorProps)
     if (chain === 'ethereum') {
       return `${config.ethereumExplorerUrl}/tx/${hash}`;
     } else {
-      return `${config.stacksExplorerUrl}/txid/${hash}?chain=testnet`;
+      return `${config.stacksExplorerUrl}/txid/${hash}`;
     }
   };
 

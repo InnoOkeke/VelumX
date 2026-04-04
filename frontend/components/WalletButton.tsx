@@ -115,7 +115,7 @@ export function WalletButton() {
                 <div className="p-4" style={{ borderBottom: `1px solid var(--border-color)` }}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                      Stacks (Testnet)
+                      Stacks
                     </span>
                     <div className="w-2 h-2 bg-green-400 rounded-full" />
                   </div>

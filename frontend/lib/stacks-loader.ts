@@ -108,9 +108,7 @@ export const getStacksNetwork = async (): Promise<any> => {
  * Robustly instantiates a Stacks Network instance
  */
 export const getNetworkInstance = async (isMainnetOverride?: boolean): Promise<any> => {
-    const isMainnet = isMainnetOverride !== undefined 
-        ? isMainnetOverride 
-        : process.env.NEXT_PUBLIC_STACKS_NETWORK === 'mainnet';
+    const isMainnet = true; // Hardcoded for production
         
     const networkModule = await getStacksNetwork();
     if (!networkModule) return null;

@@ -12,7 +12,7 @@ import { FrontendConfig } from './types';
  * Loads frontend configuration from environment variables
  */
 export function getConfig(): FrontendConfig {
-  const isMainnet = process.env.NEXT_PUBLIC_STACKS_NETWORK === 'mainnet';
+  const isMainnet = true; // Hardcoded for production
 
   return {
     // API endpoint (empty string points to same origin in Next.js)
@@ -20,8 +20,8 @@ export function getConfig(): FrontendConfig {
 
     // Network configuration
     ethereumChainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_CHAIN_ID || (isMainnet ? '1' : '11155111')), // Ethereum Mainnet (1) or Sepolia (11155111)
-    ethereumRpcUrl: process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL || (isMainnet ? 'https://ethereum.publicnode.com' : 'https://ethereum-sepolia.publicnode.com/'),
-    stacksNetwork: (process.env.NEXT_PUBLIC_STACKS_NETWORK || 'mainnet') as 'testnet' | 'mainnet',
+    ethereumRpcUrl: process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL || 'https://ethereum.publicnode.com',
+    stacksNetwork: 'mainnet' as const,
 
     // Contract addresses
     ethereumUsdcAddress: process.env.NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS || (isMainnet ? '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' : '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'),

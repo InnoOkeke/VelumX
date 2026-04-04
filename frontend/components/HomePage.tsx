@@ -87,7 +87,7 @@ export default function HomePage() {
             
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-green-500">Stacks Testnet API: Online</span>
+              <span className="text-[10px] font-bold text-green-500">Stacks Mainnet: Online</span>
             </div>
           </div>
         </header>

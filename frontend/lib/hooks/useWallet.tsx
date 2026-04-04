@@ -139,7 +139,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const fetchStacksBalances = useCallback(async (address: string) => {
     if (!address) return;
     try {
-      const apiUrl = 'https://api.testnet.hiro.so';
+      const apiUrl = 'https://api.mainnet.hiro.so';
       
       // Fetch personal balances
       const response = await fetch(`${apiUrl}/extended/v1/address/${address}/balances`);

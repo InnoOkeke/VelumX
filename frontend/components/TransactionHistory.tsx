@@ -61,7 +61,7 @@ export function TransactionHistory() {
       // Fetch Stacks transactions
       if (stacksAddress) {
         const response = await fetch(
-          `https://api.testnet.hiro.so/extended/v1/address/${stacksAddress}/transactions?limit=20`
+          `https://api.mainnet.hiro.so/extended/v1/address/${stacksAddress}/transactions?limit=20`
         );
         const data = await response.json();
 
@@ -154,7 +154,7 @@ export function TransactionHistory() {
     if (chain === 'ethereum') {
       return `${config.ethereumExplorerUrl}/tx/${hash}`;
     } else {
-      return `${config.stacksExplorerUrl}/txid/${hash}?chain=testnet`;
+      return `${config.stacksExplorerUrl}/txid/${hash}`;
     }
   };
 
