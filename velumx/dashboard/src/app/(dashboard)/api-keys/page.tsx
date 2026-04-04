@@ -563,7 +563,8 @@ export default function ApiKeysPage() {
                                                 type="number"
                                                 value={editingKey.markupPercentage}
                                                 onChange={(e) => setEditingKey({...editingKey, markupPercentage: parseInt(e.target.value) || 0})}
-                                                className="w-full px-4 py-2.5 bg-white/5 border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-white/20 transition-all font-mono"
+                                                disabled={editingKey.sponsorshipPolicy === 'DEVELOPER_SPONSORS'}
+                                                className="w-full px-4 py-2.5 bg-white/5 border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-white/20 transition-all font-mono disabled:opacity-20"
                                             />
                                         </div>
                                     </div>
