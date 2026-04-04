@@ -208,8 +208,8 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
 
-                        // Improved Token Search: USDCx balance
-                        const usdcxToken = process.env.USDCX_TOKEN || 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx';
+                        // Dynamically fetch the correct USDCx address for the current network
+                        const usdcxToken = paymasterService.getUsdcxAddress(networkType as any);
                         
                         // Hiro API keys FTs as "CONTRACT_PRINCIPAL::SYMBOL"
                         // We check for exact match OR key starting with our contract address
