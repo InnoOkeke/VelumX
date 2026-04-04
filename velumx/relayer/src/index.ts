@@ -8,9 +8,13 @@ import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
 import { verifySupabaseToken, AuthRequest } from './auth.js';
 
+import { StatusSyncService } from './StatusSyncService.js';
+
 dotenv.config();
 
 const prisma = new PrismaClient();
+const statusSync = new StatusSyncService();
+statusSync.start();
 
 const app = express();
 const port = process.env.PORT || 4000;
