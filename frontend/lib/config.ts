@@ -8,36 +8,42 @@ import { FrontendConfig } from './types';
 /**
  * Loads frontend configuration from environment variables
  */
+/**
+ * Loads frontend configuration from environment variables
+ */
 export function getConfig(): FrontendConfig {
+  const isMainnet = process.env.NEXT_PUBLIC_STACKS_NETWORK === 'mainnet';
+
   return {
     // API endpoint (empty string points to same origin in Next.js)
     backendUrl: '', // Always use relative paths for internal Next.js API routes
 
     // Network configuration
-    ethereumChainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_CHAIN_ID || '11155111'), // Sepolia
-    ethereumRpcUrl: process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL || 'https://ethereum-sepolia.publicnode.com',
-    stacksNetwork: (process.env.NEXT_PUBLIC_STACKS_NETWORK || 'testnet') as 'testnet' | 'mainnet',
+    ethereumChainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_CHAIN_ID || (isMainnet ? '1' : '11155111')), // Ethereum Mainnet (1) or Sepolia (11155111)
+    ethereumRpcUrl: process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL || (isMainnet ? 'https://ethereum.publicnode.com' : 'https://ethereum-sepolia.publicnode.com/'),
+    stacksNetwork: (process.env.NEXT_PUBLIC_STACKS_NETWORK || 'mainnet') as 'testnet' | 'mainnet',
 
-    // Contract addresses (testnet defaults)
-    ethereumUsdcAddress: process.env.NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS || '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    ethereumXReserveAddress: process.env.NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS || '0x008888878f94C0d87defdf0B07f46B93C1934442',
-    stacksUsdcxAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx',
-    stacksUsdcxProtocolAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1',
+    // Contract addresses
+    ethereumUsdcAddress: process.env.NEXT_PUBLIC_ETHEREUM_USDC_ADDRESS || (isMainnet ? '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' : '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'),
+    ethereumXReserveAddress: process.env.NEXT_PUBLIC_ETHEREUM_XRESERVE_ADDRESS || (isMainnet ? '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce' : '0x008888878f94C0d87defdf0B07f46B93C1934442'),
+    
+    stacksUsdcxAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_ADDRESS || (isMainnet ? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx' : 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx'),
+    stacksUsdcxProtocolAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS || (isMainnet ? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx-v1' : 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1'),
     
     // Simple Paymaster (Stacks-Native Sponsored Transactions)
-    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1',
+    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || (isMainnet ? 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.simple-paymaster-v1' : 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1'),
     
     // DEX contracts
-    stacksSwapContractAddress: process.env.NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx',
-    stacksVexAddress: process.env.NEXT_PUBLIC_STACKS_VEX_ADDRESS || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1',
+    stacksSwapContractAddress: process.env.NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS || (isMainnet ? 'SP102V3PRWF9674066V2FWAH0TGQEE5WQZ927S3X1.alex-vault' : 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx'), // Default to ALEX for mainnet
+    stacksVexAddress: process.env.NEXT_PUBLIC_STACKS_VEX_ADDRESS || (isMainnet ? '' : 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1'),
 
     // Domain IDs (Stacks USDCx bridging)
     ethereumDomainId: parseInt(process.env.NEXT_PUBLIC_ETHEREUM_DOMAIN_ID || '0'), // Ethereum
-    stacksDomainId: parseInt(process.env.NEXT_PUBLIC_STACKS_DOMAIN_ID || '10003'), // Stacks
+    stacksDomainId: parseInt(process.env.NEXT_PUBLIC_STACKS_DOMAIN_ID || (isMainnet ? '10003' : '10003')), // Stacks (typically 10003 for both if using the same protocol)
 
     // Explorer URLs
-    ethereumExplorerUrl: process.env.NEXT_PUBLIC_ETHEREUM_EXPLORER_URL || 'https://sepolia.etherscan.io',
-    stacksExplorerUrl: process.env.NEXT_PUBLIC_STACKS_EXPLORER_URL || 'https://explorer.hiro.so',
+    ethereumExplorerUrl: process.env.NEXT_PUBLIC_ETHEREUM_EXPLORER_URL || (isMainnet ? 'https://etherscan.io' : 'https://sepolia.etherscan.io'),
+    stacksExplorerUrl: process.env.NEXT_PUBLIC_STACKS_EXPLORER_URL || (isMainnet ? 'https://explorer.hiro.so' : 'https://explorer.hiro.so?chain=testnet'),
 
     // VelumX Integration
     velumxRelayerAddress: process.env.NEXT_PUBLIC_VELUMX_RELAYER_ADDRESS || '', // STRICT: No fallback
@@ -64,8 +70,8 @@ export function useConfig(): FrontendConfig {
  * Network names for display
  */
 export const NETWORK_NAMES = {
-  ethereum: 'Ethereum Sepolia',
-  stacks: 'Stacks Testnet',
+  ethereum: 'Ethereum Mainnet',
+  stacks: 'Stacks Mainnet',
 } as const;
 
 /**

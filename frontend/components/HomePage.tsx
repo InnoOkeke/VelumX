@@ -9,7 +9,6 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Sidebar } from './Sidebar';
 import { NotificationContainer } from './NotificationContainer';
-import { PoolBrowser } from './PoolBrowser';
 import { TransactionHistory } from './TransactionHistory';
 import { Shield, Zap, Repeat } from 'lucide-react';
 import React from 'react';
@@ -17,10 +16,9 @@ import React from 'react';
 // Dynamically import interfaces to resolve Turbopack module factory issues with Stacks libraries
 const BridgeInterface = dynamic(() => import('./BridgeInterface').then(mod => mod.BridgeInterface), { ssr: false });
 const SwapInterface = dynamic(() => import('./SwapInterface').then(mod => mod.SwapInterface), { ssr: false });
-const LiquidityInterface = dynamic(() => import('./LiquidityInterface').then(mod => mod.LiquidityInterface), { ssr: false });
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'liquidity' | 'pools' | 'history'>('bridge');
+  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'history'>('bridge');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Initialize dark mode from localStorage
@@ -109,8 +107,6 @@ export default function HomePage() {
               <p className="text-lg font-light leading-relaxed max-w-2xl" style={{ color: 'var(--text-secondary)' }}>
                 {activeTab === 'bridge' && "Securely move your assets across ecosystems with VelumX's robust bridging protocol."}
                 {activeTab === 'swap' && "Trade tokens instantly at the best market rates using our peer-to-peer liquidity protocol."}
-                {activeTab === 'liquidity' && "Provide liquidity to earn trading fees and help stabilize the decentralized ecosystem."}
-                {activeTab === 'pools' && "Discover and analyze high-yield opportunities across our verified liquidity pools."}
                 {activeTab === 'history' && "Track your recent activity and transaction status in real-time."}
               </p>
             </div>
@@ -125,8 +121,6 @@ export default function HomePage() {
             }}>
               {activeTab === 'bridge' && <BridgeInterface />}
               {activeTab === 'swap' && <SwapInterface />}
-              {activeTab === 'liquidity' && <LiquidityInterface />}
-              {activeTab === 'pools' && <PoolBrowser />}
               {activeTab === 'history' && <TransactionHistory />}
             </div>
           </div>

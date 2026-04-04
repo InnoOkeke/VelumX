@@ -1,55 +1,22 @@
+import { VelumXClient } from '@velumx/sdk';
 import { getConfig } from './config';
 
 /**
- * VelumX SDK Wrapper for DeFi Frontend
- * This handles secure communication with the Relayer via our internal proxy.
+ * VelumX SDK Integration for DeFi Frontend
+ * This uses the official @velumx/sdk via a secure proxy.
  */
-class VelumXFrontendClient {
-    private baseUrl: string = '/api/velumx/proxy';
+let clientInstance: VelumXClient | null = null;
 
-    /**
-     * Get a fee estimation for a transaction
-     */
-    async estimateFee(params: { estimatedGas: number }): Promise<{ maxFeeUSDCx: string, estimatedGas: number }> {
-        const response = await fetch(`${this.baseUrl}/estimate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(params)
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'VelumX Fee Estimation Failed');
-        }
-        return data;
-    }
-
-    /**
-     * Request gas sponsorship for a transaction
-     * @param txHex The raw transaction hex
-     * @param userId Optional: The developer's unique userId
-     * @param feeAmount Optional: The specific fee collected by the dApp
-     */
-    async sponsor(txHex: string, userId?: string, feeAmount?: string): Promise<{ txid: string, status: string }> {
-        const response = await fetch(`${this.baseUrl}/broadcast`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ txHex, userId, feeAmount })
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'VelumX Sponsorship Failed');
-        }
-        return data as { txid: string, status: string };
-    }
-}
-
-let clientInstance: VelumXFrontendClient | null = null;
-
-export function getVelumXClient(): VelumXFrontendClient {
+export function getVelumXClient(): VelumXClient {
     if (!clientInstance) {
-        clientInstance = new VelumXFrontendClient();
+        const config = getConfig();
+        clientInstance = new VelumXClient({
+            network: config.stacksNetwork,
+            coreApiUrl: config.stacksNetwork === 'mainnet' 
+                ? 'https://api.mainnet.hiro.so' 
+                : 'https://api.testnet.hiro.so',
+            paymasterUrl: '/api/velumx/proxy'
+        });
     }
     return clientInstance;
 }

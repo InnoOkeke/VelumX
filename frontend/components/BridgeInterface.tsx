@@ -10,7 +10,7 @@ import { useWallet } from '@/lib/hooks/useWallet';
 import { useConfig, USDC_ABI, XRESERVE_ABI } from '@/lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { Buffer } from 'buffer';
-import { sepolia } from 'viem/chains';
+import { mainnet, sepolia } from 'viem/chains';
 import { Shield, ArrowRight, Loader2, Unplug, RefreshCw, ArrowDownUp, Zap, AlertCircle, CheckCircle } from 'lucide-react';
 import { encodeStacksAddress, bytesToHex, encodeEthereumAddress as encodeEthereumAddressUtil } from '@/lib/utils/address-encoding';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
@@ -87,8 +87,8 @@ export function BridgeInterface() {
     setLastBalanceUpdate(Date.now());
   }, [balances]);
 
-  // Minimum bridge amounts per Stacks docs
-  const MIN_BRIDGE_IN_TESTNET = 1; // 1 USDC for testnet peg-in
+  // Minimum bridge amounts
+  const MIN_BRIDGE_IN = config.stacksNetwork === 'mainnet' ? 10 : 1; // 10 USDC for mainnet, 1 for testnet
   const MIN_BRIDGE_OUT = 4.80;     // 4.80 USDCx for peg-out (covers bridge fees)
 
   // Validate amount
@@ -104,8 +104,8 @@ export function BridgeInterface() {
 
     // Check minimum bridge amounts
     if (state.direction === 'eth-to-stacks') {
-      if (numAmount < MIN_BRIDGE_IN_TESTNET) {
-        return `Minimum deposit is ${MIN_BRIDGE_IN_TESTNET} USDC`;
+      if (numAmount < MIN_BRIDGE_IN) {
+        return `Minimum deposit is ${MIN_BRIDGE_IN} USDC`;
       }
       const usdcBalance = parseFloat(balances.usdc);
       if (numAmount > usdcBalance) {
@@ -222,13 +222,15 @@ export function BridgeInterface() {
     setState(prev => ({ ...prev, isProcessing: true, error: null, success: null }));
 
     try {
+      const ethChain = config.ethereumChainId === 1 ? mainnet : sepolia;
+      
       const walletClient = createWalletClient({
-        chain: sepolia,
+        chain: ethChain,
         transport: custom((window as any).ethereum),
       });
 
       const publicClient = createPublicClient({
-        chain: sepolia,
+        chain: ethChain,
         transport: http(),
       });
 
@@ -400,7 +402,7 @@ export function BridgeInterface() {
             Cl.uint("0"), // native-domain: 0 for Ethereum
             Cl.buffer(recipientBytes),
           ],
-          network: 'testnet',
+          network: config.stacksNetwork === 'mainnet' ? 'mainnet' : 'testnet',
           anchorMode: 'any',
           postConditionMode: 'allow',
           postConditions: [],

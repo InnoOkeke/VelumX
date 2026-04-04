@@ -23,8 +23,8 @@ import dynamic from 'next/dynamic';
 const WalletButton = dynamic(() => import('./WalletButton').then(mod => mod.WalletButton), { ssr: false });
 
 interface SidebarProps {
-    activeTab: 'bridge' | 'swap' | 'liquidity' | 'pools' | 'history';
-    setActiveTab: (tab: 'bridge' | 'swap' | 'liquidity' | 'pools' | 'history') => void;
+    activeTab: 'bridge' | 'swap' | 'history';
+    setActiveTab: (tab: 'bridge' | 'swap' | 'history') => void;
     isDarkMode: boolean;
     toggleDarkMode: () => void;
     isOpen?: boolean;
@@ -35,8 +35,6 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
     const menuItems = [
         { id: 'bridge', label: 'Bridge', icon: ArrowLeftRight },
         { id: 'swap', label: 'Swap', icon: Repeat },
-        { id: 'liquidity', label: 'Liquidity', icon: Droplets },
-        { id: 'pools', label: 'Pools', icon: BarChart3 },
         { id: 'history', label: 'History', icon: History },
     ] as const;
 

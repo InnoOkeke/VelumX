@@ -79,7 +79,7 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   // Execute sponsorship broadcast via VelumX SDK
   // We pass the raw transaction for sponsorship and explicitly report the 0.25 USDCx fee
     if (result.txRaw) {
-    const broadcastResult = await velumx.sponsor(result.txRaw, undefined, bridgeFeeInMicro);
+    const broadcastResult = await velumx.sponsor(result.txRaw, { feeAmount: bridgeFeeInMicro });
     console.log('Bridge broadcast result:', broadcastResult);
     return broadcastResult.txid;
   }
