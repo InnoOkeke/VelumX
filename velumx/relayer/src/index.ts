@@ -30,7 +30,8 @@ app.use(cors({
         const allowedPatterns = [
             /localhost:\d+$/,
             /\.vercel\.app$/,
-            /sgal-relayer\.onrender\.com$/
+            /velumx\.xyz$/,
+            /\.velumx\.xyz$/
         ];
 
         if (!origin || allowedPatterns.some(pattern => pattern.test(origin))) {

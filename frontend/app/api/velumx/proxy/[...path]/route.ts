@@ -12,7 +12,7 @@ export async function POST(
 ) {
   const { path: pathSegments } = await params;
   const path = pathSegments.join('/');
-  const relayerUrl = process.env.VELUMX_RELAYER_URL || 'https://sgal-relayer.onrender.com';
+  const relayerUrl = process.env.VELUMX_RELAYER_URL || 'https://api.velumx.xyz';
   const apiKey = process.env.VELUMX_API_KEY;
 
   if (!apiKey) {
@@ -48,7 +48,7 @@ export async function GET(
 ) {
   const { path: pathSegments } = await params;
   const path = pathSegments.join('/');
-  const relayerUrl = process.env.VELUMX_RELAYER_URL || 'https://sgal-relayer.onrender.com';
+  const relayerUrl = process.env.VELUMX_RELAYER_URL || 'https://api.velumx.xyz';
   const apiKey = process.env.VELUMX_API_KEY;
 
   if (!apiKey) {

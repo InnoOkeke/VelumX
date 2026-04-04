@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://app.velumx.xyz'),
   title: "VelumX - Gas-Free DeFi on Bitcoin L2",
   description: "VelumX is a Gas-Abstraction protocol on Stacks (Bitcoin L2) that enables gasless transactions. Pay fees in USDCx instead of STX for seamless DeFi experiences including bridging, swaps, and more.",
   icons: {

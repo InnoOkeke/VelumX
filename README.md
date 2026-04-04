@@ -33,7 +33,7 @@ VelumX uses a universal paymaster pattern with sponsored transactions:
 
 ### For Users
 
-1. Visit [velumx.vercel.app](https://velumx.vercel.app)
+1. Visit [app.velumx.xyz](https://app.velumx.xyz)
 2. Connect your Ethereum and Stacks wallets
 3. Bridge USDC from Ethereum to Stacks (Fee: 0.25 USDCx)
 4. Use DeFi features without needing STX!
@@ -64,7 +64,7 @@ const result = await velumx.sponsor(txHex, {
 });
 ```
 
-Get your API key at [velumx.xyz/dashboard](https://velumx.xyz/dashboard)
+Get your API key at [dashboard.velumx.xyz](https://dashboard.velumx.xyz)
 
 ## Project Structure
 

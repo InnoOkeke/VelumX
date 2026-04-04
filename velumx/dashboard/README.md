@@ -32,7 +32,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 DATABASE_URL="postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres"
 
 # VelumX Relayer
-NEXT_PUBLIC_VELUMX_RELAYER_URL=https://your-relayer-url.onrender.com
+NEXT_PUBLIC_VELUMX_RELAYER_URL=https://api.velumx.xyz
 ```
 
 ### 3. Get Supabase Credentials
@@ -58,7 +58,7 @@ NEXT_PUBLIC_VELUMX_RELAYER_URL=https://your-relayer-url.onrender.com
 4. Click **New OAuth App**
 5. Fill in:
    - **Application name**: VelumX Dashboard
-   - **Homepage URL**: `http://localhost:3000` (dev) or your production URL
+   - **Homepage URL**: `https://dashboard.velumx.xyz`
    - **Authorization callback URL**: Paste from Supabase
 6. Click **Register application**
 7. Copy **Client ID** and generate **Client Secret**

@@ -12,7 +12,7 @@
 
 ## API Reference (v1)
 
-All endpoints require an `x-api-key` header obtained from the [VelumX Dashboard](https://velumx.xyz/dashboard).
+All endpoints require an `x-api-key` header obtained from the [VelumX Dashboard](https://dashboard.velumx.xyz).
 
 ### `POST /api/v1/broadcast`
 Broadcasts and sponsors a raw Stacks transaction.

@@ -6,6 +6,7 @@ import { SessionProvider } from "@/components/providers/SessionProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://dashboard.velumx.xyz'),
   title: "VelumX Developer Console",
   description: "Manage your modular Stacks Gas Abstraction integrations",
   icons: {
