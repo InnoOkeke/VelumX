@@ -14,6 +14,7 @@ import {
     Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useWallet } from '@/components/providers/WalletContext';
 
 interface ApiKey {
     id: string;
@@ -32,7 +33,8 @@ export default function ApiKeysPage() {
     const [newKeyName, setNewKeyName] = useState('');
     const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
     const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
-    const [relayerInfo, setRelayerInfo] = useState<{ address: string; key: string } | null>(null);
+    const { network: currentNetwork } = useWallet();
+    const [relayerInfo, setRelayerInfo] = useState<{ mainnetAddress: string; testnetAddress: string; key: string } | null>(null);
     const [isRelayerKeyVisible, setIsRelayerKeyVisible] = useState(false);
     const [isLoadingRelayer, setIsLoadingRelayer] = useState(true);
 
@@ -149,7 +151,7 @@ export default function ApiKeysPage() {
         setIsClient(true);
         fetchKeys();
         fetchRelayerInfo();
-    }, []);
+    }, [currentNetwork]);
 
     if (!isClient) return null;
 
@@ -202,9 +204,9 @@ export default function ApiKeysPage() {
                         <div className="space-y-4">
                             <div>
                                 <div className="flex justify-between items-center mb-1.5 px-1">
-                                    <span className="text-[10px] font-bold text-white/40">STACKS ADDRESS</span>
+                                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{currentNetwork} ADDRESS</span>
                                     <a 
-                                        href={`https://explorer.hiro.so/address/${relayerInfo.address}?chain=mainnet`}
+                                        href={`https://explorer.hiro.so/address/${currentNetwork === 'mainnet' ? relayerInfo.mainnetAddress : relayerInfo.testnetAddress}?chain=${currentNetwork}`}
                                         target="_blank"
                                         className="text-[10px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1"
                                     >
@@ -213,10 +215,10 @@ export default function ApiKeysPage() {
                                 </div>
                                 <div className="flex items-center gap-2 group">
                                     <code className="flex-1 px-3 py-2 bg-black/40 rounded-lg text-xs text-white/60 font-mono border border-white/5 truncate">
-                                        {relayerInfo.address}
+                                        {currentNetwork === 'mainnet' ? relayerInfo.mainnetAddress : relayerInfo.testnetAddress}
                                     </code>
                                     <button
-                                        onClick={() => copyToClipboard(relayerInfo.address)}
+                                        onClick={() => copyToClipboard(currentNetwork === 'mainnet' ? relayerInfo.mainnetAddress : relayerInfo.testnetAddress)}
                                         className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white/20 hover:text-white transition-all border border-white/5"
                                     >
                                         <Copy className="w-3.5 h-3.5" />
