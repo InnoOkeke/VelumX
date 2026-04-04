@@ -159,6 +159,7 @@ export class PaymasterService {
                         userAddress: intent.target,
                         feeAmount: intent.maxFeeUSDCx.toString(),
                         status: 'Pending',
+                        network: process.env.NETWORK || 'mainnet',
                         userId: userId || null,
                         apiKeyId: apiKeyId || null
                     }
@@ -242,6 +243,7 @@ export class PaymasterService {
                         userAddress,
                         feeAmount,
                         status: 'Pending',
+                        network: process.env.NETWORK || 'mainnet',
                         userId: userId || null,
                         apiKeyId: apiKeyId || null
                     }

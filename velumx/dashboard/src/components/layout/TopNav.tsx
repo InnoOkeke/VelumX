@@ -4,13 +4,16 @@ import { Bell } from 'lucide-react';
 import { Search } from 'lucide-react';
 import { User } from 'lucide-react';
 import { LogOut } from 'lucide-react';
-import { useUser } from '../providers/SessionProvider';
+import { useUser } from '@/components/providers/SessionProvider';
+import { useWallet } from '@/components/providers/WalletContext'; 
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { Globe, TestTube2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function TopNav() {
     const { user } = useUser();
+    const { network, setNetwork } = useWallet();
     const router = useRouter();
     const supabase = createClient();
 
@@ -36,6 +39,31 @@ export function TopNav() {
                         className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-white/20 transition-all placeholder:text-white/20"
                     />
                 </div>
+            </div>
+
+            <div className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-full p-1">
+                <button
+                    onClick={() => setNetwork('mainnet')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                        network === 'mainnet'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
+                            : 'text-white/40 hover:text-white/60'
+                    }`}
+                >
+                    <Globe className="w-3.5 h-3.5" />
+                    Mainnet
+                </button>
+                <button
+                    onClick={() => setNetwork('testnet')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                        network === 'testnet'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/20'
+                            : 'text-white/40 hover:text-white/60'
+                    }`}
+                >
+                    <TestTube2 className="w-3.5 h-3.5" />
+                    Testnet
+                </button>
             </div>
 
             <div className="flex items-center gap-6">

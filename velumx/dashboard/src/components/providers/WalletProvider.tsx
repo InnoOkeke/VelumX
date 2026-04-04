@@ -5,8 +5,20 @@ import { WalletContext } from './WalletContext';
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [userData, setUserData] = useState<any | null>(null);
-    const [network, setNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
+    const [network, setNetwork] = useState<'mainnet' | 'testnet'>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('velumx_network');
+            return (saved === 'mainnet' || saved === 'testnet') ? saved : 'mainnet';
+        }
+        return 'mainnet';
+    });
     const [userSession, setUserSession] = useState<any | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('velumx_network', network);
+        }
+    }, [network]);
 
     useEffect(() => {
         // Lazy-load @stacks/connect at runtime to avoid Turbopack

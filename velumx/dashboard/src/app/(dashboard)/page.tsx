@@ -8,20 +8,20 @@ import { ArrowUpRight } from 'lucide-react';
 import { ArrowDownRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUser } from '@/components/providers/SessionProvider';
+import { useWallet } from '@/components/providers/WalletContext';
 
 import { RELAYER_URL } from '@/lib/config';
 
 export default function DashboardOverview() {
   const [isClient, setIsClient] = useState(false);
   const { user, loading: userLoading } = useUser();
-  const [statsData, setStatsData] = useState({
-    totalTransactions: 0,
+  const { network: currentNetwork } = useWallet();
+  const [statsData, setStatsData] = useState<any>({
     activeKeys: 0,
-    totalSponsored: '0',
-    activeSmartWallets: 0,
-    relayerAddress: '',
-    relayerStxBalance: '0',
-    relayerUsdcxBalance: '0'
+    networks: {
+      mainnet: { totalTransactions: 0, totalSponsored: '0', relayerAddress: '', relayerStxBalance: '0', relayerUsdcxBalance: '0' },
+      testnet: { totalTransactions: 0, totalSponsored: '0', relayerAddress: '', relayerStxBalance: '0', relayerUsdcxBalance: '0' }
+    }
   });
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,7 +56,7 @@ export default function DashboardOverview() {
 
         const fetchLogs = async () => {
           try {
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, {
+            const res = await fetch(`${RELAYER_URL}/api/dashboard/logs?network=${currentNetwork}`, {
               cache: 'no-store',
               headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -83,14 +83,22 @@ export default function DashboardOverview() {
     if (!userLoading) {
       fetchAllData();
     }
-  }, [user, userLoading]);
+  }, [user, userLoading, currentNetwork]);
 
   if (!isClient) return null;
+
+  const currentStats = statsData.networks?.[currentNetwork] || {
+    totalTransactions: 0,
+    totalSponsored: '0',
+    relayerAddress: '',
+    relayerStxBalance: '0',
+    relayerUsdcxBalance: '0'
+  };
 
   const metricCards = [
     {
       title: 'Total Gas Sponsored',
-      value: `${(parseInt(statsData.totalSponsored) / 1_000_000).toFixed(2)} USDCx`,
+      value: `${(parseInt(currentStats.totalSponsored) / 1_000_000).toFixed(2)} USDCx`,
       change: '0%',
       trend: 'up',
       icon: BatteryCharging,
@@ -106,7 +114,7 @@ export default function DashboardOverview() {
     },
     {
       title: 'Total Transactions',
-      value: statsData.totalTransactions.toString(),
+      value: currentStats.totalTransactions.toString(),
       change: '0%',
       trend: 'up',
       icon: Users,
@@ -122,14 +130,16 @@ export default function DashboardOverview() {
           <p className="text-white/40 mt-1 text-sm">Monitor your dApp's gas abstraction performance.</p>
         </div>
 
-        {!isLoading && statsData.relayerAddress && (
+        {!isLoading && currentStats.relayerAddress && (
           <div className="glass-card px-5 py-3 flex items-center gap-6 border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-colors">
             <div className="flex flex-col">
-              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Relayer Node</span>
+              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">
+                Relayer ({currentNetwork})
+              </span>
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${currentNetwork === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                 <span className="text-[11px] text-white/60 font-mono tracking-tight">
-                  {statsData.relayerAddress.substring(0, 8)}...{statsData.relayerAddress.substring(statsData.relayerAddress.length - 6)}
+                  {currentStats.relayerAddress.substring(0, 8)}...{currentStats.relayerAddress.substring(currentStats.relayerAddress.length - 6)}
                 </span>
               </div>
             </div>
@@ -137,13 +147,13 @@ export default function DashboardOverview() {
             <div className="flex flex-col">
               <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">STX Balance</span>
               <span className="text-[11px] text-white font-bold font-mono">
-                {(parseInt(statsData.relayerStxBalance) / 1_000_000).toFixed(2)} <span className="text-white/40 font-medium">STX</span>
+                {(parseInt(currentStats.relayerStxBalance) / 1_000_000).toFixed(2)} <span className="text-white/40 font-medium">STX</span>
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">USDCx Revenue</span>
-              <span className="text-[11px] text-emerald-400 font-bold font-mono">
-                {(parseInt(statsData.relayerUsdcxBalance) / 1_000_000).toFixed(2)} <span className="text-emerald-400/40 font-medium">USDCx</span>
+              <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Rev. ({currentNetwork})</span>
+              <span className={`text-[11px] font-bold font-mono ${currentNetwork === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {(parseInt(currentStats.relayerUsdcxBalance) / 1_000_000).toFixed(2)} <span className="opacity-40 font-medium">USDCx</span>
               </span>
             </div>
           </div>

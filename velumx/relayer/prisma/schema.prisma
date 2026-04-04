@@ -32,6 +32,7 @@ model Transaction {
   userAddress String
   feeAmount   String
   status      String   @default("Pending")
+  network     String   @default("mainnet")
   userId      String?  // Associated Supabase User ID
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt @default(now())

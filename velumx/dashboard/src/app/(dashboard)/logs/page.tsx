@@ -3,12 +3,14 @@
 import { useUser } from '@/components/providers/SessionProvider';
 import { Search, Filter, ExternalLink, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useWallet } from '@/components/providers/WalletContext';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'http://localhost:4000';
 
 export default function TransactionLogsPage() {
     const [isClient, setIsClient] = useState(false);
     const { user, loading: userLoading } = useUser();
+    const { network: currentNetwork } = useWallet();
     const [logs, setLogs] = useState<{ id: string; txid: string; type: string; userAddress: string; feeAmount: string; status: string; createdAt: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -25,7 +27,7 @@ export default function TransactionLogsPage() {
 
                 if (!token) return;
 
-                const res = await fetch(`${RELAYER_URL}/api/dashboard/logs`, {
+                const res = await fetch(`${RELAYER_URL}/api/dashboard/logs?network=${currentNetwork}`, {
                     cache: 'no-store',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -41,7 +43,7 @@ export default function TransactionLogsPage() {
         if (!userLoading) {
             fetchLogs();
         }
-    }, [user, userLoading]);
+    }, [user, userLoading, currentNetwork]);
 
     if (!isClient) return null;
 

@@ -35,10 +35,16 @@ export default function FundingPage() {
             });
             if (res.ok) {
                 const data = await res.json();
+                const currentStats = data.networks?.[network] || {
+                    relayerAddress: 'Not Configured',
+                    relayerStxBalance: '0',
+                    relayerUsdcxBalance: '0'
+                };
+
                 setStats({
-                    relayerAddress: data.relayerAddress,
-                    relayerStxBalance: (parseInt(data.relayerStxBalance || '0') / 1_000_000).toFixed(2),
-                    relayerUsdcxBalance: (parseInt(data.relayerUsdcxBalance || '0') / 1_000_000).toFixed(2)
+                    relayerAddress: currentStats.relayerAddress,
+                    relayerStxBalance: (parseInt(currentStats.relayerStxBalance || '0') / 1_000_000).toFixed(2),
+                    relayerUsdcxBalance: (parseInt(currentStats.relayerUsdcxBalance || '0') / 1_000_000).toFixed(2)
                 });
             } else {
                 console.warn('Relayer: Stats API returned non-ok status');

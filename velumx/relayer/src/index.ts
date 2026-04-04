@@ -154,9 +154,10 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
         // Return both the address and the key
         const { getAddressFromPrivateKey } = await import('@stacks/transactions');
         const networkType = (process.env.NETWORK || 'mainnet') as "mainnet" | "testnet";
-        const address = getAddressFromPrivateKey(key, networkType);
+        const mainnetAddress = getAddressFromPrivateKey(key, 'mainnet');
+        const testnetAddress = getAddressFromPrivateKey(key, 'testnet');
 
-        res.json({ address, key });
+        res.json({ mainnetAddress, testnetAddress, key });
     } catch (error: any) {
         console.error("Export Key Error:", error);
         res.status(500).json({ error: "Failed to export key" });
@@ -171,67 +172,64 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
 app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.userId!;
-        
-        let totalTransactions = 0;
-        let activeKeys = 0;
-        let totalSponsored = BigInt(0);
-
-        try {
-            totalTransactions = await (prisma.transaction as any).count({ where: { userId } });
-            activeKeys = await (prisma.apiKey as any).count({ where: { userId, status: 'Active' } });
-
-            // Since feeAmount is currently a String, we fetch and sum manually for accurate results
-            const transactions = await (prisma.transaction as any).findMany({
-                where: { userId },
-                select: { feeAmount: true }
-            });
-
-            const total = transactions.reduce((acc: bigint, tx: any) => {
-                try {
-                    return acc + BigInt(tx.feeAmount || '0');
-                } catch (e) {
-                    return acc;
-                }
-            }, BigInt(0));
-
-            totalSponsored = total;
-        } catch (dbError) {
-            console.error("Stats DB Error:", dbError);
-        }
 
         // --- Relayer Health Metrics ---
         const relayerKey = paymasterService.getUserRelayerKey(userId);
-        const networkType = (process.env.NETWORK || 'testnet') as "mainnet" | "testnet";
-        const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
+        
+        const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
+            const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
+            let relayerAddress = "Not Configured";
+            let stxBalance = "0";
+            let totalTransactions = 0;
+            let totalSponsored = BigInt(0);
 
-        let relayerAddress = "Not Configured";
-        let stxBalance = "0";
-        let usdcxBalance = "0";
-
-        if (relayerKey && relayerKey.length >= 64) {
             try {
-                // Ensure relayerKey is a clean hex string
-                const cleanKey = relayerKey.replace(/^0x/, '');
-                relayerAddress = getAddressFromPrivateKey(cleanKey, networkType);
+                totalTransactions = await (prisma.transaction as any).count({ 
+                    where: { userId, network: networkType } 
+                });
 
-                // Fetch STX Balance
-                const url = `${network.client.baseUrl}/v2/accounts/${relayerAddress}`;
-                const accountRes = await fetch(url);
-                const accountData: any = await accountRes.json();
-                stxBalance = accountData.balance || "0";
+                const transactions = await (prisma.transaction as any).findMany({
+                    where: { userId, network: networkType },
+                    select: { feeAmount: true }
+                });
+
+                totalSponsored = transactions.reduce((acc: bigint, tx: any) => {
+                    try {
+                        return acc + BigInt(tx.feeAmount || '0');
+                    } catch (e) {
+                        return acc;
+                    }
+                }, BigInt(0));
+
+                if (relayerKey && relayerKey.length >= 64) {
+                    const cleanKey = relayerKey.replace(/^0x/, '');
+                    relayerAddress = getAddressFromPrivateKey(cleanKey, networkType);
+
+                    const url = `${network.client.baseUrl}/v2/accounts/${relayerAddress}`;
+                    const accountRes = await fetch(url);
+                    const accountData: any = await accountRes.json();
+                    stxBalance = accountData.balance || "0";
+                }
             } catch (err) {
-                console.error("Relayer Index: Error fetching health metrics:", err);
+                console.error(`Stats Error for ${networkType}:`, err);
             }
-        }
+
+            return {
+                totalTransactions,
+                totalSponsored: totalSponsored.toString(),
+                relayerAddress,
+                relayerStxBalance: stxBalance,
+                relayerUsdcxBalance: "0" // Future: Add USDCx balance fetch
+            };
+        };
+
+        const mainnet = await getNetworkStats('mainnet');
+        const testnet = await getNetworkStats('testnet');
+        const activeKeysCount = await (prisma.apiKey as any).count({ where: { userId, status: 'Active' } });
 
         res.json({
-            totalTransactions,
-            activeKeys,
-            totalSponsored: totalSponsored.toString(),
-            activeSmartWallets: totalTransactions > 0 ? Math.ceil(totalTransactions / 1.5) : 0,
-            relayerAddress,
-            relayerStxBalance: stxBalance,
-            relayerUsdcxBalance: usdcxBalance
+            activeKeys: activeKeysCount,
+            networks: { mainnet, testnet }
         });
     } catch (error: any) {
         console.error("Dashboard Stats Critical Error:", error);
@@ -280,8 +278,15 @@ app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, re
 app.get('/api/dashboard/logs', verifySupabaseToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.userId!;
+        const { network } = req.query; // Optional filter
+
+        const where: any = { userId };
+        if (network === 'mainnet' || network === 'testnet') {
+            where.network = network;
+        }
+
         const logs = await (prisma.transaction as any).findMany({
-            where: { userId },
+            where,
             orderBy: { createdAt: 'desc' },
             take: 50,
             include: { apiKey: true }
