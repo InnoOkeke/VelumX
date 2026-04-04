@@ -31,9 +31,9 @@ export function Sidebar() {
                     alt="VelumX Logo"
                     width={32}
                     height={32}
-                    className="brightness-0 invert"
+                    className=""
                 />
-                <span className="text-xl font-bold tracking-tight text-white uppercase">VelumX</span>
+                <span className="text-xl font-bold tracking-tight text-white uppercase text-white">VelumX</span>
             </div>
 
             <nav className="flex-1 px-4 space-y-1">

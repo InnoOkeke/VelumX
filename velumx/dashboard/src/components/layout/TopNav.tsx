@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Globe, TestTube2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Image from 'next/image';
 
 export function TopNav() {
     const { user } = useUser();
