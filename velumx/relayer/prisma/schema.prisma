@@ -8,18 +8,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SponsorshipPolicy {
+  USER_PAYS
+  DEVELOPER_SPONSORS
+}
+
 model ApiKey {
-  id          String    @id @default(cuid())
-  userId      String?   // Associated Supabase User ID
-  name        String
-  key         String    @unique
-  status      String    @default("Active")
-  lastUsedAt  DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt @default(now())
-  usageLogs   UsageLog[]
-  transactions Transaction[]
+  id                    String            @id @default(cuid())
+  userId                String?           // Associated Supabase User ID
+  name                  String
+  key                   String            @unique
+  status                String            @default("Active")
+  sponsorshipPolicy     SponsorshipPolicy @default(DEVELOPER_SPONSORS)
+  markupPercentage      Int               @default(10)
+  maxSponsoredTxsPerUser Int               @default(5)
+  lastUsedAt            DateTime?
+  revokedAt             DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt @default(now())
+  usageLogs             UsageLog[]
+  transactions          Transaction[]
 
   @@index([userId])
   @@index([key])

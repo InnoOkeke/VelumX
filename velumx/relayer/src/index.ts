@@ -103,7 +103,7 @@ app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res) => 
         const { intent } = req.body;
         if (!intent) return res.status(400).json({ error: "Missing intent" });
 
-        const estimation = await paymasterService.estimateFee(intent);
+        const estimation = await paymasterService.estimateFee(intent, req.apiKeyId!);
         res.json(estimation);
     } catch (error: any) {
         console.error("Estimation Error:", error);
