@@ -36,7 +36,7 @@ export class PaymasterService {
         this.network = process.env.NETWORK === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
         const rawKey = (process.env.RELAYER_PRIVATE_KEY || '').trim();
         this.relayerKey = this.sanitizePrivateKey(rawKey);
-        this.smartWalletContract = process.env.SMART_WALLET_CONTRACT || '';
+        this.smartWalletContract = process.env.SMART_WALLET_CONTRACT || 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.simple-paymaster-v1';
 
         if (!this.relayerKey) {
             console.warn("WARNING: RELAYER_PRIVATE_KEY not set. Sponsorship will fail.");
@@ -115,7 +115,7 @@ export class PaymasterService {
         if (!contractAddress && activeKey) {
             const { getAddressFromPrivateKey } = await import('@stacks/transactions');
             const cleanKey = activeKey.replace(/^0x/, '');
-            const networkType = (process.env.NETWORK || 'testnet') as "mainnet" | "testnet";
+            const networkType = (process.env.NETWORK || 'mainnet') as "mainnet" | "testnet";
             contractAddress = getAddressFromPrivateKey(cleanKey, networkType);
         }
 
@@ -129,7 +129,7 @@ export class PaymasterService {
                 uintCV(intent.maxFeeUSDCx),
                 uintCV(intent.nonce),
                 bufferCV(Buffer.from(intent.signature.replace(/^0x/, ''), 'hex')),
-                principalCV(process.env.USDCX_TOKEN || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
+                principalCV(process.env.USDCX_TOKEN || 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx')
             ],
             senderKey: activeKey,
             validateWithAbi: false,

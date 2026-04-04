@@ -153,7 +153,7 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
         
         // Return both the address and the key
         const { getAddressFromPrivateKey } = await import('@stacks/transactions');
-        const networkType = (process.env.NETWORK || 'testnet') as "mainnet" | "testnet";
+        const networkType = (process.env.NETWORK || 'mainnet') as "mainnet" | "testnet";
         const address = getAddressFromPrivateKey(key, networkType);
 
         res.json({ address, key });

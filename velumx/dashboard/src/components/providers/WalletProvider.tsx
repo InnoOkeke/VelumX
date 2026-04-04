@@ -5,7 +5,7 @@ import { WalletContext } from './WalletContext';
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [userData, setUserData] = useState<any | null>(null);
-    const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
+    const [network, setNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
     const [userSession, setUserSession] = useState<any | null>(null);
 
     useEffect(() => {

@@ -99,7 +99,49 @@ Submit a SIP-018 signed intent for legacy smart-wallet sponsorship.
 
 ## Use Cases
 
-### 1. Gasless Bridge
+### 1. Gasless Token Transfer (New in v2.3.0)
+
+Transfer any SIP-010 token (like USDCx) between wallets without needing STX.
+
+```typescript
+import { getVelumXClient } from '@velumx/sdk';
+
+async function sendTokens(token: string, amount: string, recipient: string) {
+  const velumx = getVelumXClient();
+  
+  // 1. Estimate fee
+  const estimate = await velumx.estimateFee({ estimatedGas: 100000 });
+  
+  // 2. Perform gasless transfer
+  await velumx.transferGasless({
+    token: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+    amount: '10000000', // 10 USDCx
+    recipient: 'SP123...', 
+    feeUsdcx: estimate.maxFeeUSDCx,
+    onFinish: (data) => console.log(`Transfer TX: ${data.txid}`)
+  });
+}
+```
+
+### 2. Universal Gasless Action (New in v2.3.0)
+
+Make any contract call gasless by using the Universal Executor trait.
+
+```typescript
+async function callDeFiProtocol() {
+  const velumx = getVelumXClient();
+  
+  await velumx.executeGasless({
+    target: 'SP...YOUR_PROTOCOL_CONTRACT',
+    actionId: '0x...', // Hex hash of the intended action
+    param: '100', // Numeric parameter
+    feeUsdcx: '250000',
+    onFinish: (data) => console.log(`Action TX: ${data.txid}`)
+  });
+}
+```
+
+### 3. Gasless Bridge
 
 Bridge USDC from Ethereum to Stacks without needing STX.
 
@@ -122,18 +164,18 @@ async function gaslessBridge(amount: string, recipient: string) {
   
   // 3. Execute gasless bridge
   const result = await openContractCall({
-    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractAddress: 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW',
     contractName: 'simple-paymaster-v1',
     functionName: 'bridge-gasless',
     functionArgs: [
       Cl.uint(parseUnits(amount, 6)),
       Cl.buffer(recipientBytes),
       Cl.uint(estimate.maxFeeUSDCx),
-      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
-      Cl.principal('ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
+      Cl.principal('SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW'),
+      Cl.principal('SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx')
     ],
     sponsored: true,
-    network: 'testnet',
+    network: 'mainnet',
     onFinish: async (data) => {
       const tx = await velumx.submitRawTransaction(data.txRaw);
       console.log(`Bridge transaction: ${tx.txid}`);
@@ -173,7 +215,7 @@ async function gaslessSwap(
   
   // 2. Execute gasless swap
   const result = await openContractCall({
-    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractAddress: 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW',
     contractName: 'simple-paymaster-v1',
     functionName: 'swap-gasless',
     functionArgs: [
@@ -182,11 +224,11 @@ async function gaslessSwap(
       Cl.uint(parseUnits(amountIn, 6)),
       Cl.uint(parseUnits(minOut, 6)),
       Cl.uint(estimate.maxFeeUSDCx),
-      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
-      Cl.principal('ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx')
+      Cl.principal('SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW'),
+      Cl.principal('SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx')
     ],
     sponsored: true,
-    network: 'testnet',
+    network: 'mainnet',
     onFinish: async (data) => {
       const tx = await velumx.submitRawTransaction(data.txRaw);
       console.log(`Swap transaction: ${tx.txid}`);
@@ -219,7 +261,7 @@ async function customGaslessTransaction() {
       // More args...
     ],
     sponsored: true,  // Enable gasless
-    network: 'testnet',
+    network: 'mainnet',
     onFinish: async (data) => {
       const tx = await velumx.submitRawTransaction(data.txRaw);
       console.log(`Transaction: ${tx.txid}`);
@@ -246,18 +288,18 @@ async function gaslessWithSBTC(amount: string) {
   
   // 3. Execute with sBTC as fee token
   const result = await openContractCall({
-    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractAddress: 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW',
     contractName: 'simple-paymaster-v1',
     functionName: 'bridge-gasless',
     functionArgs: [
       Cl.uint(parseUnits(amount, 6)),
       Cl.buffer(recipientBytes),
       Cl.uint(feeInSBTC),  // Fee in sBTC
-      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+      Cl.principal('SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW'),
       Cl.principal('SM3KNVZS30WM7F89SXKVVFY4SN9RMPZZ9FX929N0V.sbtc')  // sBTC token
     ],
     sponsored: true,
-    network: 'testnet',
+    network: 'mainnet',
     onFinish: async (data) => {
       const tx = await velumx.submitRawTransaction(data.txRaw);
       console.log(`Transaction: ${tx.txid}`);
@@ -287,18 +329,18 @@ async function gaslessWithALEX(amount: string) {
   const feeInALEX = convertToALEX(estimate.maxFeeUSDCx);
   
   const result = await openContractCall({
-    contractAddress: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P',
+    contractAddress: 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW',
     contractName: 'simple-paymaster-v1',
     functionName: 'bridge-gasless',
     functionArgs: [
       Cl.uint(parseUnits(amount, 6)),
       Cl.buffer(recipientBytes),
       Cl.uint(feeInALEX),  // Fee in ALEX
-      Cl.principal('STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P'),
+      Cl.principal('SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW'),
       Cl.principal('ALEX_TOKEN_ADDRESS')  // ALEX token
     ],
     sponsored: true,
-    network: 'testnet',
+    network: 'mainnet',
     onFinish: async (data) => {
       const tx = await velumx.submitRawTransaction(data.txRaw);
       console.log(`Transaction: ${tx.txid}`);
@@ -340,7 +382,7 @@ VelumX accepts ANY SIP-010 token for gas fees. The paymaster contract uses the `
 
 | Token | Contract Address | Decimals | Use Case |
 |-------|-----------------|----------|----------|
-| USDCx | `ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx` | 6 | Stablecoin fees |
+| USDCx | `SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx` | 6 | Stablecoin fees |
 | sBTC | `SM3KNVZS30WM7F89SXKVVFY4SN9RMPZZ9FX929N0V.sbtc` | 8 | Bitcoin fees |
 | ALEX | `ALEX_TOKEN_ADDRESS` | 6 | DeFi token fees |
 | STX | Native | 6 | Native token fees |
@@ -480,14 +522,14 @@ describe('VelumX SDK', () => {
 
 **Simple Paymaster**
 ```
-Address: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1
-Network: Stacks Testnet
-Explorer: https://explorer.hiro.so/txid/[TRANSACTION_ID]?chain=testnet
+Address: SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.simple-paymaster-v1
+Network: Stacks Mainnet
+Explorer: https://explorer.hiro.so/txid/[TRANSACTION_ID]?chain=mainnet
 ```
 
 **USDCx Token**
 ```
-Address: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx
+Address: SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx
 Standard: SIP-010
 Decimals: 6
 ```
@@ -516,7 +558,7 @@ Status: https://sgal-relayer.onrender.com/api/v1/health
 **A:** Any Stacks wallet (Xverse, Leather, Hiro) that supports sponsored transactions.
 
 ### Q: Can I use this in production?
-**A:** Currently on testnet. Mainnet launch pending security audit.
+**A:** Yes! VelumX is fully functional on Stacks Mainnet.
 
 ### Q: How do I get an API key?
 **A:** Visit [https://velum-x-ssum.vercel.app](https://velum-x-ssum.vercel.app) to sign up and generate API keys.

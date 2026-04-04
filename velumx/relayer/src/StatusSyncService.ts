@@ -15,7 +15,7 @@ export class StatusSyncService {
     private timer: any = null;
 
     constructor() {
-        this.networkType = (process.env.NETWORK || 'testnet') as 'mainnet' | 'testnet';
+        this.networkType = (process.env.NETWORK || 'mainnet') as 'mainnet' | 'testnet';
         const network = this.networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
         this.baseUrl = network.client.baseUrl;
     }

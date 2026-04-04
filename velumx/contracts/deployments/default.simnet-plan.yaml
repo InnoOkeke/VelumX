@@ -64,36 +64,26 @@ plan:
     - id: 0
       transactions:
         - emulated-contract-publish:
-            contract-name: sip-010-trait-ft-standard
+            contract-name: executor-trait-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\traits\\sip-010-trait-ft-standard.clar"
+            path: "contracts\\traits\\executor-trait-v1.clar"
+            clarity-version: 2
+        - emulated-contract-publish:
+            contract-name: sip-010-trait-ft-standard-v5
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: "contracts\\traits\\sip-010-trait-ft-standard-v5.clar"
             clarity-version: 2
       epoch: "2.5"
     - id: 1
       transactions:
         - emulated-contract-publish:
-            contract-name: mock-token
+            contract-name: relayer-registry-v3
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\mock-token.clar"
+            path: "contracts\\relayer-registry-v3.clar"
             clarity-version: 3
         - emulated-contract-publish:
-            contract-name: paymaster-module
+            contract-name: simple-paymaster-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\paymaster-module.clar"
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: relayer-registry
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\relayer-registry.clar"
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: smart-wallet
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\smart-wallet.clar"
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: wallet-factory
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\wallet-factory.clar"
+            path: "contracts\\simple-paymaster-v1.clar"
             clarity-version: 3
       epoch: "3.0"

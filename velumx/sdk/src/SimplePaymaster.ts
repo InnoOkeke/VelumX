@@ -38,6 +38,24 @@ export interface SwapParams {
     onCancel?: () => void;
 }
 
+export interface TransferParams {
+    token: string; // Contract principal of token to transfer (e.g. 'SP...usdcx')
+    amount: string; // Amount in micro units
+    recipient: string; // Stacks address
+    feeUsdcx: string; // Fee in micro units
+    onFinish?: (data: any) => void;
+    onCancel?: () => void;
+}
+
+export interface ExecuteParams {
+    target: string; // Contract principal implementing executor-trait-v1
+    actionId: string; // 32-byte hex string (e.g., hash of action)
+    param: string; // Numeric parameter for the action
+    feeUsdcx: string; // Fee in micro units
+    onFinish?: (data: any) => void;
+    onCancel?: () => void;
+}
+
 export class SimplePaymaster {
     private config: SimplePaymasterConfig;
 
@@ -95,6 +113,64 @@ export class SimplePaymaster {
             contractAddress,
             contractName,
             functionName: 'swap-gasless',
+            functionArgs,
+            network: this.config.network,
+            sponsored: true,
+            postConditionMode: PostConditionMode.Allow,
+            onFinish: params.onFinish || (() => {}),
+            onCancel: params.onCancel || (() => {}),
+        });
+    }
+
+    /**
+     * Execute gasless token transfer
+     */
+    async transferGasless(params: TransferParams): Promise<void> {
+        const [contractAddress, contractName] = this.config.paymasterContract.split('.');
+        const [tokenAddress, tokenName] = params.token.split('.');
+
+        const functionArgs: ClarityValue[] = [
+            contractPrincipalCV(tokenAddress, tokenName),
+            uintCV(params.amount),
+            principalCV(params.recipient),
+            uintCV(params.feeUsdcx),
+            principalCV(this.config.relayerAddress),
+            contractPrincipalCV(this.config.usdcxContract.split('.')[0], this.config.usdcxContract.split('.')[1])
+        ];
+
+        await openContractCall({
+            contractAddress,
+            contractName,
+            functionName: 'transfer-gasless',
+            functionArgs,
+            network: this.config.network,
+            sponsored: true,
+            postConditionMode: PostConditionMode.Allow,
+            onFinish: params.onFinish || (() => {}),
+            onCancel: params.onCancel || (() => {}),
+        });
+    }
+
+    /**
+     * Execute universal gasless action
+     */
+    async executeGasless(params: ExecuteParams): Promise<void> {
+        const [contractAddress, contractName] = this.config.paymasterContract.split('.');
+        const [targetAddress, targetName] = params.target.split('.');
+
+        const functionArgs: ClarityValue[] = [
+            contractPrincipalCV(targetAddress, targetName),
+            bufferCV(Buffer.from(params.actionId.replace(/^0x/, ''), 'hex')),
+            uintCV(params.param),
+            uintCV(params.feeUsdcx),
+            principalCV(this.config.relayerAddress),
+            contractPrincipalCV(this.config.usdcxContract.split('.')[0], this.config.usdcxContract.split('.')[1])
+        ];
+
+        await openContractCall({
+            contractAddress,
+            contractName,
+            functionName: 'execute-gasless',
             functionArgs,
             network: this.config.network,
             sponsored: true,
