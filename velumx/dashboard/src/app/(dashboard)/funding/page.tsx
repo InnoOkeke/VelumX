@@ -14,7 +14,8 @@ export default function FundingPage() {
     const [stats, setStats] = useState({
         relayerAddress: 'Loading...',
         relayerStxBalance: '0',
-        relayerUsdcxBalance: '0'
+        relayerFeeBalance: '0',
+        feeToken: 'Tokens'
     });
     const [logs, setLogs] = useState<any[]>([]);
     const [isFetching, setIsFetching] = useState(true);
@@ -39,13 +40,15 @@ export default function FundingPage() {
                 const currentStats = data.networks?.[network] || {
                     relayerAddress: 'Not Configured',
                     relayerStxBalance: '0',
-                    relayerUsdcxBalance: '0'
+                    relayerFeeBalance: '0',
+                    feeToken: 'Tokens'
                 };
 
                 setStats({
                     relayerAddress: currentStats.relayerAddress,
                     relayerStxBalance: (parseInt(currentStats.relayerStxBalance || '0') / 1_000_000).toFixed(2),
-                    relayerUsdcxBalance: (parseInt(currentStats.relayerUsdcxBalance || '0') / 1_000_000).toFixed(2)
+                    relayerFeeBalance: (parseInt(currentStats.relayerFeeBalance || '0') / 1_000_000).toFixed(2),
+                    feeToken: currentStats.feeToken || 'Tokens'
                 });
 
                 // --- Fetch Recent Logs for History ---
@@ -84,7 +87,7 @@ export default function FundingPage() {
         <div className="space-y-8 pb-12">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Relayer Status</h1>
-                <p className="text-white/40 text-sm font-medium">Monitor your SGAL Relayer health and manage gas sponsorship capital.</p>
+                <p className="text-white/40 text-sm font-medium">Monitor your Universal gas abstraction health and manage sponsorship capital.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -136,7 +139,7 @@ export default function FundingPage() {
                     </div>
                 </div>
 
-                {/* USDCx Balance (Revenue) */}
+                {/* Fee Revenue Balance */}
                 <div className="glass-card p-8 flex flex-col justify-between">
                     <div>
                         <div className="flex items-center gap-3 mb-8">
@@ -145,14 +148,14 @@ export default function FundingPage() {
                             </div>
                             <div>
                                 <h2 className="text-sm font-bold text-white uppercase tracking-wider">Collected Fees (USDCx)</h2>
-                                <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Revenue & Reimbursements</p>
+                                <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Standardized Revenue Value</p>
                             </div>
                         </div>
 
                         <div className="mb-8">
                             <div className="flex items-baseline gap-2">
                                 <span className="text-5xl font-black text-white font-mono">
-                                    {isFetching ? '...' : stats.relayerUsdcxBalance}
+                                    {isFetching ? '...' : stats.relayerFeeBalance}
                                 </span>
                                 <span className="text-lg text-white/40 font-bold">USDCx</span>
                             </div>
@@ -160,10 +163,9 @@ export default function FundingPage() {
                     </div>
 
                     <div className="p-6 bg-white/[0.02] border border-white/10 rounded-xl">
-                        <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-tight">Profit Mechanism</h4>
+                        <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-tight">Reporting Mechanism</h4>
                         <p className="text-[10px] text-white/40 leading-relaxed">
-                            When users perform gasless transactions, they pay back the STX cost in USDCx plus an 8% markup.
-                            These funds are collected here in your Relayer wallet.
+                            While you collect fees in various tokens (ALEX, sBTC), your dashboard reports their total **USDCx Value** for easier financial management and predictability.
                         </p>
                     </div>
                 </div>
@@ -196,7 +198,7 @@ export default function FundingPage() {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-white text-[11px] font-bold font-mono">{(parseInt(log.feeAmount) / 1_000_000).toFixed(2)} <span className="opacity-40">USDCx</span></p>
+                                <p className="text-white text-[11px] font-bold font-mono">{(parseInt(log.feeAmount) / 1_000_000).toFixed(2)} <span className="opacity-40">{log.feeToken || stats.feeToken}</span></p>
                                 <span className={`text-[9px] font-black uppercase tracking-widest ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>
                                     {log.status}
                                 </span>

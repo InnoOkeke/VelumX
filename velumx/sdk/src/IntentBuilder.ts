@@ -39,7 +39,7 @@ export class IntentBuilder {
         return tupleCV({
             target: principalCV(intent.target),
             payload: bufferCV(Buffer.from(intent.payload.startsWith('0x') ? intent.payload.substring(2) : intent.payload, 'hex')),
-            'max-fee-usdcx': uintCV(intent.maxFeeUSDCx),
+            'max-fee': uintCV(intent.maxFee),
             nonce: uintCV(intent.nonce)
         });
     }

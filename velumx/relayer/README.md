@@ -27,7 +27,7 @@ Broadcasts and sponsors a raw Stacks transaction.
 ```
 
 ### `POST /api/v1/estimate`
-Estimates the USDCx fee required for a specific transaction intent.
+Estimates the Universal Token fee required for a specific transaction intent.
 
 ### `GET /api/dashboard/stats`
 Returns multi-tenant analytics for the authenticated developer (Total Transactions, Revenue, Relayer Health).
@@ -40,7 +40,7 @@ Returns multi-tenant analytics for the authenticated developer (Total Transactio
 | `DATABASE_URL` | PostgreSQL (Prisma) connection string | Required |
 | `RELAYER_KEY` | Primary relayer private key | Required |
 | `NETWORK` | Stacks network (`mainnet` or `testnet`) | `testnet` |
-| `BRIDGE_FEE_USDCX` | Default fallback fee for logging | `250000` |
+| `FALLBACK_FEE_TOKENS` | Default fallback fee label for logging | `250000` |
 
 ## Deployment
 

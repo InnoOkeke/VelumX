@@ -11,7 +11,7 @@ export default function TransactionLogsPage() {
     const [isClient, setIsClient] = useState(false);
     const { user, loading: userLoading } = useUser();
     const { network: currentNetwork } = useWallet();
-    const [logs, setLogs] = useState<{ id: string; txid: string; type: string; userAddress: string; feeAmount: string; status: string; createdAt: string }[]>([]);
+    const [logs, setLogs] = useState<{ id: string; txid: string; type: string; userAddress: string; feeAmount: string; feeToken: string; status: string; createdAt: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -79,7 +79,7 @@ export default function TransactionLogsPage() {
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Transaction ID</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Type</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">User Address</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Fee (USDCx)</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Fee (Token)</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Status</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">Time</th>
                             </tr>
@@ -115,7 +115,10 @@ export default function TransactionLogsPage() {
                                         <code className="text-xs text-white/40 font-mono">{log.userAddress.substring(0, 12)}...</code>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="text-xs font-bold font-mono text-white">{parseInt(log.feeAmount) / 1_000_000}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold font-mono text-white">{(parseInt(log.feeAmount) / 1_000_000).toFixed(2)}</span>
+                                            <span className="text-[9px] font-bold text-white/40 uppercase">{log.feeToken}</span>
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold border ${log.status === 'Confirmed' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :

@@ -3,7 +3,8 @@ import { principalCV, uintCV, stringAsciiCV, tupleCV, someCV, noneCV, ClarityVal
 export interface WalletIntent {
     target: string;
     payload: string; // Hex string of the encoded transaction
-    maxFeeUSDCx: string | number; // uint represented as string or number
+    maxFee: string | number; // uint represented as string or number
+    feeToken: string; // Contract principal of gas token (e.g. SP...usdcx)
     nonce: string | number;
     deadline?: string | number; // Future feature
 }

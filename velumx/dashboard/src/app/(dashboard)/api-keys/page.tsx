@@ -521,7 +521,7 @@ export default function ApiKeysPage() {
                                 <p className="text-[10px] text-white/20 px-1 italic">
                                     {editingKey.sponsorshipPolicy === 'DEVELOPER_SPONSORS' 
                                         ? "* You will pay STX gas for your users automatically." 
-                                        : `* Users will pay fees in ${editingKey.supportedGasTokens?.join(', ') || 'USDCx'}. You will collect the markup.`}
+                                        : `* Users will pay fees in ${editingKey.supportedGasTokens?.join(', ') || 'Tokens'}. You will collect the markup.`}
                                 </p>
                             </div>
 
@@ -530,11 +530,11 @@ export default function ApiKeysPage() {
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">Supported Gas Tokens</label>
                                     <div className="flex flex-wrap gap-2">
-                                        {['sBTC', 'USDCx', 'aUSD', 'ALEX', 'aBTC'].map((token) => (
+                                        {['sBTC', 'aUSD', 'ALEX', 'aBTC'].map((token) => (
                                             <button
                                                 key={token}
                                                 onClick={() => {
-                                                    const current = editingKey.supportedGasTokens || ['USDCx'];
+                                                    const current = editingKey.supportedGasTokens || [];
                                                     const updated = current.includes(token)
                                                         ? current.length > 1 ? current.filter(t => t !== token) : current
                                                         : [...current, token];

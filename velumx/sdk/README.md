@@ -1,17 +1,6 @@
-# @velumx/sdk
-
-> Universal Gasless transaction SDK for Stacks - Pay fees in sBTC, USDCx, ALEX, or any SIP-010 token.
-
-[![npm version](https://img.shields.io/npm/v/@velumx/sdk.svg)](https://www.npmjs.com/package/@velumx/sdk)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-## Overview
-
-VelumX SDK enables gasless transactions on Stacks blockchain. Users pay transaction fees in their preferred SIP-010 tokens instead of STX using Stacks' native sponsored transaction feature.
-
-### Key Features
-
-- 🪙 **Any Token Gas** - Users can pay in sBTC, USDCx, ALEX, aUSD, or any custom SIP-010.
+> Universal Gasless transaction SDK for Stacks - Pay fees in sBTC, ALEX, or any SIP-010 token.
+...
+- 🪙 **Any Token Gas** - Users can pay in sBTC, ALEX, aUSD, or any custom SIP-010.
 - ⚡ **Native Sponsorship** - Uses Stacks' built-in `sponsored` flag.
 - 🔧 **Simple Integration** - Standardized helper methods for Swap, Bridge, and Transfer.
 - 🛡️ **Secure** - Registry-based authorization on Stacks Mainnet.

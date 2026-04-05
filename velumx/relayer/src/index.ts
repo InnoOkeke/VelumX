@@ -109,19 +109,19 @@ const validateApiKey = async (req: ApiKeyRequest, res: express.Response, next: e
     }
 };
 
-// Estimate Fee Endpoint (Gated)
+// Estimate Fee
 app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
     try {
-        const { intent } = req.body;
-        if (!intent) return res.status(400).json({ error: "Missing intent" });
-
-        // Backward compatibility: If no feeToken provided, default to USDCx
-        if (!intent.feeToken && intent.maxFeeUSDCx) {
-            intent.feeToken = 'USDCx';
-            intent.maxFee = intent.maxFeeUSDCx;
+        const { intent, network } = req.body;
+        
+        if (!intent) {
+            return res.status(400).json({ error: "Missing intent" });
         }
 
-        const estimation = await paymasterService.estimateFee(intent, req.apiKeyId!);
+        // Network context for Universal gas estimation
+        const estimationIntent = { ...intent, network: network || intent.network || 'mainnet' };
+
+        const estimation = await paymasterService.estimateFee(estimationIntent, req.apiKeyId!);
         res.json(estimation);
     } catch (error: any) {
         console.error("Estimation Error:", error);
@@ -129,19 +129,13 @@ app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res: exp
     }
 });
 
-// Sponsor and Submit Intent Endpoint (Gated)
+// Sponsor and Submit Intent Endpoint
 app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { intent } = req.body;
 
         if (!intent || !intent.signature) {
             return res.status(400).json({ error: "Missing signed intent" });
-        }
-
-        // Backward compatibility: If no feeToken provided, default to USDCx
-        if (!intent.feeToken && intent.maxFeeUSDCx) {
-            intent.feeToken = 'USDCx';
-            intent.maxFee = intent.maxFeeUSDCx;
         }
 
         const result = await paymasterService.sponsorIntent(intent, req.apiKeyId, req.userId);
@@ -199,32 +193,36 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
 
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
             try {
-                // 1. Database Stats
-                const totalTransactions = await (prisma.transaction as any).count({ 
-                    where: { userId, network: networkType } 
-                });
-
+                // 1. Fetch Transactions with Tokens
                 const transactions = await (prisma.transaction as any).findMany({
                     where: { userId, network: networkType },
-                    select: { feeAmount: true }
+                    select: { feeAmount: true, feeToken: true }
                 });
 
-                const totalSponsored = transactions.reduce((acc: bigint, tx: any) => {
-                    try {
-                        return acc + BigInt(tx.feeAmount || '0');
-                    } catch (e) {
-                        return acc;
-                    }
-                }, BigInt(0));
+                const totalTransactions = transactions.length;
 
-                // 2. Fetch Active Policy for Token Info
-                const activePolicy = await (prisma as any).policy.findFirst({
-                    where: { userId, status: 'Active' },
-                    select: { feeToken: true }
-                });
+                // 2. Batch Convert Fees to USDCx
+                // Standardize on 6-decimal USDCx units
+                let totalRevenueUsdcx = 0;
                 
-                const feeTokenPrincipal = activePolicy?.feeToken || paymasterService.getUsdcxAddress(networkType as any);
-                const feeTokenSymbol = feeTokenPrincipal.includes('.') ? feeTokenPrincipal.split('.').pop()?.toUpperCase() : 'FT';
+                // Optimized pricing: cache token rates for this batch
+                const tokenRates: Record<string, number> = {};
+                const stxPrice = await paymasterService.getStxPrice();
+
+                for (const tx of transactions) {
+                    const token = tx.feeToken || 'Token';
+                    if (!tokenRates[token]) {
+                        tokenRates[token] = await paymasterService.getTokenRate(token);
+                    }
+                    
+                    const amountInToken = Number(tx.feeAmount || '0') / 1_000_000;
+                    const amountInUsdcx = (amountInToken * tokenRates[token]) * stxPrice;
+                    totalRevenueUsdcx += amountInUsdcx;
+                }
+
+                // 3. Metadata for Dashboard
+                const feeTokenSymbol = 'USDCx'; 
+                const totalSponsored = totalRevenueUsdcx.toFixed(2); // String format for UI consistency
 
                 // 3. On-Chain Metrics
                 const relayerKey = paymasterService.getUserRelayerKey(userId);
@@ -241,17 +239,23 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
                         
-                        // Dynamically fetch the balance for the developer's chosen fee token
-                        const tokenKey = Object.keys(balances.fungible_tokens).find(key => 
-                            key === feeTokenPrincipal || 
-                            key.startsWith(`${feeTokenPrincipal}::`)
-                        );
+                        // Calculate total USDCx value of all fungible tokens
+                        let totalFeeValueUsdcx = 0;
+                        const ftBalances = balances.fungible_tokens || {};
                         
-                        if (tokenKey) {
-                            relayerFeeBalance = balances.fungible_tokens[tokenKey].balance;
+                        for (const tokenKey of Object.keys(ftBalances)) {
+                            const tokenPrincipal = tokenKey.split('::')[0];
+                            const balance = ftBalances[tokenKey].balance;
+                            
+                            if (balance !== '0') {
+                                const usdcxEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal);
+                                totalFeeValueUsdcx += usdcxEquivalent;
+                            }
                         }
+                        
+                        relayerFeeBalance = totalFeeValueUsdcx.toFixed(2);
                     }
-                } catch (e) { console.warn("Balance check failed"); }
+                } catch (e) { console.warn("Balance check failed", e); }
 
                 return {
                     totalTransactions,

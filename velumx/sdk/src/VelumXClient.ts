@@ -16,7 +16,7 @@ export class VelumXClient {
     /**
      * Get a fee estimation from the relayer for a specific intent
      */
-    public async estimateFee(intent: any): Promise<{ maxFeeUSDCx: string, estimatedGas: number }> {
+    public async estimateFee(intent: any): Promise<{ maxFee: string, estimatedGas: number }> {
         try {
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
             if (this.config.apiKey && this.config.apiKey !== 'proxied') {
@@ -39,7 +39,7 @@ export class VelumXClient {
                 throw new Error(`Fee estimation failed: ${errData.error || errData.message || response.statusText}`);
             }
 
-            return await response.json() as { maxFeeUSDCx: string, estimatedGas: number };
+            return await response.json() as { maxFee: string, estimatedGas: number };
         } catch (error) {
             console.error("VelumX Client Error (estimateFee):", error);
             throw error;

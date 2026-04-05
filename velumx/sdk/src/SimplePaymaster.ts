@@ -217,8 +217,8 @@ export class SimplePaymaster {
     }): Promise<{ feeAmount: string; feeToken: string; policy: string; isSponsored: boolean }> {
         const { estimatedGas = 150000, userAddress = 'unknown', txType = 'generic', feeToken } = params;
         
-        // Use provided relayerUrl or fallback to a default (if applicable)
-        const relayerUrl = this.config.relayerUrl || 'https://sgal-relayer.onrender.com';
+        // Use provided relayerUrl or fallback to the VelumX production URL
+        const relayerUrl = this.config.relayerUrl || 'https://relayer.velumx.com';
 
         try {
             const res = await fetch(`${relayerUrl}/api/v1/estimate`, {

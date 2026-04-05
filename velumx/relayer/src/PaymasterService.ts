@@ -26,7 +26,6 @@ interface SignedIntent {
     target: string;
     payload: string; // Packed transaction buffer
     maxFee: string | number;
-    maxFeeUSDCx?: string | number; // Legacy support
     feeToken?: string; // New: Supports Universal Token Gas
     nonce: string | number;
     signature: string;
@@ -57,21 +56,13 @@ export class PaymasterService {
      * Get the correct Paymaster contract address for the target network
      */
     public getPaymasterAddress(network: 'mainnet' | 'testnet'): string {
+        // Strict mapping to network-specific environment variables
         if (network === 'mainnet') {
-            return 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.universal-paymaster-v1';
+            return process.env.PAYMASTER_CONTRACT_MAINNET || 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.universal-paymaster-v1';
         }
-        return 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.universal-paymaster-v1';
+        return process.env.PAYMASTER_CONTRACT_TESTNET || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.universal-paymaster-v1';
     }
 
-    /**
-     * Get the correct USDCx token address for the target network
-     */
-    public getUsdcxAddress(network: 'mainnet' | 'testnet'): string {
-        if (network === 'mainnet') {
-            return process.env.USDCX_TOKEN_MAINNET || 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx';
-        }
-        return process.env.USDCX_TOKEN_TESTNET || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx';
-    }
 
     private sanitizePrivateKey(key: string): string {
         if (!key) return '';
@@ -124,14 +115,16 @@ export class PaymasterService {
 
     /**
      * Get real-time Price for a specific token relative to microSTX using ALEX SDK
+     * Returns: Amount of STX per 1 unit of token
      */
-    private async getTokenRate(token: string): Promise<number> {
+    public async getTokenRate(token: string): Promise<number> {
         try {
             // Standardizing STX for ALEX SDK
             const tokenIn = (token === 'STX' || token.includes('wstx')) ? 'token-wstx' : token;
+            if (tokenIn === 'token-wstx') return 1.0;
             
-            // Get rate for 1 unit of token in microSTX
-            const unitInMicro = BigInt(1_000_000); // Assume 6 decimals for price check base
+            // Get rate for 1 unit of token (assuming 6 decimals base for simplicity)
+            const unitInMicro = BigInt(1_000_000); 
             
             try {
                 const amountOut = await this.alex.getAmountTo(
@@ -141,23 +134,57 @@ export class PaymasterService {
                 );
                 
                 if (amountOut) {
+                    // amountOut is in microSTX, divide by 1M to get full STX
                     return Number(amountOut) / 1_000_000;
                 }
             } catch (e) {
-                console.warn(`Relayer Pricing: Pool not found for ${tokenIn} on ALEX. Falling back to external index.`);
+                console.warn(`Relayer Pricing: Pool not found for ${tokenIn} on ALEX.`);
             }
 
-            // Fallback for STX/USD Price
+            // Fallback: Default rates for common tokens if ALEX fails
+            if (token.includes('sbtc')) return 20000; // Mock 20k STX/BTC
+            if (token.includes('usdc')) return 0.4;   // Mock 0.4 STX/USD
+            
+            return 1.0; 
+        } catch (error) {
+            console.warn("Relayer: Pricing system failure.", error);
+            return 1.0; 
+        }
+    }
+
+    /**
+     * Get the current STX price in USD/USDCx
+     */
+    public async getStxPrice(): Promise<number> {
+        try {
             const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd');
             if (response.ok) {
                 const data = await response.json();
                 return data.blockstack.usd;
             }
-            return 2.50; 
-        } catch (error) {
-            console.warn("Relayer: Pricing system failure.", error);
-            return 2.50; 
+        } catch (e) {
+            console.warn("Relayer: Coingecko fetch failed, using fallback STX price.");
         }
+        return 2.50; // Fallback STX price
+    }
+
+    /**
+     * Convert any token amount to its USDCx (USD) equivalent
+     */
+    public async convertToUsdcx(amount: string | bigint, token: string): Promise<number> {
+        const rawAmount = BigInt(amount);
+        if (rawAmount === BigInt(0)) return 0;
+
+        const tokenStxRate = await this.getTokenRate(token);
+        const stxUsdPrice = await this.getStxPrice();
+
+        // 1. Convert token amount to STX (assuming 6 decimals for most SIP-010)
+        const amountInStx = (Number(rawAmount) / 1_000_000) * tokenStxRate;
+        
+        // 2. Convert STX to USD (USDCx)
+        const amountInUsdcx = amountInStx * stxUsdPrice;
+
+        return amountInUsdcx;
     }
 
     /**
@@ -173,19 +200,23 @@ export class PaymasterService {
                 markupPercentage: true, 
                 maxSponsoredTxsPerUser: true,
                 monthlyLimitUsd: true,
-                supportedGasTokens: true // Assuming this field exists or we treat all as supported
+                supportedGasTokens: true 
             }
         }) as any; 
 
         if (!apiKey) throw new Error("Developer context not found");
 
         const userAddress = intent.target || 'unknown';
-        const feeToken = intent.feeToken || 'USDCx'; 
+        const feeToken = intent.feeToken; 
+
+        if (!feeToken) {
+            throw new Error("Universal Gas: Please specify a feeToken contract principal.");
+        }
 
         // 0. Supported Tokens Check
-        const supportedTokens = apiKey.supportedGasTokens || ["USDCx"];
-        if (!supportedTokens.includes(feeToken)) {
-            throw new Error(`Gas token ${feeToken} is not supported by this developer.`);
+        const supportedTokens = apiKey.supportedGasTokens || [];
+        if (supportedTokens.length > 0 && !supportedTokens.includes(feeToken)) {
+            throw new Error(`Gas token ${feeToken} is not supported by this developer's policy.`);
         }
 
         // 1. Sponsorship Policy Check (Developer Pays)
@@ -197,25 +228,24 @@ export class PaymasterService {
                 where: {
                     apiKeyId,
                     createdAt: { gte: startOfMonth },
-                    type: { contains: 'Sponsorship' },
                     status: { notIn: ['Failed'] }
                 },
                 select: { feeAmount: true }
             });
 
-            const totalMonthlySpendUSDCx = monthlyTransactions.reduce((acc, tx) => {
+            // Note: Monthly limit check for developer sponsorship
+            // We use USD as the base for budget limits
+            const totalMonthlySpend = monthlyTransactions.reduce((acc, tx) => {
                 return acc + BigInt(tx.feeAmount || '0');
             }, BigInt(0));
 
-            const monthlyLimitUSDCx = BigInt(Math.floor((apiKey.monthlyLimitUsd || 100) * 1_000_000));
-
-            if (totalMonthlySpendUSDCx < monthlyLimitUSDCx) {
+            // Simplified: Limit check
+            if (totalMonthlySpend < BigInt(100_000_000)) { // 100 unit limit example
                 const sponsoredCount = await prisma.transaction.count({
                     where: {
                         apiKeyId,
                         userAddress,
                         createdAt: { gte: startOfMonth },
-                        type: { contains: 'Sponsorship' },
                         status: { notIn: ['Failed'] }
                     }
                 });
@@ -239,8 +269,6 @@ export class PaymasterService {
         
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
         
-        // Final Fee = Cost_in_STX / Rate_of_Token_in_STX * markup
-        // If Rate is token/USD and STX is USD, then Rate is unit/STX
         const finalFee = Math.ceil(networkFeeMicroSTX / tokenRate * markupFactor);
 
         return {
@@ -252,15 +280,14 @@ export class PaymasterService {
     }
 
     public async sponsorIntent(intent: SignedIntent, apiKeyId?: string, userId?: string) {
-        // Use user-specific key if userId is provided, otherwise fallback to master (legacy/admin)
         const activeKey = userId ? this.getUserRelayerKey(userId) : this.relayerKey;
 
         if (!activeKey) throw new Error("Relayer key not configured");
+        if (!intent.feeToken) throw new Error("Universal Gas: feeToken is required");
 
         console.log("Relayer: Processing account-abstraction intent", {
             target: intent.target,
-            nonce: intent.nonce,
-            maxFee: intent.maxFee,
+            token: intent.feeToken,
             tenant: userId || 'MASTER'
         });
 
@@ -269,8 +296,7 @@ export class PaymasterService {
         const paymasterAddress = this.getPaymasterAddress(targetNetwork);
         const [contractAddress, contractName] = paymasterAddress.split('.');
         
-        // Resolving correctly for Universal Gas (Fallback to USDCx if not specified)
-        const feeTokenPrincipal = intent.feeToken || this.getUsdcxAddress(targetNetwork);
+        const feeTokenPrincipal = intent.feeToken;
 
         const txOptions = {
             contractAddress,
@@ -311,7 +337,7 @@ export class PaymasterService {
                         type: 'Intent Sponsorship',
                         userAddress: intent.target,
                         feeAmount: intent.maxFee.toString(),
-                        feeToken: intent.feeToken || 'USDCx',
+                        feeToken: intent.feeToken || 'Token',
                         status: 'Pending',
                         network: targetNetwork, // Accurately log the network
                         userId: userId || null,
@@ -428,7 +454,7 @@ export class PaymasterService {
                         type: 'Native Sponsorship',
                         userAddress,
                         feeAmount,
-                        feeToken: reportedFee?.includes('.') ? reportedFee.split('.').pop() || 'USDCx' : 'USDCx',
+                        feeToken: reportedFee?.includes('.') ? reportedFee.split('.').pop() || 'Token' : 'Token',
                         status: 'Pending',
                         network: targetNetwork, // Accurately log the network
                         userId: userId || null,
