@@ -199,6 +199,24 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
 
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
             try {
+                // 1. Database Stats
+                const totalTransactions = await (prisma.transaction as any).count({ 
+                    where: { userId, network: networkType } 
+                });
+
+                const transactions = await (prisma.transaction as any).findMany({
+                    where: { userId, network: networkType },
+                    select: { feeAmount: true }
+                });
+
+                const totalSponsored = transactions.reduce((acc: bigint, tx: any) => {
+                    try {
+                        return acc + BigInt(tx.feeAmount || '0');
+                    } catch (e) {
+                        return acc;
+                    }
+                }, BigInt(0));
+
                 // 2. Fetch Active Policy for Token Info
                 const activePolicy = await (prisma as any).policy.findFirst({
                     where: { userId, status: 'Active' },
@@ -224,7 +242,6 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                         relayerStxBalance = balances.stx.balance;
                         
                         // Dynamically fetch the balance for the developer's chosen fee token
-                        // Hiro API keys FTs as "CONTRACT_PRINCIPAL::SYMBOL"
                         const tokenKey = Object.keys(balances.fungible_tokens).find(key => 
                             key === feeTokenPrincipal || 
                             key.startsWith(`${feeTokenPrincipal}::`)
@@ -244,19 +261,9 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                     relayerFeeBalance,
                     feeToken: feeTokenSymbol
                 };
-                    console.error(`Relayer Stat Error (${networkType}): Failed to fetch on-chain balances`, balanceError);
-                }
-
-                return {
-                    totalTransactions,
-                    totalSponsored: totalSponsored.toString(),
-                    relayerAddress,
-                    relayerStxBalance,
-                    relayerUsdcxBalance
-                };
             } catch (err) {
                 console.error(`Stats Error for ${networkType}:`, err);
-                return { totalTransactions: 0, totalSponsored: "0", relayerAddress: "Error", relayerStxBalance: "0", relayerUsdcxBalance: "0" };
+                return { totalTransactions: 0, totalSponsored: "0", relayerAddress: "Error", relayerStxBalance: "0", relayerFeeBalance: "0", feeToken: "Tokens" };
             }
         };
 

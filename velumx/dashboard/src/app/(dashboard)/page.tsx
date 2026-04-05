@@ -95,7 +95,6 @@ export default function DashboardOverview() {
     relayerFeeBalance: '0',
     feeToken: 'Tokens'
   };
-  };
 
   const metricCards = [
     {
