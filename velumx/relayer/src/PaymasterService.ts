@@ -104,16 +104,22 @@ export class PaymasterService {
         if (!this.relayerKey) throw new Error("Relayer master key not configured");
         if (!userId) throw new Error("User ID required for key derivation");
 
-        // Create a deterministic sub-key using HMAC-SHA256
-        const hmac = crypto.createHmac('sha256', Buffer.from(this.relayerKey, 'hex'));
-        hmac.update(userId);
-        const derivedBuffer = hmac.digest();
+        try {
+            // 1. Get the RAW 32-byte seed (remove any 01 suffix from the master key for derivation)
+            const masterSeed = this.relayerKey.length === 66 ? this.relayerKey.substring(0, 64) : this.relayerKey;
+            
+            // 2. Derive a deterministic 32-byte sub-key using HMAC-SHA256
+            const hmac = crypto.createHmac('sha256', Buffer.from(masterSeed, 'hex'));
+            hmac.update(userId);
+            const subKey = hmac.digest('hex');
 
-        // Ensure it's 33 bytes for Stacks (compressed)
-        let derivedHex = derivedBuffer.toString('hex');
-        if (derivedHex.length === 64) derivedHex += '01';
-
-        return derivedHex;
+            // 3. SECP256K1 Validation & Compression Suffix
+            // We append '01' to indicate this is a compressed public key, which Stacks requires.
+            return subKey + '01';
+        } catch (error) {
+            console.error(`Relayer: Failed to derive key for user ${userId}`, error);
+            throw new Error("Multi-tenant key derivation failed");
+        }
     }
 
     /**
