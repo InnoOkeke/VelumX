@@ -1,0 +1,16 @@
+# Netlify configuration for VelumX Landing Page
+# This file is located in the /landing directory.
+
+[build]
+  # For Monorepo: Ensure 'Base directory' is set to 'landing' in Netlify UI
+  # If 'Base directory' is set to 'landing', then these paths are relative to /landing
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Optimized for Next.js 15+ and Turbopack
+[build.environment]
+  NEXT_USE_LIBUV = "1"
+  NODE_VERSION = "20"
