@@ -265,26 +265,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           appDetails: { name: 'VelumX DEX', icon: window.location.origin + '/favicon.ico' },
           onFinish: (authData: any) => {
             const address = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.address;
-            const userSession = authData.userSession;
-            const publicKey = userSession?.loadUserData()?.profile?.stxAddress?.publicKey ||
-              connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey ||
-              authData.authResponsePayload?.profile?.stxAddress?.publicKey;
-
-            console.log('Stacks Wallet Auth Data:', {
-              hasUserSession: !!userSession,
-              hasLocalStorageKey: !!connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey,
-              hasPayloadKey: !!authData.authResponsePayload?.profile?.stxAddress?.publicKey,
-              payloadKeys: Object.keys(authData || {}),
-            });
-
-            console.log('Stacks Wallet Auth Data:', {
-              hasUserSession: !!userSession,
-              hasLocalStorageKey: !!connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey,
-              hasPayloadKey: !!authData.authResponsePayload?.profile?.stxAddress?.publicKey,
-              payloadKeys: Object.keys(authData || {}),
-              userSessionKeys: userSession ? Object.keys(userSession) : ['none'],
-              userDataProfile: userSession?.loadUserData()?.profile ? 'present' : 'missing',
-            });
+            
+            // Comprehensive Public Key Resolution
+            let publicKey = "";
+            
+            try {
+              // Path 1: Directly from authData profile
+              publicKey = authData.authResponsePayload?.profile?.stxAddress?.publicKey || "";
+              
+              // Path 2: From the userSession loadUserData (Standard Stacks Connect)
+              if (!publicKey && authData.userSession) {
+                const userData = authData.userSession.loadUserData();
+                publicKey = userData.profile?.stxAddress?.publicKey || userData.publicKey || "";
+              }
+              
+              // Path 3: From LocalStorage fallback (if already persisted by extension)
+              if (!publicKey) {
+                publicKey = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey || "";
+              }
+            } catch (e) {
+              console.warn("Wallet: Error during public key extraction", e);
+            }
 
             console.log('Stacks Wallet Connected:', { address, hasPublicKey: !!publicKey });
 

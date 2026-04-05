@@ -23,6 +23,7 @@ model ApiKey {
   markupPercentage      Int               @default(10)
   maxSponsoredTxsPerUser Int               @default(5)
   monthlyLimitUsd      Float             @default(100.0)
+  supportedGasTokens    String[]          @default(["USDCx"])
   lastUsedAt            DateTime?
   revokedAt             DateTime?
   createdAt             DateTime          @default(now())
@@ -40,6 +41,7 @@ model Transaction {
   type        String
   userAddress String
   feeAmount   String
+  feeToken    String   @default("USDCx")
   status      String   @default("Pending")
   network     String   @default("mainnet")
   userId      String?  // Associated Supabase User ID

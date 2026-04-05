@@ -24,6 +24,17 @@ const port = process.env.PORT || 4000;
     return this.toString();
 };
 
+interface SignedIntent {
+    target: string;
+    payload: string;
+    maxFee: string | number;
+    maxFeeUSDCx?: string | number; // Legacy support
+    feeToken: string;
+    nonce: string | number;
+    signature: string;
+    network?: 'mainnet' | 'testnet';
+}
+
 app.use(cors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
         // Allow all origins in development (no origin) or specific trusted domains
@@ -104,6 +115,12 @@ app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res: exp
         const { intent } = req.body;
         if (!intent) return res.status(400).json({ error: "Missing intent" });
 
+        // Backward compatibility: If no feeToken provided, default to USDCx
+        if (!intent.feeToken && intent.maxFeeUSDCx) {
+            intent.feeToken = 'USDCx';
+            intent.maxFee = intent.maxFeeUSDCx;
+        }
+
         const estimation = await paymasterService.estimateFee(intent, req.apiKeyId!);
         res.json(estimation);
     } catch (error: any) {
@@ -119,6 +136,12 @@ app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res: expr
 
         if (!intent || !intent.signature) {
             return res.status(400).json({ error: "Missing signed intent" });
+        }
+
+        // Backward compatibility: If no feeToken provided, default to USDCx
+        if (!intent.feeToken && intent.maxFeeUSDCx) {
+            intent.feeToken = 'USDCx';
+            intent.maxFee = intent.maxFeeUSDCx;
         }
 
         const result = await paymasterService.sponsorIntent(intent, req.apiKeyId, req.userId);
@@ -176,30 +199,21 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
 
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
             try {
-                // 1. Database Stats
-                const totalTransactions = await (prisma.transaction as any).count({ 
-                    where: { userId, network: networkType } 
+                // 2. Fetch Active Policy for Token Info
+                const activePolicy = await (prisma as any).policy.findFirst({
+                    where: { userId, status: 'Active' },
+                    select: { feeToken: true }
                 });
+                
+                const feeTokenPrincipal = activePolicy?.feeToken || paymasterService.getUsdcxAddress(networkType as any);
+                const feeTokenSymbol = feeTokenPrincipal.includes('.') ? feeTokenPrincipal.split('.').pop()?.toUpperCase() : 'FT';
 
-                const transactions = await (prisma.transaction as any).findMany({
-                    where: { userId, network: networkType },
-                    select: { feeAmount: true }
-                });
-
-                const totalSponsored = transactions.reduce((acc: bigint, tx: any) => {
-                    try {
-                        return acc + BigInt(tx.feeAmount || '0');
-                    } catch (e) {
-                        return acc;
-                    }
-                }, BigInt(0));
-
-                // 2. On-Chain Metrics
+                // 3. On-Chain Metrics
                 const relayerKey = paymasterService.getUserRelayerKey(userId);
                 const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
 
                 let relayerStxBalance = "0";
-                let relayerUsdcxBalance = "0";
+                let relayerFeeBalance = "0";
 
                 try {
                     const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
@@ -208,23 +222,28 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
-
-                        // Dynamically fetch the correct USDCx address for the current network
-                        const usdcxToken = paymasterService.getUsdcxAddress(networkType as any);
                         
+                        // Dynamically fetch the balance for the developer's chosen fee token
                         // Hiro API keys FTs as "CONTRACT_PRINCIPAL::SYMBOL"
-                        // We check for exact match OR key starting with our contract address
                         const tokenKey = Object.keys(balances.fungible_tokens).find(key => 
-                            key === usdcxToken || 
-                            key === `${usdcxToken}-v1` ||
-                            key.startsWith(`${usdcxToken}::`)
+                            key === feeTokenPrincipal || 
+                            key.startsWith(`${feeTokenPrincipal}::`)
                         );
                         
                         if (tokenKey) {
-                            relayerUsdcxBalance = balances.fungible_tokens[tokenKey].balance;
+                            relayerFeeBalance = balances.fungible_tokens[tokenKey].balance;
                         }
                     }
-                } catch (balanceError) {
+                } catch (e) { console.warn("Balance check failed"); }
+
+                return {
+                    totalTransactions,
+                    totalSponsored: totalSponsored.toString(),
+                    relayerAddress,
+                    relayerStxBalance,
+                    relayerFeeBalance,
+                    feeToken: feeTokenSymbol
+                };
                     console.error(`Relayer Stat Error (${networkType}): Failed to fetch on-chain balances`, balanceError);
                 }
 

@@ -11,10 +11,13 @@ import {
     listCV,
     deserializeTransaction,
     sponsorTransaction,
+    Cl,
+    getAddressFromPrivateKey,
 } from '@stacks/transactions';
 import { StacksNetwork, STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'node:crypto';
+import { AlexSDK } from 'alex-sdk';
 
 const prisma = new PrismaClient();
 
@@ -22,7 +25,9 @@ const prisma = new PrismaClient();
 interface SignedIntent {
     target: string;
     payload: string; // Packed transaction buffer
-    maxFeeUSDCx: string | number;
+    maxFee: string | number;
+    maxFeeUSDCx?: string | number; // Legacy support
+    feeToken?: string; // New: Supports Universal Token Gas
     nonce: string | number;
     signature: string;
     network?: 'mainnet' | 'testnet'; // Optional network flag
@@ -32,17 +37,19 @@ export class PaymasterService {
     private mainnetNetwork: StacksNetwork;
     private testnetNetwork: StacksNetwork;
     private relayerKey: string;
+    private alex: AlexSDK;
 
     constructor() {
         this.mainnetNetwork = STACKS_MAINNET;
         this.testnetNetwork = STACKS_TESTNET;
+        this.alex = new AlexSDK();
         const rawKey = (process.env.RELAYER_PRIVATE_KEY || '').trim();
         this.relayerKey = this.sanitizePrivateKey(rawKey);
 
         if (!this.relayerKey) {
             console.warn("WARNING: RELAYER_PRIVATE_KEY not set. Sponsorship will fail.");
         } else {
-            console.log("Relayer Key initialized and sanitized.");
+            console.log("Relayer Key initialized and sanitized for Universal Gas.");
         }
     }
 
@@ -51,9 +58,9 @@ export class PaymasterService {
      */
     public getPaymasterAddress(network: 'mainnet' | 'testnet'): string {
         if (network === 'mainnet') {
-            return process.env.PAYMASTER_CONTRACT_MAINNET || 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.simple-paymaster-v1';
+            return 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.universal-paymaster-v1';
         }
-        return process.env.PAYMASTER_CONTRACT_TESTNET || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v1';
+        return 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.universal-paymaster-v1';
     }
 
     /**
@@ -110,52 +117,76 @@ export class PaymasterService {
     }
 
     /**
-     * Get real-time STX/USD price from CoinGecko
+     * Get real-time Price for a specific token relative to microSTX using ALEX SDK
      */
-    private async getCurrentStxPrice(): Promise<number> {
+    private async getTokenRate(token: string): Promise<number> {
         try {
-            // Using a simple fetch for the STX price (Blockstack ID on CoinGecko)
+            // Standardizing STX for ALEX SDK
+            const tokenIn = (token === 'STX' || token.includes('wstx')) ? 'token-wstx' : token;
+            
+            // Get rate for 1 unit of token in microSTX
+            const unitInMicro = BigInt(1_000_000); // Assume 6 decimals for price check base
+            
+            try {
+                const amountOut = await this.alex.getAmountTo(
+                    tokenIn as any,
+                    unitInMicro,
+                    'token-wstx' as any
+                );
+                
+                if (amountOut) {
+                    return Number(amountOut) / 1_000_000;
+                }
+            } catch (e) {
+                console.warn(`Relayer Pricing: Pool not found for ${tokenIn} on ALEX. Falling back to external index.`);
+            }
+
+            // Fallback for STX/USD Price
             const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd');
             if (response.ok) {
                 const data = await response.json();
                 return data.blockstack.usd;
             }
-            throw new Error(`Price API status: ${response.status}`);
+            return 2.50; 
         } catch (error) {
-            console.warn("Relayer: Failed to fetch STX price, using fallback $2.50", error);
-            // Dynamic fallback can also be sourced from environment
+            console.warn("Relayer: Pricing system failure.", error);
             return 2.50; 
         }
     }
 
     /**
-     * Estimate real USDCx fee for a transaction intent
+     * Estimate Universal fee for a transaction intent
      */
     public async estimateFee(intent: any, apiKeyId: string) {
         if (!apiKeyId) throw new Error("API key identity required for estimation");
 
-        // 1. Fetch Developer Settings (Multi-tenant context)
         const apiKey = await (prisma.apiKey as any).findUnique({
             where: { id: apiKeyId },
             select: { 
                 sponsorshipPolicy: true, 
                 markupPercentage: true, 
                 maxSponsoredTxsPerUser: true,
-                monthlyLimitUsd: true
+                monthlyLimitUsd: true,
+                supportedGasTokens: true // Assuming this field exists or we treat all as supported
             }
         }) as any; 
 
         if (!apiKey) throw new Error("Developer context not found");
 
-        // 2. Determine User Address (Who is being sponsored?)
         const userAddress = intent.target || 'unknown';
+        const feeToken = intent.feeToken || 'USDCx'; 
 
-        // 3. Handle 'Developer Sponsors' Policy
+        // 0. Supported Tokens Check
+        const supportedTokens = apiKey.supportedGasTokens || ["USDCx"];
+        if (!supportedTokens.includes(feeToken)) {
+            throw new Error(`Gas token ${feeToken} is not supported by this developer.`);
+        }
+
+        // 1. Sponsorship Policy Check (Developer Pays)
         if ((apiKey.sponsorshipPolicy as string) === 'DEVELOPER_SPONSORS') {
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-            // 3a. Check Total Developer Monthly Budget
             const monthlyTransactions = await prisma.transaction.findMany({
                 where: {
                     apiKeyId,
@@ -172,64 +203,45 @@ export class PaymasterService {
 
             const monthlyLimitUSDCx = BigInt(Math.floor((apiKey.monthlyLimitUsd || 100) * 1_000_000));
 
-            if (totalMonthlySpendUSDCx >= monthlyLimitUSDCx) {
-                console.log(`Relayer: Developer ${apiKeyId} hit total monthly budget limit (${totalMonthlySpendUSDCx}/${monthlyLimitUSDCx}). Falling back to USER_PAYS.`);
-                // Return User-pays early
-                return {
-                    maxFeeUSDCx: "0", // Will be overridden below
-                    isLimitReached: true
-                };
-            }
+            if (totalMonthlySpendUSDCx < monthlyLimitUSDCx) {
+                const sponsoredCount = await prisma.transaction.count({
+                    where: {
+                        apiKeyId,
+                        userAddress,
+                        createdAt: { gte: startOfMonth },
+                        type: { contains: 'Sponsorship' },
+                        status: { notIn: ['Failed'] }
+                    }
+                });
 
-            // 3b. Check Per-User limit for this specific userAddress
-            const sponsoredCount = await prisma.transaction.count({
-                where: {
-                    apiKeyId,
-                    userAddress,
-                    createdAt: { gte: startOfMonth },
-                    // Count transactions where the relayer sponsored the gas
-                    type: { contains: 'Sponsorship' },
-                    status: { notIn: ['Failed'] }
+                if (sponsoredCount < apiKey.maxSponsoredTxsPerUser) {
+                    return {
+                        maxFee: "0",
+                        feeToken: "STX",
+                        estimatedGas: intent.estimatedGas || 10000,
+                        policy: "DEVELOPER_SPONSORS"
+                    };
                 }
-            });
-
-            // If under the limit (e.g. 5 free per month), return 0 fee
-            if (sponsoredCount < apiKey.maxSponsoredTxsPerUser) {
-                return {
-                    maxFeeUSDCx: "0",
-                    estimatedGas: intent.estimatedGas || 5000,
-                    policy: "DEVELOPER_SPONSORS",
-                    remainingFreeInRange: apiKey.maxSponsoredTxsPerUser - sponsoredCount,
-                    totalMonthlySpendUsd: Number(totalMonthlySpendUSDCx) / 1_000_000
-                };
             }
-            
-            console.log(`Relayer: User ${userAddress} hit monthly limit (${sponsoredCount}/${apiKey.maxSponsoredTxsPerUser}). Falling back to USER_PAYS.`);
         }
 
-        // 4. Handle 'User Pays' or Fallback (Dynamic Calculation)
-        
-        // Fetch current market conditions
-        const stxPrice = await this.getCurrentStxPrice();
-        const estimatedGas = intent.estimatedGas || 7000; // Base gas + buffer
-        
-        // Stacks Fee Logic:
-        // microSTX = gas * gasPrice
-        // In current mainnet, 1000 microSTX is a safe "average" gas price per unit for sponsorship
-        const SAFE_GAS_PRICE = 1; // 1 microSTX per gas unit
+        // 2. Universal Pricing (User Pays)
+        const tokenRate = await this.getTokenRate(feeToken);
+        const estimatedGas = intent.estimatedGas || 10000;
+        const SAFE_GAS_PRICE = 1; 
         const networkFeeMicroSTX = estimatedGas * SAFE_GAS_PRICE;
         
-        // Conversion:
-        // USDCx has 6 decimals, same as microSTX (1 STX = 1e6 microSTX)
-        // Fee = microSTX_Cost * STX_USD_PRICE * (1 + markup%)
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
-        const finalUsdcxFee = Math.ceil(networkFeeMicroSTX * stxPrice * markupFactor);
+        
+        // Final Fee = Cost_in_STX / Rate_of_Token_in_STX * markup
+        // If Rate is token/USD and STX is USD, then Rate is unit/STX
+        const finalFee = Math.ceil(networkFeeMicroSTX / tokenRate * markupFactor);
 
         return {
-            maxFeeUSDCx: finalUsdcxFee.toString(),
+            maxFee: finalFee.toString(),
+            feeToken,
             estimatedGas,
-            policy: "USER_PAYS",
-            reason: (apiKey.sponsorshipPolicy as string) === 'USER_PAYS' ? "Developer policy: User Pays" : "Monthly sponsorship limit reached"
+            policy: "USER_PAYS"
         };
     }
 
@@ -242,7 +254,7 @@ export class PaymasterService {
         console.log("Relayer: Processing account-abstraction intent", {
             target: intent.target,
             nonce: intent.nonce,
-            maxFee: intent.maxFeeUSDCx,
+            maxFee: intent.maxFee,
             tenant: userId || 'MASTER'
         });
 
@@ -250,19 +262,21 @@ export class PaymasterService {
         const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
         const paymasterAddress = this.getPaymasterAddress(targetNetwork);
         const [contractAddress, contractName] = paymasterAddress.split('.');
-        const usdcxToken = this.getUsdcxAddress(targetNetwork);
+        
+        // Resolving correctly for Universal Gas (Fallback to USDCx if not specified)
+        const feeTokenPrincipal = intent.feeToken || this.getUsdcxAddress(targetNetwork);
 
         const txOptions = {
             contractAddress,
             contractName,
-            functionName: 'execute-gasless',
+            functionName: 'call-gasless',
             functionArgs: [
+                principalCV(feeTokenPrincipal),
+                uintCV(intent.maxFee),
+                principalCV(getAddressFromPrivateKey(activeKey, targetNetwork)), // Dynamic Relayer receiver
                 principalCV(intent.target),
-                bufferCV(Buffer.from(intent.payload.replace(/^0x/, ''), 'hex')), // Actual user signed payload
-                uintCV(intent.maxFeeUSDCx),
-                uintCV(intent.nonce),
-                bufferCV(Buffer.from(intent.signature.replace(/^0x/, ''), 'hex')),
-                principalCV(usdcxToken)
+                Cl.stringAscii('universal-execute'),
+                bufferCV(Buffer.from(intent.payload.replace(/^0x/, ''), 'hex'))
             ],
             senderKey: activeKey,
             validateWithAbi: false,
@@ -290,7 +304,8 @@ export class PaymasterService {
                         txid,
                         type: 'Intent Sponsorship',
                         userAddress: intent.target,
-                        feeAmount: intent.maxFeeUSDCx.toString(),
+                        feeAmount: intent.maxFee.toString(),
+                        feeToken: intent.feeToken || 'USDCx',
                         status: 'Pending',
                         network: targetNetwork, // Accurately log the network
                         userId: userId || null,
@@ -342,14 +357,26 @@ export class PaymasterService {
 
                     if (args && args.length > 0) {
                         let feeIndex = -1;
-                        if (functionName === 'bridge-gasless') feeIndex = 2;
-                        else if (functionName === 'swap-gasless') feeIndex = 4;
-                        else if (functionName === 'transfer-gasless') feeIndex = 3;
-                        else if (functionName === 'execute-gasless') feeIndex = 3;
+                        let tokenIndex = -1;
+                        
+                        if (functionName === 'call-gasless') {
+                            tokenIndex = 0;
+                            feeIndex = 1;
+                        } else if (functionName === 'bridge-gasless' || functionName === 'bridge-tokens') feeIndex = 2;
+                        else if (functionName === 'swap-gasless' || functionName === 'swap-v1') feeIndex = 4;
+                        else if (functionName === 'transfer-gasless' || functionName === 'transfer') feeIndex = 3;
 
+                        // Extract Fee Amount
                         if (feeIndex !== -1 && args[feeIndex] && args[feeIndex].type === 1) { // 1 = uint
                             feeAmount = args[feeIndex].value.toString();
                             console.log(`Relayer: Successfully extracted fee ${feeAmount} from ${functionName}.`);
+                        }
+
+                        // Extract Fee Token
+                        if (tokenIndex !== -1 && args[tokenIndex] && args[tokenIndex].type === 6) { // 6 = Principal
+                            const tokenPrincipal = args[tokenIndex].value.toString();
+                            const ticker = tokenPrincipal.split('.').pop() || 'FT';
+                            console.log(`Relayer: Detected fee token ${ticker} in universal call.`);
                         }
                     }
                 }
@@ -395,6 +422,7 @@ export class PaymasterService {
                         type: 'Native Sponsorship',
                         userAddress,
                         feeAmount,
+                        feeToken: reportedFee?.includes('.') ? reportedFee.split('.').pop() || 'USDCx' : 'USDCx',
                         status: 'Pending',
                         network: targetNetwork, // Accurately log the network
                         userId: userId || null,

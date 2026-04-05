@@ -77,6 +77,7 @@ export async function PATCH(
         markupPercentage: body.markupPercentage !== undefined ? parseInt(body.markupPercentage) : undefined,
         maxSponsoredTxsPerUser: body.maxSponsoredTxsPerUser !== undefined ? parseInt(body.maxSponsoredTxsPerUser) : undefined,
         monthlyLimitUsd: body.monthlyLimitUsd !== undefined ? parseFloat(body.monthlyLimitUsd) : undefined,
+        supportedGasTokens: body.supportedGasTokens !== undefined ? body.supportedGasTokens : undefined,
       },
     })
 

@@ -41,12 +41,13 @@ interface SwapState {
   inputAmount: string;
   outputAmount: string;
   gaslessMode: boolean;
+  selectedGasToken: Token | null; // New: Universal Gas Token
   isProcessing: boolean;
   isFetchingQuote: boolean;
   error: string | null;
   success: string | null;
   quote: SwapQuote | null;
-  gasFeeUsdcx: string;
+  gasFee: string;
   slippage: number;
   showSettings: boolean;
   isRegistering: boolean;
@@ -98,31 +99,51 @@ export function SwapInterface() {
     inputAmount: '',
     outputAmount: '',
     gaslessMode: true,
+    selectedGasToken: DEFAULT_TOKENS[1], // DEFAULT to USDCx for Gas
     isProcessing: false,
     isFetchingQuote: false,
     error: null,
     success: null,
     quote: null,
-    gasFeeUsdcx: '0.2',
+    gasFee: '0.2',
     slippage: 0.5,
     showSettings: false,
     isRegistering: false,
   });
 
-  // Initialize tokens from config
+  // Dynamic Token Discovery via ALEX SDK
   useEffect(() => {
-    const updatedTokens = DEFAULT_TOKENS.map(t => {
-      if (t.symbol === 'VEX') return { ...t, address: config.stacksVexAddress || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1' };
-      return t;
-    });
-    setTokens(updatedTokens);
+    const fetchAlexTokens = async () => {
+      try {
+        const { AlexSDK } = await import('alex-sdk');
+        const alex = new AlexSDK();
+        const alexTokens = await alex.getTokens();
+        
+        // Map ALEX tokens to our Token interface
+        const mappedTokens: Token[] = alexTokens.map((t: any) => ({
+          symbol: t.symbol,
+          name: t.name || t.symbol,
+          address: t.id,
+          decimals: t.decimals || 6,
+          logoUrl: t.icon,
+        }));
 
-    // Update initial state tokens - Default to STX -> VEX
-    setState(prev => ({
-      ...prev,
-      inputToken: updatedTokens[1], // USDCx
-      outputToken: updatedTokens[2]  // VEX
-    }));
+        // Merge with our internal tokens (USDCx, VEX)
+        setTokens(prev => {
+          const unique = [...prev];
+          mappedTokens.forEach(mt => {
+            if (!unique.find(ut => ut.symbol === mt.symbol)) {
+              unique.push(mt);
+            }
+          });
+          return unique;
+        });
+      } catch (e) {
+        console.error("Swap: Failed to fetch ALEX tokens", e);
+      }
+    };
+    
+    fetchAlexTokens();
   }, [config.stacksVexAddress]);
 
   const fetchQuote = async () => {
@@ -185,32 +206,30 @@ export function SwapInterface() {
     }
   };
 
-  // Fetch fee estimate for gasless mode
+  // Fetch fee estimate for universal gas mode
   const fetchFeeEstimate = useCallback(async () => {
-    if (!state.gaslessMode) return;
+    if (!state.gaslessMode || !state.selectedGasToken) return;
 
     try {
       const velumxClient = getVelumXClient();
       const estimate = await velumxClient.estimateFee({
-        estimatedGas: 100000 // Base gas estimate for swaps
+        estimatedGas: 100000,
+        feeToken: state.selectedGasToken.address // Pass the Universal Token address
       });
 
-      console.log('Fee Estimate Response:', estimate);
+      console.log('Universal Fee Estimate:', estimate);
 
-      if (estimate && estimate.maxFeeUSDCx) {
-        // Use the returned fee
+      if (estimate && (estimate.maxFee || estimate.maxFeeUSDCx)) {
+        const fee = estimate.maxFee || estimate.maxFeeUSDCx;
         setState(prev => ({
           ...prev,
-          gasFeeUsdcx: (Number(estimate.maxFeeUSDCx) / 1_000_000).toString(),
+          gasFee: (Number(fee) / Math.pow(10, state.selectedGasToken?.decimals || 6)).toFixed(4),
         }));
-      } else {
-        console.warn('Fee estimate failed or invalid data:', estimate);
       }
     } catch (error) {
-      console.error('Failed to fetch fee estimate:', error);
-      // Keep default 0.2 if failed
+      console.error('Failed to fetch universal fee estimate:', error);
     }
-  }, [state.gaslessMode, config.backendUrl]);
+  }, [state.gaslessMode, state.selectedGasToken, config.backendUrl]);
 
   // Fetch quote and fee estimate when input changes
   useEffect(() => {
@@ -274,6 +293,7 @@ export function SwapInterface() {
           tokenOut: state.outputToken.symbol === 'STX' ? 'token-wstx' : state.outputToken.address,
           amountIn: state.inputAmount,
           minOut: minAmountOut,
+          feeToken: state.selectedGasToken?.address, // Universal Gas Token
           onProgress: (step) => {
             setState(prev => ({ ...prev, success: step }));
           }
@@ -471,6 +491,34 @@ export function SwapInterface() {
             setEnabled={(val: boolean) => setState(prev => ({ ...prev, gaslessMode: val }))}
             disabled={state.isProcessing}
           />
+
+          {/* Universal Gas Token Selector */}
+          {state.gaslessMode && (
+            <div className="mt-4 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 active:border-purple-500/30 transition-all">
+              <label className="text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400 mb-2 block">
+                Pay Gas With
+              </label>
+              <div className="flex items-center justify-between">
+                <select
+                  value={state.selectedGasToken?.symbol}
+                  onChange={(e) => {
+                    const token = tokens.find(t => t.symbol === e.target.value);
+                    if (token) setState(prev => ({ ...prev, selectedGasToken: token }));
+                  }}
+                  className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer"
+                >
+                  {tokens.filter(t => t.symbol !== 'STX').map(t => (
+                    <option key={t.symbol} value={t.symbol} className="bg-white dark:bg-gray-900">
+                      {t.symbol} (Balance: {getBalance(t)})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs font-mono opacity-60">
+                   Fee: {state.gasFee} {state.selectedGasToken?.symbol}
+                </span>
+              </div>
+            </div>
+          )}
 
           <TransactionStatus error={state.error} success={state.success} />
 

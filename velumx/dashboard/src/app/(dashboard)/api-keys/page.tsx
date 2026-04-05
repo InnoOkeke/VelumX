@@ -29,6 +29,7 @@ interface ApiKey {
     markupPercentage: number;
     maxSponsoredTxsPerUser: number;
     monthlyLimitUsd: number;
+    supportedGasTokens?: string[];
     lastUsedAt: string | null;
     createdAt: string;
 }
@@ -48,6 +49,7 @@ export default function ApiKeysPage() {
     const [isLoadingRelayer, setIsLoadingRelayer] = useState(true);
     const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [customToken, setCustomToken] = useState('');
 
     const fetchKeys = async () => {
         try {
@@ -519,9 +521,61 @@ export default function ApiKeysPage() {
                                 <p className="text-[10px] text-white/20 px-1 italic">
                                     {editingKey.sponsorshipPolicy === 'DEVELOPER_SPONSORS' 
                                         ? "* You will pay STX gas for your users automatically." 
-                                        : "* Users will pay fees in USDCx. You will collect the markup."}
+                                        : `* Users will pay fees in ${editingKey.supportedGasTokens?.join(', ') || 'USDCx'}. You will collect the markup.`}
                                 </p>
                             </div>
+
+                            {/* Token Selection (New) */}
+                            {editingKey.sponsorshipPolicy === 'USER_PAYS' && (
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">Supported Gas Tokens</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['sBTC', 'USDCx', 'aUSD', 'ALEX', 'aBTC'].map((token) => (
+                                            <button
+                                                key={token}
+                                                onClick={() => {
+                                                    const current = editingKey.supportedGasTokens || ['USDCx'];
+                                                    const updated = current.includes(token)
+                                                        ? current.length > 1 ? current.filter(t => t !== token) : current
+                                                        : [...current, token];
+                                                    setEditingKey({...editingKey, supportedGasTokens: updated});
+                                                }}
+                                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+                                                    (editingKey.supportedGasTokens || ['USDCx']).includes(token)
+                                                    ? 'bg-white text-black border-white shadow-lg'
+                                                    : 'bg-white/5 text-white/40 border-white/5 hover:border-white/20'
+                                                }`}
+                                            >
+                                                {token}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
+                                        <input
+                                            type="text"
+                                            value={customToken}
+                                            onChange={(e) => setCustomToken(e.target.value)}
+                                            placeholder="SP...token-name"
+                                            className="flex-1 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] text-white focus:outline-none focus:ring-1 focus:ring-white/20"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (!customToken.includes('.')) {
+                                                    toast.error('Invalid contract principal (e.g. SP...token-name)');
+                                                    return;
+                                                }
+                                                const current = editingKey.supportedGasTokens || ['USDCx'];
+                                                if (current.includes(customToken)) return;
+                                                setEditingKey({...editingKey, supportedGasTokens: [...current, customToken]});
+                                                setCustomToken('');
+                                            }}
+                                            className="px-3 py-1.5 bg-white/10 text-white text-[10px] font-bold rounded-lg hover:bg-white/20 transition-all"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Limits Area */}

@@ -27,15 +27,16 @@ export interface SimpleGaslessSwapParams {
   tokenOut: string; // Token contract address
   amountIn: string; // Amount in human-readable format
   minOut: string;   // Minimum output amount
+  feeToken?: string; // NEW: Universal Gas Token
   onProgress?: (step: string) => void;
 }
 
 /**
- * Execute gasless swap using simple-paymaster
- * User pays gas fees in USDCx, relayer sponsors STX
+ * Execute gasless swap using universal-paymaster
+ * User pays gas fees in any whitelisted SIP-010 token, relayer sponsors STX
  */
 export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams): Promise<string> {
-  const { userAddress, tokenIn, tokenOut, amountIn, minOut, onProgress } = params;
+  const { userAddress, tokenIn, tokenOut, amountIn, minOut, feeToken, onProgress } = params;
   const config = getConfig();
   const velumx = getVelumXClient();
   
@@ -43,49 +44,58 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const amountInMicro = parseUnits(amountIn, 6);
   const minOutMicro = parseUnits(minOut, 6);
   
-  // Get fee estimate
-  onProgress?.('Calculating fees...');
-  const estimate = await velumx.estimateFee({ estimatedGas: 150000 });
-  const feeInMicro = BigInt(estimate.maxFeeUSDCx);
+  // Get universal fee estimate
+  onProgress?.('Calculating universal fees...');
+  const selectedFeeToken = feeToken || config.stacksUsdcxAddress;
   
-  console.log('Simple Swap Details:', {
+  // Cast to any or a local interface to support the new 'maxFee' field from the updated relayer
+  const estimate = await velumx.estimateFee({ 
+    estimatedGas: 150000,
+    feeToken: selectedFeeToken 
+  }) as any;
+  
+  const feeInMicro = BigInt(estimate.maxFee || estimate.maxFeeUSDCx || 0);
+  
+  console.log('Universal Swap Details:', {
     tokenIn,
     tokenOut,
     amountIn: amountInMicro.toString(),
-    minOut: minOutMicro.toString(),
+    feeToken: selectedFeeToken,
     fee: feeInMicro.toString()
   });
   
-  // Get relayer address
-  const relayerAddress = 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P';
+  // Get relayer address from config or default
+  const relayerAddress = config.stacksPaymasterAddress.split('.')[0]; 
   
   onProgress?.('Preparing transaction...');
   
   const connect = await getStacksConnect();
   const network = await getNetworkInstance();
-  const [contractAddress, contractName] = config.stacksPaymasterAddress.split('.');
   
-  // Call swap-gasless with sponsored=true
+  // Use the new Universal Paymaster v1
+  const contractAddress = config.stacksPaymasterAddress.split('.')[0];
+  const contractName = 'universal-paymaster-v1';
+  
+  // Call swap-gasless-v2 with sponsored=true
   const result = await new Promise<{ txid?: string; txRaw?: string } | null>((resolve, reject) => {
     connect.openContractCall({
       contractAddress,
       contractName,
-      functionName: 'swap-gasless',
+      functionName: 'swap-gasless-v2',
       functionArgs: [
+        Cl.principal(selectedFeeToken),
+        Cl.uint(feeInMicro.toString()),
+        Cl.principal(relayerAddress),
         Cl.principal(tokenIn),
         Cl.principal(tokenOut),
         Cl.uint(amountInMicro.toString()),
-        Cl.uint(minOutMicro.toString()),
-        Cl.uint(feeInMicro.toString()),
-        Cl.principal(relayerAddress),
-        Cl.principal(config.stacksUsdcxAddress)
+        Cl.uint(minOutMicro.toString())
       ],
       network,
-      sponsored: true, // Stacks native sponsorship
+      sponsored: true, 
       postConditionMode: 'allow',
       postConditions: [],
       onFinish: (data: any) => {
-        console.log('Swap onFinish data:', data);
         resolve(data);
       },
       onCancel: () => {

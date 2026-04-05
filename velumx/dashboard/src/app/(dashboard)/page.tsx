@@ -19,8 +19,8 @@ export default function DashboardOverview() {
   const [statsData, setStatsData] = useState<any>({
     activeKeys: 0,
     networks: {
-      mainnet: { totalTransactions: 0, totalSponsored: '0', relayerAddress: '', relayerStxBalance: '0', relayerUsdcxBalance: '0' },
-      testnet: { totalTransactions: 0, totalSponsored: '0', relayerAddress: '', relayerStxBalance: '0', relayerUsdcxBalance: '0' }
+      mainnet: { totalTransactions: 0, totalSponsored: '0', relayerAddress: '', relayerStxBalance: '0', relayerFeeBalance: '0', feeToken: 'USDCx' },
+      testnet: { totalTransactions: 0, totalSponsored: '0', relayerAddress: '', relayerStxBalance: '0', relayerFeeBalance: '0', feeToken: 'USDCx' }
     }
   });
   const [logs, setLogs] = useState<any[]>([]);
@@ -92,13 +92,15 @@ export default function DashboardOverview() {
     totalSponsored: '0',
     relayerAddress: '',
     relayerStxBalance: '0',
-    relayerUsdcxBalance: '0'
+    relayerFeeBalance: '0',
+    feeToken: 'Tokens'
+  };
   };
 
   const metricCards = [
     {
       title: 'Total Gas Sponsored',
-      value: `${(parseInt(currentStats.totalSponsored) / 1_000_000).toFixed(2)} USDCx`,
+      value: `${(parseInt(currentStats.totalSponsored) / 1_000_000).toFixed(2)} ${currentStats.feeToken || 'Tokens'}`,
       change: '0%',
       trend: 'up',
       icon: BatteryCharging,
@@ -153,7 +155,7 @@ export default function DashboardOverview() {
             <div className="flex flex-col">
               <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Rev. ({currentNetwork})</span>
               <span className={`text-[11px] font-bold font-mono ${currentNetwork === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {(parseInt(currentStats.relayerUsdcxBalance) / 1_000_000).toFixed(2)} <span className="opacity-40 font-medium">USDCx</span>
+                {(parseInt(currentStats.relayerFeeBalance || 0) / 1_000_000).toFixed(2)} <span className="opacity-40 font-medium">{currentStats.feeToken || 'Tokens'}</span>
               </span>
             </div>
           </div>
@@ -224,7 +226,7 @@ export default function DashboardOverview() {
                   className="w-full rounded-sm bg-white/20 hover:bg-white/40 transition-colors relative group"
                 >
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                    {total.toFixed(2)} USDCx
+                    {total.toFixed(2)} {currentStats.feeToken || 'Tokens'}
                   </div>
                 </div>
               );
@@ -263,7 +265,7 @@ export default function DashboardOverview() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-white text-xs font-bold font-mono">{parseInt(log.feeAmount) / 1_000_000} USDCx</p>
+                <p className="text-white text-xs font-bold font-mono">{(parseInt(log.feeAmount) || 0) / 1_000_000} {log.feeToken || 'Tokens'}</p>
                 <p className={`text-[10px] font-bold mt-0.5 ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>{log.status}</p>
               </div>
             </div>
