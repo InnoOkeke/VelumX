@@ -1,4 +1,4 @@
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Loader2, Search } from 'lucide-react';
 import React from 'react';
 
 interface Token {
@@ -43,9 +43,9 @@ export function TokenInput({
         ? 'bg-purple-600 shadow-purple-500/50'
         : 'bg-blue-600 shadow-blue-500/50';
 
-    const filteredTokens = tokens.filter(t => 
-        t.symbol.toLowerCase().includes(search.toLowerCase()) ||
-        t.name.toLowerCase().includes(search.toLowerCase())
+    const filteredTokens = (tokens || []).filter(t => 
+        (t.symbol?.toLowerCase() || '').includes(search.toLowerCase()) ||
+        (t.name?.toLowerCase() || '').includes(search.toLowerCase())
     );
 
     // Close dropdown on click outside
@@ -68,9 +68,17 @@ export function TokenInput({
         >
             <div className="flex items-center justify-between mb-6 relative z-10">
                 <span className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>{label}</span>
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    Balance: <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{parseFloat(balance).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</span>
-                </span>
+                <div className="flex items-center gap-2">
+                    {tokens.length <= 4 && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
+                           <Loader2 className="w-2.5 h-2.5 text-purple-500 animate-spin" />
+                           <span className="text-[8px] font-black uppercase tracking-tighter text-purple-600 dark:text-purple-400">Discovering...</span>
+                        </div>
+                    )}
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        Balance: <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{parseFloat(balance).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</span>
+                    </span>
+                </div>
             </div>
             <div className="flex items-center gap-6 relative z-10">
                 <input
@@ -111,7 +119,6 @@ export function TokenInput({
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
                                     <input 
-                                        autoFocus
                                         type="text"
                                         placeholder="Search tokens..."
                                         value={search}

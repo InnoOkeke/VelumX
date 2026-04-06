@@ -53,18 +53,32 @@ interface SwapState {
   isRegistering: boolean;
 }
 
-// Default tokens simplified to just STX
-const DEFAULT_TOKENS: Token[] = [
+// Absolute minimal baseline for boot (STX is universal)
+const FALLBACK_STX: Token = {
+  symbol: 'STX',
+  name: 'Stacks',
+  address: 'token-wstx',
+  decimals: 6,
+  logoUrl: 'https://cryptologos.cc/logos/stacks-stx-logo.png',
+};
+
+// High-priority VelumX assets that must be available even if discovery is pending
+const VELUMX_PRIORITY_TOKENS: Token[] = [
   {
-    symbol: 'STX',
-    name: 'Stacks',
-    address: 'STX',
+    symbol: 'USDCx',
+    name: 'VelumX USDC',
+    address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    assetName: 'stx',
+    logoUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png',
+  },
+  {
+    symbol: 'VEX',
+    name: 'VelumX Token',
+    address: 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.vex-token',
+    decimals: 8,
+    logoUrl: '/images/vex-logo.png',
   }
 ];
-
-
 
 export function SwapInterface() {
   const { stacksAddress, stacksConnected, balances, fetchBalances, stacksPublicKey, recoverPublicKey } = useWallet();
@@ -72,19 +86,19 @@ export function SwapInterface() {
 
   const getBalance = (token: Token | null): string => {
     if (!token) return '0';
-    // Generic balance lookup by symbol
     const symbol = token.symbol.toLowerCase();
     return (balances as any)[symbol] || '0';
   };
 
-  const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
+  const [tokens, setTokens] = useState<Token[]>([FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS]);
+  const [isDiscovering, setIsDiscovering] = useState(false);
   const [state, setState] = useState<SwapState>({
-    inputToken: DEFAULT_TOKENS[0], // STX
-    outputToken: DEFAULT_TOKENS[1], // USDCx
+    inputToken: FALLBACK_STX,
+    outputToken: VELUMX_PRIORITY_TOKENS[0], // USDCx
     inputAmount: '',
     outputAmount: '',
     gaslessMode: true,
-    selectedGasToken: DEFAULT_TOKENS[1], // USDCx as default gas token
+    selectedGasToken: VELUMX_PRIORITY_TOKENS[0], // USDCx
     isProcessing: false,
     isFetchingQuote: false,
     error: null,
@@ -102,37 +116,50 @@ export function SwapInterface() {
 
     const fetchAlexTokens = async () => {
       try {
+        setIsDiscovering(true);
+        console.log("Swap: Running Global Token Discovery...");
         const { AlexSDK } = await import('alex-sdk');
         const alex = new AlexSDK() as any;
         const res = await alex.getTokens();
         
+        if (!isMounted) return;
+
         // Handle both array and object responses from SDK
-        const alexTokens = Array.isArray(res) ? res : Object.values(res);
+        const alexTokensList = Array.isArray(res) ? res : Object.values(res);
         
-        if (!isMounted || !alexTokens.length) return;
+        if (!alexTokensList.length) {
+          setIsDiscovering(false);
+          return;
+        }
 
         // Map ALEX tokens to our Token interface
-        const mappedTokens: Token[] = alexTokens.map((t: any) => ({
-          symbol: t.symbol || t.name,
-          name: t.name || t.symbol,
-          address: t.id || t.contractAddress,
+        const mappedTokens: Token[] = alexTokensList.map((t: any) => ({
+          symbol: t.symbol || t.name || 'Unknown',
+          name: t.name || t.symbol || 'Unknown Token',
+          address: t.id || t.contractAddress || 'unknown-address',
           decimals: t.decimals || 8,
           logoUrl: t.icon || '',
-        }));
+        })).filter(t => t.symbol !== 'Unknown');
 
-        // Set the tokens directly from ALEX SDK (merging with defaults)
+        // Merging logic: Keep Priority tokens at the top, then adddiscovered ones
         setTokens(prev => {
-          const unique = [...DEFAULT_TOKENS];
+          const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
           mappedTokens.forEach(mt => {
-            if (!unique.find(ut => ut.symbol === mt.symbol)) {
+            const alreadyIn = unique.find(ut => 
+              ut.symbol.toLowerCase() === mt.symbol.toLowerCase() || 
+              ut.address.toLowerCase() === mt.address.toLowerCase()
+            );
+            if (!alreadyIn) {
               unique.push(mt);
             }
           });
-          
+          console.log(`Swap: Discovery complete. Library expanded to ${unique.length} assets.`);
           return unique;
         });
+        setIsDiscovering(false);
       } catch (e) {
-        console.error("Swap: Failed to fetch ALEX tokens", e);
+        console.error("Swap: Critical Discovery Error", e);
+        setIsDiscovering(false);
       }
     };
     
@@ -394,7 +421,7 @@ export function SwapInterface() {
         padding: '2rem'
       }}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
             Swap Interface
           </h2>
@@ -405,6 +432,22 @@ export function SwapInterface() {
           >
             <Settings className={`w-5 h-5 ${state.showSettings ? 'animate-spin-slow' : ''}`} />
           </button>
+        </div>
+
+        {/* Token Discovery Label */}
+        <div className="flex items-center gap-2 mb-6 px-1">
+          <div className={`w-2 h-2 rounded-full ${isDiscovering ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)', opacity: 0.8 }}>
+            {isDiscovering ? 'Discovering Liquidity...' : `${tokens.length} Assets Synchronized`}
+          </span>
+          {tokens.length <= 1 && (
+             <button 
+                onClick={() => setTokens([FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS])}
+                className="text-[10px] font-bold text-purple-500 hover:underline ml-2"
+             >
+               Force Sync
+             </button>
+          )}
         </div>
 
         <SettingsPanel
