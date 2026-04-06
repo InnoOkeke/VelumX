@@ -1,12 +1,5 @@
-/**
- * TokenInput Component
- * Reusable token amount and selection input
- */
-
-'use client';
-
+import { ChevronDown, Search } from 'lucide-react';
 import React from 'react';
-import { ChevronDown } from 'lucide-react';
 
 interface Token {
     symbol: string;
@@ -42,9 +35,29 @@ export function TokenInput({
     onMax,
     variant = 'purple'
 }: TokenInputProps) {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const [search, setSearch] = React.useState('');
+    const dropdownRef = React.useRef<HTMLDivElement>(null);
+
     const gradientClass = variant === 'purple'
         ? 'bg-purple-600 shadow-purple-500/50'
         : 'bg-blue-600 shadow-blue-500/50';
+
+    const filteredTokens = tokens.filter(t => 
+        t.symbol.toLowerCase().includes(search.toLowerCase()) ||
+        t.name.toLowerCase().includes(search.toLowerCase())
+    );
+
+    // Close dropdown on click outside
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     return (
         <div className="group rounded-2xl p-6 transition-all duration-300 relative"
@@ -53,7 +66,6 @@ export function TokenInput({
                 backgroundColor: 'var(--bg-surface)',
             }}
         >
-
             <div className="flex items-center justify-between mb-6 relative z-10">
                 <span className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>{label}</span>
                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -70,25 +82,85 @@ export function TokenInput({
                     style={{ color: 'var(--text-primary)' }}
                     disabled={isProcessing}
                 />
-                <div className="relative">
-                    <select
-                        value={token?.symbol || ''}
-                        onChange={(e) => {
-                            const selected = tokens.find(t => t.symbol === e.target.value);
-                            if (selected) setToken(selected);
-                        }}
-                        className={`appearance-none ${gradientClass} text-white pl-5 pr-10 py-3 rounded-2xl font-bold outline-none cursor-pointer transition-all shadow-lg flex items-center gap-2 border-none`}
+                
+                {/* Custom Dropdown */}
+                <div className="relative" ref={dropdownRef}>
+                    <button
+                        onClick={() => !isProcessing && setIsOpen(!isOpen)}
+                        className={`flex items-center gap-2 ${gradientClass} text-white px-4 py-2.5 rounded-xl font-bold shadow-lg transition-transform active:scale-95 whitespace-nowrap`}
                         disabled={isProcessing}
                     >
-                        {Array.isArray(tokens) && (tokens || []).map(t => (
-                            <option key={t.symbol} value={t.symbol} className="text-black dark:text-white bg-white dark:bg-gray-900">
-                                {t.symbol}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white pointer-events-none" />
+                        {token?.logoUrl ? (
+                            <img src={token.logoUrl} alt={token.symbol} className="w-5 h-5 rounded-full" />
+                        ) : (
+                            <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+                                {token?.symbol?.[0]}
+                            </div>
+                        )}
+                        <span>{token?.symbol || 'Select'}</span>
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {isOpen && (
+                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-50 border border-white/10 flex flex-col backdrop-blur-xl"
+                            style={{ backgroundColor: 'var(--bg-card)' }}
+                        >
+                            {/* Search */}
+                            <div className="p-4 border-b border-white/5">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+                                    <input 
+                                        autoFocus
+                                        type="text"
+                                        placeholder="Search tokens..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        className="w-full bg-black/5 dark:bg-white/5 rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Token List */}
+                            <div className="overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+                                {filteredTokens.length > 0 ? (
+                                    filteredTokens.map(t => (
+                                        <button
+                                            key={t.address + t.symbol}
+                                            onClick={() => {
+                                                setToken(t);
+                                                setIsOpen(false);
+                                                setSearch('');
+                                            }}
+                                            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {t.logoUrl ? (
+                                                    <img src={t.logoUrl} alt={t.symbol} className="w-8 h-8 rounded-full" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white uppercase">
+                                                        {t.symbol[0]}
+                                                    </div>
+                                                )}
+                                                <div className="text-left">
+                                                    <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{t.symbol}</div>
+                                                    <div className="text-[10px] opacity-50 truncate max-w-[120px]" style={{ color: 'var(--text-secondary)' }}>{t.name}</div>
+                                                </div>
+                                            </div>
+                                            {t.symbol === token?.symbol && (
+                                                <div className="w-2 h-2 rounded-full bg-purple-500 shadow-glow" />
+                                            )}
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="p-8 text-center opacity-40 text-sm italic">No tokens found</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
+
             {onMax && (
                 <div className="flex justify-between items-center mt-6 relative z-10">
                     <button

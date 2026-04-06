@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useConfig, getConfig } from '@/lib/config';
-import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet } from 'lucide-react';
+import { ArrowDownUp, Settings, Info, Loader2, AlertTriangle, Wallet, ChevronDown, Zap } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
 import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
@@ -80,11 +80,11 @@ export function SwapInterface() {
   const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<SwapState>({
     inputToken: DEFAULT_TOKENS[0], // STX
-    outputToken: null, // Will be set after ALEX tokens load
+    outputToken: DEFAULT_TOKENS[1], // USDCx
     inputAmount: '',
     outputAmount: '',
     gaslessMode: true,
-    selectedGasToken: DEFAULT_TOKENS[0], // DEFAULT to STX for Gas if available
+    selectedGasToken: DEFAULT_TOKENS[1], // USDCx as default gas token
     isProcessing: false,
     isFetchingQuote: false,
     error: null,
@@ -98,34 +98,36 @@ export function SwapInterface() {
 
   // Dynamic Token Discovery via ALEX SDK
   useEffect(() => {
+    let isMounted = true;
+
     const fetchAlexTokens = async () => {
       try {
         const { AlexSDK } = await import('alex-sdk');
         const alex = new AlexSDK() as any;
-        const alexTokens = await alex.getTokens();
+        const res = await alex.getTokens();
         
+        // Handle both array and object responses from SDK
+        const alexTokens = Array.isArray(res) ? res : Object.values(res);
+        
+        if (!isMounted || !alexTokens.length) return;
+
         // Map ALEX tokens to our Token interface
         const mappedTokens: Token[] = alexTokens.map((t: any) => ({
-          symbol: t.symbol,
+          symbol: t.symbol || t.name,
           name: t.name || t.symbol,
-          address: t.id,
-          decimals: t.decimals || 6,
-          logoUrl: t.icon,
+          address: t.id || t.contractAddress,
+          decimals: t.decimals || 8,
+          logoUrl: t.icon || '',
         }));
 
-        // Set the tokens directly from ALEX SDK (merging only with STX if not present)
+        // Set the tokens directly from ALEX SDK (merging with defaults)
         setTokens(prev => {
-          const unique = [{ ...DEFAULT_TOKENS[0] }]; // Pin STX at the top
+          const unique = [...DEFAULT_TOKENS];
           mappedTokens.forEach(mt => {
             if (!unique.find(ut => ut.symbol === mt.symbol)) {
               unique.push(mt);
             }
           });
-          
-          // Set initial output token if not set (first token after STX)
-          if (unique.length > 1) {
-             setState(s => ({ ...s, outputToken: s.outputToken || unique[1] }));
-          }
           
           return unique;
         });
@@ -135,7 +137,8 @@ export function SwapInterface() {
     };
     
     fetchAlexTokens();
-  }, [config.stacksVexAddress]);
+    return () => { isMounted = false; };
+  }, []);
 
   const fetchQuote = async () => {
     if (!state.inputToken || !state.outputToken || !state.inputAmount) return;
@@ -470,28 +473,74 @@ export function SwapInterface() {
 
           {/* Universal Gas Token Selector */}
           {state.gaslessMode && (
-            <div className="mt-4 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 active:border-purple-500/30 transition-all">
-              <label className="text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400 mb-2 block">
-                Pay Gas With
-              </label>
-              <div className="flex items-center justify-between">
-                <select
-                  value={state.selectedGasToken?.symbol}
-                  onChange={(e) => {
-                    const token = tokens.find(t => t.symbol === e.target.value);
-                    if (token) setState(prev => ({ ...prev, selectedGasToken: token }));
-                  }}
-                  className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer"
-                >
-                  {tokens.filter(t => t.symbol !== 'STX').map(t => (
-                    <option key={t.symbol} value={t.symbol} className="bg-white dark:bg-gray-900">
-                      {t.symbol} (Balance: {getBalance(t)})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs font-mono opacity-60">
-                   Fee: {state.gasFee} {state.selectedGasToken?.symbol}
-                </span>
+            <div className="mt-8 p-6 rounded-3xl transition-all duration-300 border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 relative">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-widest text-purple-700 dark:text-purple-300">
+                    Pay Gas With
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-3 bg-white/5 p-1 rounded-2xl border border-white/10 group/gas-container">
+                  <div className="relative">
+                    <button
+                      onClick={() => setState(prev => ({ ...prev, isRegistering: !prev.isRegistering }))}
+                      className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:shadow-purple-500/20 active:scale-95 whitespace-nowrap"
+                    >
+                      {state.selectedGasToken?.logoUrl ? (
+                         <img src={state.selectedGasToken.logoUrl} alt={state.selectedGasToken.symbol} className="w-4 h-4 rounded-full" />
+                      ) : (
+                         <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px]">{state.selectedGasToken?.symbol[0]}</div>
+                      )}
+                      <span>{state.selectedGasToken?.symbol}</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${state.isRegistering ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Floating Dropdown for Gas Token */}
+                    {state.isRegistering && (
+                       <div className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[100] border border-white/10 backdrop-blur-xl p-2"
+                        style={{ backgroundColor: 'var(--bg-card)' }}
+                       >
+                         {tokens.filter(t => t.symbol !== 'STX').map(t => (
+                           <button
+                              key={t.symbol}
+                              onClick={() => {
+                                setState(prev => ({ ...prev, selectedGasToken: t, isRegistering: false }));
+                              }}
+                              className="w-full flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors group"
+                           >
+                             <div className="flex items-center gap-3">
+                                {t.logoUrl ? (
+                                  <img src={t.logoUrl} alt={t.symbol} className="w-6 h-6 rounded-full" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px]">{t.symbol[0]}</div>
+                                )}
+                                <div className="text-left">
+                                   <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{t.symbol}</div>
+                                   <div className="text-[10px] opacity-40" style={{ color: 'var(--text-secondary)' }}>Bal: {parseFloat(getBalance(t)).toFixed(2)}</div>
+                                </div>
+                             </div>
+                             {t.symbol === state.selectedGasToken?.symbol && (
+                               <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                             )}
+                           </button>
+                         ))}
+                       </div>
+                    )}
+                  </div>
+                  
+                  <div className="h-6 w-px bg-white/10 mx-1" />
+                  
+                  <div className="flex flex-col items-end pr-3">
+                    <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400">
+                      Fee: {state.gasFee} {state.selectedGasToken?.symbol}
+                    </span>
+                    <span className="text-[8px] opacity-40 uppercase font-black" style={{ color: 'var(--text-secondary)' }}>Sponsored v2</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
