@@ -59,7 +59,7 @@ const FALLBACK_STX: Token = {
   name: 'Stacks',
   address: 'token-wstx',
   decimals: 6,
-  logoUrl: 'https://cryptologos.cc/logos/stacks-stx-logo.png?v=040',
+  logoUrl: 'https://cryptologos.cc/logos/stacks-stx-logo.svg?v=040',
 };
 
 // High-priority VelumX assets that must be available even if discovery is pending
@@ -69,7 +69,7 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
     name: 'VelumX USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    logoUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040',
+    logoUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=040',
   }
 ];
 
