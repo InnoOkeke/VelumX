@@ -518,7 +518,7 @@ export function BridgeInterface() {
             />
             <div className="flex items-center gap-3 bg-purple-600 dark:bg-purple-600 px-5 py-3 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
                <img 
-                 src="https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/USDC.png" 
+                 src="https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040" 
                  alt={sourceToken} 
                  className="w-5 h-5 rounded-full" 
                />
@@ -563,7 +563,7 @@ export function BridgeInterface() {
             </div>
             <div className="flex items-center gap-3 bg-blue-600 dark:bg-blue-600 px-5 py-3 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
                <img 
-                 src="https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/USDC.png" 
+                 src="https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040" 
                  alt={destToken} 
                  className="w-5 h-5 rounded-full" 
                />

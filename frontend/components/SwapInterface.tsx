@@ -59,7 +59,7 @@ const FALLBACK_STX: Token = {
   name: 'Stacks',
   address: 'token-wstx',
   decimals: 6,
-  logoUrl: 'https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/STX.png',
+  logoUrl: 'https://cryptologos.cc/logos/stacks-stx-logo.png?v=040',
 };
 
 // High-priority VelumX assets that must be available even if discovery is pending
@@ -69,7 +69,7 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
     name: 'VelumX USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    logoUrl: 'https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/USDC.png',
+    logoUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040',
   }
 ];
 
@@ -110,67 +110,60 @@ export function SwapInterface() {
     const fetchAlexTokens = async () => {
       try {
         setIsDiscovering(true);
-        console.log("Swap: Running Global Token Discovery (v3)...");
+        console.log("Swap: Initializing Token Discovery (v3 Asynchronous)...");
         const { AlexSDK } = await import('alex-sdk');
         const alex = new AlexSDK() as any;
         
-        // In ALEX SDK v3, token discovery methodology has shifted.
-        // We will attempt multiple discovery paths to ensure resilience.
         let alexTokensList: any[] = [];
         
+        // In v3, discovery methods return Promises or need robust resolution
         try {
-          // Attempt 1: Check for exposed allTokens (v3 common)
-          if (alex.allTokens) {
-            alexTokensList = Array.isArray(alex.allTokens) ? alex.allTokens : Object.values(alex.allTokens);
-          } 
-          // Attempt 2: Check for getTokenList (some v3 versions)
-          else if (alex.getTokenList) {
+          // Priority 1: Asynchronous Token List (New v3 API)
+          if (typeof alex.getTokenList === 'function') {
             const res = await alex.getTokenList();
-            alexTokensList = Array.isArray(res) ? res : Object.values(res);
-          }
-          // Attempt 3: Legacy fallback (with safety check)
-          else if (typeof alex.getTokens === 'function') {
-            const res = await alex.getTokens();
-            alexTokensList = Array.isArray(res) ? res : Object.values(res);
+            alexTokensList = Array.isArray(res) ? res : Object.values(res || {});
+          } 
+          // Priority 2: Asynchronous allTokens property
+          else if (alex.allTokens) {
+            const res = await (typeof alex.allTokens === 'function' ? alex.allTokens() : alex.allTokens);
+            alexTokensList = Array.isArray(res) ? res : Object.values(res || {});
           }
         } catch (innerError) {
-          console.warn("Swap: SDK Discovery Attempt Failed", innerError);
+          console.warn("Swap: SDK Discovery Step Failed", innerError);
         }
         
         if (!isMounted) return;
 
-        if (!alexTokensList || !alexTokensList.length) {
-          setIsDiscovering(false);
-          return;
-        }
+        if (alexTokensList && alexTokensList.length > 0) {
+          // Map ALEX tokens to our Token interface
+          const mappedTokens: Token[] = alexTokensList.map((t: any) => ({
+            symbol: t.symbol || t.name || 'Unknown',
+            name: t.name || t.symbol || 'Unknown Token',
+            address: t.id || t.contractAddress || 'unknown-address',
+            decimals: t.decimals || 8,
+            logoUrl: t.icon || '',
+          })).filter(t => t.symbol !== 'Unknown');
 
-        // Map ALEX tokens to our Token interface
-        const mappedTokens: Token[] = alexTokensList.map((t: any) => ({
-          symbol: t.symbol || t.name || 'Unknown',
-          name: t.name || t.symbol || 'Unknown Token',
-          address: t.id || t.contractAddress || 'unknown-address',
-          decimals: t.decimals || 8,
-          logoUrl: t.icon || '',
-        })).filter(t => t.symbol !== 'Unknown');
-
-        // Merging logic: Keep Priority tokens at the top, then add discovered ones
-        setTokens(prev => {
-          const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
-          mappedTokens.forEach(mt => {
-            const alreadyIn = unique.find(ut => 
-              ut.symbol.toLowerCase() === mt.symbol.toLowerCase() || 
-              ut.address.toLowerCase() === mt.address.toLowerCase()
-            );
-            if (!alreadyIn) {
-              unique.push(mt);
-            }
+          // Merging logic: Keep Priority tokens at the top, then add discovered ones
+          setTokens(prev => {
+            const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
+            mappedTokens.forEach(mt => {
+              const alreadyIn = unique.find(ut => 
+                ut.symbol.toLowerCase() === mt.symbol.toLowerCase() || 
+                ut.address.toLowerCase() === mt.address.toLowerCase()
+              );
+              if (!alreadyIn) {
+                unique.push(mt);
+              }
+            });
+            console.log(`Swap: Discovery complete. ${unique.length} assets ready.`);
+            return unique;
           });
-          return unique;
-        });
-        setIsDiscovering(false);
+        }
       } catch (e) {
-        console.error("Swap: Global Discovery Critical Failure", e);
-        setIsDiscovering(false);
+        console.error("Swap: Discovery Critical Failure", e);
+      } finally {
+        if (isMounted) setIsDiscovering(false);
       }
     };
     
