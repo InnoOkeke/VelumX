@@ -59,7 +59,7 @@ const FALLBACK_STX: Token = {
   name: 'Stacks',
   address: 'token-wstx',
   decimals: 6,
-  logoUrl: 'https://cryptologos.cc/logos/stacks-stx-logo.png',
+  logoUrl: 'https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/STX.png',
 };
 
 // High-priority VelumX assets that must be available even if discovery is pending
@@ -69,14 +69,7 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
     name: 'VelumX USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    logoUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png',
-  },
-  {
-    symbol: 'VEX',
-    name: 'VelumX Token',
-    address: 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.vex-token',
-    decimals: 8,
-    logoUrl: '/images/vex-logo.png',
+    logoUrl: 'https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/USDC.png',
   }
 ];
 
@@ -117,17 +110,36 @@ export function SwapInterface() {
     const fetchAlexTokens = async () => {
       try {
         setIsDiscovering(true);
-        console.log("Swap: Running Global Token Discovery...");
+        console.log("Swap: Running Global Token Discovery (v3)...");
         const { AlexSDK } = await import('alex-sdk');
         const alex = new AlexSDK() as any;
-        const res = await alex.getTokens();
+        
+        // In ALEX SDK v3, token discovery methodology has shifted.
+        // We will attempt multiple discovery paths to ensure resilience.
+        let alexTokensList: any[] = [];
+        
+        try {
+          // Attempt 1: Check for exposed allTokens (v3 common)
+          if (alex.allTokens) {
+            alexTokensList = Array.isArray(alex.allTokens) ? alex.allTokens : Object.values(alex.allTokens);
+          } 
+          // Attempt 2: Check for getTokenList (some v3 versions)
+          else if (alex.getTokenList) {
+            const res = await alex.getTokenList();
+            alexTokensList = Array.isArray(res) ? res : Object.values(res);
+          }
+          // Attempt 3: Legacy fallback (with safety check)
+          else if (typeof alex.getTokens === 'function') {
+            const res = await alex.getTokens();
+            alexTokensList = Array.isArray(res) ? res : Object.values(res);
+          }
+        } catch (innerError) {
+          console.warn("Swap: SDK Discovery Attempt Failed", innerError);
+        }
         
         if (!isMounted) return;
 
-        // Handle both array and object responses from SDK
-        const alexTokensList = Array.isArray(res) ? res : Object.values(res);
-        
-        if (!alexTokensList.length) {
+        if (!alexTokensList || !alexTokensList.length) {
           setIsDiscovering(false);
           return;
         }
@@ -141,7 +153,7 @@ export function SwapInterface() {
           logoUrl: t.icon || '',
         })).filter(t => t.symbol !== 'Unknown');
 
-        // Merging logic: Keep Priority tokens at the top, then adddiscovered ones
+        // Merging logic: Keep Priority tokens at the top, then add discovered ones
         setTokens(prev => {
           const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
           mappedTokens.forEach(mt => {
@@ -153,12 +165,11 @@ export function SwapInterface() {
               unique.push(mt);
             }
           });
-          console.log(`Swap: Discovery complete. Library expanded to ${unique.length} assets.`);
           return unique;
         });
         setIsDiscovering(false);
       } catch (e) {
-        console.error("Swap: Critical Discovery Error", e);
+        console.error("Swap: Global Discovery Critical Failure", e);
         setIsDiscovering(false);
       }
     };

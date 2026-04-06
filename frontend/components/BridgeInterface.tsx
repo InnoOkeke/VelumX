@@ -516,8 +516,13 @@ export function BridgeInterface() {
               style={{ color: 'var(--text-primary)' }}
               disabled={state.isProcessing}
             />
-            <div className="flex items-center gap-2 bg-purple-600 dark:bg-purple-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
-              <span className="font-bold text-sm text-white">{sourceToken}</span>
+            <div className="flex items-center gap-3 bg-purple-600 dark:bg-purple-600 px-5 py-3 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
+               <img 
+                 src="https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/USDC.png" 
+                 alt={sourceToken} 
+                 className="w-5 h-5 rounded-full" 
+               />
+               <span className="font-bold text-sm text-white">{sourceToken}</span>
             </div>
           </div>
           <button
@@ -556,8 +561,13 @@ export function BridgeInterface() {
             <div className="flex-1 text-4xl font-mono min-w-0" style={{ color: 'var(--text-secondary)' }}>
               {state.amount || '0.00'}
             </div>
-            <div className="flex items-center gap-2 bg-blue-600 dark:bg-blue-600 px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
-              <span className="font-bold text-sm text-white">{destToken}</span>
+            <div className="flex items-center gap-3 bg-blue-600 dark:bg-blue-600 px-5 py-3 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
+               <img 
+                 src="https://raw.githubusercontent.com/Hi-Alex/alex-sdk/main/assets/USDC.png" 
+                 alt={destToken} 
+                 className="w-5 h-5 rounded-full" 
+               />
+               <span className="font-bold text-sm text-white">{destToken}</span>
             </div>
           </div>
         </div>
