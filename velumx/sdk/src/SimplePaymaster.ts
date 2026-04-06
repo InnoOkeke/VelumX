@@ -218,7 +218,7 @@ export class SimplePaymaster {
         const { estimatedGas = 150000, userAddress = 'unknown', txType = 'generic', feeToken } = params;
         
         // Use provided relayerUrl or fallback to the VelumX production URL
-        const relayerUrl = this.config.relayerUrl || 'https://relayer.velumx.com';
+        const relayerUrl = this.config.relayerUrl || 'https://api.velumx.xyz';
 
         try {
             const res = await fetch(`${relayerUrl}/api/v1/estimate`, {

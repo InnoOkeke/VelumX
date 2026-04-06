@@ -98,7 +98,7 @@ export class PaymasterService {
         try {
             // 1. Get the RAW 32-byte seed (remove any 01 suffix from the master key for derivation)
             const masterSeed = this.relayerKey.length === 66 ? this.relayerKey.substring(0, 64) : this.relayerKey;
-            
+
             // 2. Derive a deterministic 32-byte sub-key using HMAC-SHA256
             const hmac = crypto.createHmac('sha256', Buffer.from(masterSeed, 'hex'));
             hmac.update(userId);
@@ -122,17 +122,17 @@ export class PaymasterService {
             // Standardizing STX for ALEX SDK
             const tokenIn = (token === 'STX' || token.includes('wstx')) ? 'token-wstx' : token;
             if (tokenIn === 'token-wstx') return 1.0;
-            
+
             // Get rate for 1 unit of token (assuming 6 decimals base for simplicity)
-            const unitInMicro = BigInt(1_000_000); 
-            
+            const unitInMicro = BigInt(1_000_000);
+
             try {
                 const amountOut = await this.alex.getAmountTo(
                     tokenIn as any,
                     unitInMicro,
                     'token-wstx' as any
                 );
-                
+
                 if (amountOut) {
                     // amountOut is in microSTX, divide by 1M to get full STX
                     return Number(amountOut) / 1_000_000;
@@ -144,11 +144,11 @@ export class PaymasterService {
             // Fallback: Default rates for common tokens if ALEX fails
             if (token.includes('sbtc')) return 20000; // Mock 20k STX/BTC
             if (token.includes('usdc')) return 0.4;   // Mock 0.4 STX/USD
-            
-            return 1.0; 
+
+            return 1.0;
         } catch (error) {
             console.warn("Relayer: Pricing system failure.", error);
-            return 1.0; 
+            return 1.0;
         }
     }
 
@@ -180,7 +180,7 @@ export class PaymasterService {
 
         // 1. Convert token amount to STX (assuming 6 decimals for most SIP-010)
         const amountInStx = (Number(rawAmount) / 1_000_000) * tokenStxRate;
-        
+
         // 2. Convert STX to USD (USDCx)
         const amountInUsdcx = amountInStx * stxUsdPrice;
 
@@ -195,19 +195,19 @@ export class PaymasterService {
 
         const apiKey = await (prisma.apiKey as any).findUnique({
             where: { id: apiKeyId },
-            select: { 
-                sponsorshipPolicy: true, 
-                markupPercentage: true, 
+            select: {
+                sponsorshipPolicy: true,
+                markupPercentage: true,
                 maxSponsoredTxsPerUser: true,
                 monthlyLimitUsd: true,
-                supportedGasTokens: true 
+                supportedGasTokens: true
             }
-        }) as any; 
+        }) as any;
 
         if (!apiKey) throw new Error("Developer context not found");
 
         const userAddress = intent.target || 'unknown';
-        const feeToken = intent.feeToken; 
+        const feeToken = intent.feeToken;
 
         if (!feeToken) {
             throw new Error("Universal Gas: Please specify a feeToken contract principal.");
@@ -264,11 +264,11 @@ export class PaymasterService {
         // 2. Universal Pricing (User Pays)
         const tokenRate = await this.getTokenRate(feeToken);
         const estimatedGas = intent.estimatedGas || 10000;
-        const SAFE_GAS_PRICE = 1; 
+        const SAFE_GAS_PRICE = 1;
         const networkFeeMicroSTX = estimatedGas * SAFE_GAS_PRICE;
-        
+
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
-        
+
         const finalFee = Math.ceil(networkFeeMicroSTX / tokenRate * markupFactor);
 
         return {
@@ -295,7 +295,7 @@ export class PaymasterService {
         const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
         const paymasterAddress = this.getPaymasterAddress(targetNetwork);
         const [contractAddress, contractName] = paymasterAddress.split('.');
-        
+
         const feeTokenPrincipal = intent.feeToken;
 
         const txOptions = {
@@ -390,7 +390,7 @@ export class PaymasterService {
                     if (args && args.length > 0) {
                         let feeIndex = -1;
                         let tokenIndex = -1;
-                        
+
                         if (functionName === 'call-gasless') {
                             tokenIndex = 0;
                             feeIndex = 1;

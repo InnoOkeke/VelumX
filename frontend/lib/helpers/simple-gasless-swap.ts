@@ -16,7 +16,10 @@
  */
 
 import { getStacksConnect, getNetworkInstance } from '../stacks-loader';
-import { Cl } from '@stacks/transactions';
+import { 
+  Cl, 
+  PostConditionMode 
+} from '@stacks/transactions';
 import { getConfig } from '../config';
 import { parseUnits } from 'viem';
 import { getVelumXClient } from '../velumx';
@@ -54,7 +57,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     feeToken: selectedFeeToken 
   }) as any;
   
-  const feeInMicro = BigInt(estimate.maxFee || estimate.maxFeeUSDCx || 0);
+  const feeInMicro = BigInt((estimate as any).maxFee || 0);
   
   console.log('Universal Swap Details:', {
     tokenIn,
@@ -73,34 +76,39 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const network = await getNetworkInstance();
   
   // Use the new Universal Paymaster v1
-  const contractAddress = config.stacksPaymasterAddress.split('.')[0];
-  const contractName = 'universal-paymaster-v1';
-  
-  // Call swap-gasless-v2 with sponsored=true
   const result = await new Promise<{ txid?: string; txRaw?: string } | null>((resolve, reject) => {
+    const [paymasterAddress, paymasterName] = config.stacksPaymasterAddress.split('.');
+    const [feeTokenAddress, feeTokenName] = selectedFeeToken.split('.');
+
+    // Encode the swap action payload (swap-v1 tokenIn tokenOut amountIn minOut)
+    const payloadBuffer = Cl.serialize(Cl.tuple({
+      tokenIn: Cl.principal(tokenIn),
+      tokenOut: Cl.principal(tokenOut),
+      amountIn: Cl.uint(amountIn),
+      minOut: Cl.uint(minOut)
+    }));
+
     connect.openContractCall({
-      contractAddress,
-      contractName,
-      functionName: 'swap-gasless-v2',
+      contractAddress: paymasterAddress,
+      contractName: paymasterName,
+      functionName: 'call-gasless',
       functionArgs: [
-        Cl.principal(selectedFeeToken),
+        Cl.contractPrincipal(feeTokenAddress, feeTokenName),
         Cl.uint(feeInMicro.toString()),
         Cl.principal(relayerAddress),
-        Cl.principal(tokenIn),
-        Cl.principal(tokenOut),
-        Cl.uint(amountInMicro.toString()),
-        Cl.uint(minOutMicro.toString())
+        Cl.principal(tokenIn.split('.')[0]), // Target Contract: The token's deployer or a specific router
+        Cl.stringAscii('swap-v1'),
+        Cl.buffer(payloadBuffer as any)
       ],
       network,
-      sponsored: true, 
-      postConditionMode: 'allow',
-      postConditions: [],
+      postConditionMode: PostConditionMode.Allow,
       onFinish: (data: any) => {
-        resolve(data);
+        console.log('Swap result received:', data);
+        resolve({ txRaw: data.txRaw });
       },
       onCancel: () => {
-        resolve(null);
-      },
+        reject(new Error('Swap initiation cancelled'));
+      }
     });
   });
 
@@ -112,7 +120,11 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
 
   // If we have txRaw, broadcast it via relayer
   if (result.txRaw) {
-    const broadcastResult = await velumx.sponsor(result.txRaw, { feeAmount: feeInMicro.toString() });
+    const broadcastResult = await velumx.sponsor(result.txRaw, { 
+      feeAmount: feeInMicro.toString(),
+      feeToken: selectedFeeToken,
+      network: (network as any).isMainnet() ? 'mainnet' : 'testnet'
+    } as any);
     console.log('Swap broadcast result:', broadcastResult);
     return broadcastResult.txid;
   }

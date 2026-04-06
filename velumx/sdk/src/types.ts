@@ -23,4 +23,6 @@ export interface NetworkConfig {
 export interface SponsorshipOptions {
     userId?: string;
     feeAmount?: string;
+    feeToken?: string;
+    network?: 'mainnet' | 'testnet' | 'devnet';
 }

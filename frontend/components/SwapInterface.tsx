@@ -53,7 +53,7 @@ interface SwapState {
   isRegistering: boolean;
 }
 
-// Default tokens for testnet
+// Default tokens simplified to just STX
 const DEFAULT_TOKENS: Token[] = [
   {
     symbol: 'STX',
@@ -61,21 +61,7 @@ const DEFAULT_TOKENS: Token[] = [
     address: 'STX',
     decimals: 6,
     assetName: 'stx',
-  },
-  {
-    symbol: 'USDCx',
-    name: 'USDC (xReserve)',
-    address: getConfig().stacksUsdcxAddress, // Use dynamic config address
-    decimals: 6,
-    assetName: 'usdcx',
-  },
-  {
-    symbol: 'VEX',
-    name: 'VelumX Token',
-    address: 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.vextoken-v1', // Will be filled from config
-    decimals: 6,
-    assetName: 'vex', // Assumed asset name for VEX
-  },
+  }
 ];
 
 
@@ -86,20 +72,19 @@ export function SwapInterface() {
 
   const getBalance = (token: Token | null): string => {
     if (!token) return '0';
-    if (token.symbol === 'USDCx') return balances.usdcx;
-    if (token.symbol === 'STX') return balances.stx;
-    if (token.symbol === 'VEX') return balances.vex || '0';
-    return '0';
+    // Generic balance lookup by symbol
+    const symbol = token.symbol.toLowerCase();
+    return (balances as any)[symbol] || '0';
   };
 
   const [tokens, setTokens] = useState<Token[]>(DEFAULT_TOKENS);
   const [state, setState] = useState<SwapState>({
-    inputToken: DEFAULT_TOKENS[1], // USDCx
-    outputToken: DEFAULT_TOKENS[2], // VEX
+    inputToken: DEFAULT_TOKENS[0], // STX
+    outputToken: null, // Will be set after ALEX tokens load
     inputAmount: '',
     outputAmount: '',
     gaslessMode: true,
-    selectedGasToken: DEFAULT_TOKENS[1], // DEFAULT to USDCx for Gas
+    selectedGasToken: DEFAULT_TOKENS[0], // DEFAULT to STX for Gas if available
     isProcessing: false,
     isFetchingQuote: false,
     error: null,
@@ -116,7 +101,7 @@ export function SwapInterface() {
     const fetchAlexTokens = async () => {
       try {
         const { AlexSDK } = await import('alex-sdk');
-        const alex = new AlexSDK();
+        const alex = new AlexSDK() as any;
         const alexTokens = await alex.getTokens();
         
         // Map ALEX tokens to our Token interface
@@ -128,14 +113,20 @@ export function SwapInterface() {
           logoUrl: t.icon,
         }));
 
-        // Merge with our internal tokens (USDCx, VEX)
+        // Set the tokens directly from ALEX SDK (merging only with STX if not present)
         setTokens(prev => {
-          const unique = [...prev];
+          const unique = [{ ...DEFAULT_TOKENS[0] }]; // Pin STX at the top
           mappedTokens.forEach(mt => {
             if (!unique.find(ut => ut.symbol === mt.symbol)) {
               unique.push(mt);
             }
           });
+          
+          // Set initial output token if not set (first token after STX)
+          if (unique.length > 1) {
+             setState(s => ({ ...s, outputToken: s.outputToken || unique[1] }));
+          }
+          
           return unique;
         });
       } catch (e) {
@@ -154,7 +145,7 @@ export function SwapInterface() {
     try {
       // Lazy load AlexSDK to optimize bundle size
       const { AlexSDK, Currency } = await import('alex-sdk');
-      const alex = new AlexSDK();
+      const alex = new AlexSDK() as any;
 
       // Convert input amount to micro units
       const amountInMicro = BigInt(parseUnits(state.inputAmount, state.inputToken.decimals).toString());
@@ -219,8 +210,8 @@ export function SwapInterface() {
 
       console.log('Universal Fee Estimate:', estimate);
 
-      if (estimate && (estimate.maxFee || estimate.maxFeeUSDCx)) {
-        const fee = estimate.maxFee || estimate.maxFeeUSDCx;
+      if (estimate && estimate.maxFee) {
+        const fee = estimate.maxFee;
         setState(prev => ({
           ...prev,
           gasFee: (Number(fee) / Math.pow(10, state.selectedGasToken?.decimals || 6)).toFixed(4),
@@ -419,21 +410,6 @@ export function SwapInterface() {
           isOpen={state.showSettings}
         />
 
-        {/* Suggested Pairs */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setState(prev => ({ ...prev, inputToken: tokens[1], outputToken: tokens[2] }))}
-            className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10 transition-all text-blue-600 dark:text-blue-400"
-          >
-            USDCx/VEX
-          </button>
-          <button
-            onClick={() => setState(prev => ({ ...prev, inputToken: tokens[0], outputToken: tokens[1] }))}
-            className="text-[10px] font-bold px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-all text-purple-600 dark:text-purple-400"
-          >
-            STX/USDCx
-          </button>
-        </div>
 
         <div className="relative">
           <TokenInput

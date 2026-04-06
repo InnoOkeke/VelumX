@@ -10,7 +10,7 @@ export class VelumXClient {
         }
         this.config = config;
         // Default to a hosted relayer if not provided
-        this.relayerUrl = config.paymasterUrl || 'https://relayer.velumx.com/api/v1';
+        this.relayerUrl = config.paymasterUrl || 'https://api.velumx.xyz/api/v1';
     }
 
     /**
@@ -105,7 +105,8 @@ export class VelumXClient {
                     txHex,
                     userId: options?.userId,
                     feeAmount: options?.feeAmount,
-                    network: this.config.network
+                    feeToken: options?.feeToken,
+                    network: options?.network || this.config.network
                 })
             });
 

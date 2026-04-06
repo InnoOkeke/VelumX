@@ -131,14 +131,14 @@ export function BridgeInterface() {
     try {
       const velumxClient = getVelumXClient();
       const estimate = await velumxClient.estimateFee({
-        estimatedGas: 100000 // Standard estimate for withdrawal
-      });
+        estimatedGas: 100000 
+      }) as any;
 
       setState(prev => ({
         ...prev,
         feeEstimate: {
-          stx: formatUnits(BigInt(estimate.estimatedGas), 6), // In microSTX
-          usdcx: formatUnits(BigInt(estimate.maxFeeUSDCx), 6),
+          stx: formatUnits(BigInt(estimate.estimatedGas || 100000), 6), 
+          usdcx: formatUnits(BigInt(estimate.maxFee || 0), 6),
         },
       }));
     } catch (error) {
