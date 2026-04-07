@@ -73,15 +73,30 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const alexTokenIn = await resolveAlexId(tokenIn) as any;
   const alexTokenOut = await resolveAlexId(tokenOut) as any;
 
-  // Step 3: Build the swap transaction
-  // Use runSwap (not runSwapForSponsoredTx) — VelumX handles sponsorship, not ALEX
-  const swapTx = await alex.runSwap(
-    params.userAddress,
-    alexTokenIn,
-    alexTokenOut,
-    BigInt(amountIn),
-    BigInt(minOut)
-  );
+  // Step 3: Build the swap transaction in sponsored mode
+  // runSwapForSponsoredTx builds the tx with sponsored=true at the Stacks level
+  // We intercept before ALEX broadcasts it — VelumX handles the broadcast instead
+  let swapTx: any;
+  try {
+    swapTx = await alex.runSwapForSponsoredTx(
+      params.userAddress,
+      alexTokenIn,
+      alexTokenOut,
+      BigInt(amountIn),
+      BigInt(minOut)
+    );
+  } catch (e: any) {
+    // If ALEX's sponsor service check fails (stxer.xyz 503), fall back to runSwap
+    // and rely on openContractCall sponsored:true to mark it as sponsored
+    console.warn('runSwapForSponsoredTx failed, falling back to runSwap:', e?.message);
+    swapTx = await alex.runSwap(
+      params.userAddress,
+      alexTokenIn,
+      alexTokenOut,
+      BigInt(amountIn),
+      BigInt(minOut)
+    );
+  }
 
   const connect = await getStacksConnect();
   const network = await getNetworkInstance();
