@@ -594,9 +594,9 @@ export function SwapInterface() {
                     
                     {/* Floating Dropdown for Gas Token */}
                     {state.isRegistering && (
-                       <div className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[100] border p-2"
+                       <div className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[9999] border p-2"
                         style={{ 
-                          backgroundColor: 'var(--bg-card)',
+                          backgroundColor: 'var(--bg-surface)',
                           borderColor: 'var(--border-color)'
                         }}
                        >
@@ -606,7 +606,10 @@ export function SwapInterface() {
                               onClick={() => {
                                 setState(prev => ({ ...prev, selectedGasToken: t, isRegistering: false }));
                               }}
-                              className="w-full flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors group"
+                              className="w-full flex items-center justify-between p-3 rounded-xl transition-colors"
+                              style={{ backgroundColor: t.symbol === state.selectedGasToken?.symbol ? 'var(--bg-primary)' : 'transparent' }}
+                              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-primary)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.backgroundColor = t.symbol === state.selectedGasToken?.symbol ? 'var(--bg-primary)' : 'transparent'; }}
                            >
                              <div className="flex items-center gap-3">
                                 {t.logoUrl ? (
@@ -615,18 +618,17 @@ export function SwapInterface() {
                                     alt={t.symbol} 
                                     className="w-6 h-6 rounded-full" 
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                    crossOrigin="anonymous"
                                   />
                                 ) : (
-                                  <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px]">{t.symbol[0]}</div>
+                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-[10px] font-bold text-white">{t.symbol[0]}</div>
                                 )}
                                 <div className="text-left">
                                    <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{t.symbol}</div>
-                                   <div className="text-[10px] opacity-40" style={{ color: 'var(--text-secondary)' }}>Bal: {parseFloat(getBalance(t)).toFixed(2)}</div>
+                                   <div className="text-[10px]" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>Bal: {parseFloat(getBalance(t)).toFixed(2)}</div>
                                 </div>
                              </div>
                              {t.symbol === state.selectedGasToken?.symbol && (
-                               <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                               <div className="w-1.5 h-1.5 rounded-full bg-purple-500 flex-shrink-0" />
                              )}
                            </button>
                          ))}
