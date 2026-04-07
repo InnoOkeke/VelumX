@@ -268,35 +268,42 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isFetchingQuote: true, error: null }));
 
     try {
-      // Use statically imported AlexSDK — no dynamic import delay
       const alex = new AlexSDK() as any;
 
-      // Convert input amount to micro units
       const amountInMicro = BigInt(parseUnits(state.inputAmount, state.inputToken.decimals).toString());
 
-      // Fetch quote from ALEX SDK
-      // Alex uses specific token principals. For STX it's usually 'token-wstx'
-      const tokenIn = (state.inputToken.symbol === 'STX' ? 'token-wstx' : state.inputToken.address) as any;
-      const tokenOut = (state.outputToken.symbol === 'STX' ? 'token-wstx' : state.outputToken.address) as any;
-      
-      const amountOut = await alex.getAmountTo(
-        tokenIn,
-        amountInMicro,
-        tokenOut
-      );
+      // ALEX SDK needs its internal currency ID, not the contract address.
+      // For STX/wSTX use 'token-wstx'. For others, try to find the matching
+      // token from fetchSwappableCurrency by matching the wrapToken contract address.
+      const resolveAlexId = async (token: Token): Promise<string> => {
+        if (token.symbol === 'STX' || token.address === 'token-wstx') return 'token-wstx';
+        
+        // Try to get the full token list and find the matching ALEX id
+        try {
+          const allTokens = await alex.fetchSwappableCurrency();
+          const match = allTokens.find((t: any) => {
+            const contractAddr = t.wrapToken ? t.wrapToken.split('::')[0] : t.id;
+            return contractAddr?.toLowerCase() === token.address?.toLowerCase() ||
+                   t.id?.toLowerCase() === token.address?.toLowerCase();
+          });
+          if (match) return match.id;
+        } catch (e) {}
+        
+        // Fallback: use address directly (works for some tokens)
+        return token.address;
+      };
+
+      const tokenIn = await resolveAlexId(state.inputToken);
+      const tokenOut = await resolveAlexId(state.outputToken);
+
+      console.log(`Swap: Quote request — ${tokenIn} → ${tokenOut}, amount: ${amountInMicro}`);
+
+      const amountOut = await alex.getAmountTo(tokenIn, amountInMicro, tokenOut);
 
       if (amountOut === undefined || amountOut === null) {
         throw new Error('No liquidity found for this pair on ALEX');
       }
 
-      // Fetch price impact if available (some SDK versions have getPriceImpact)
-      let priceImpact = 0.3;
-      try {
-        const routers = await alex.getRouter(tokenIn, tokenOut);
-        // Simplified impact for now as it depends on SDK version
-      } catch (e) {}
-
-      // Convert output amount from micro units to display units
       const outputAmountFormatted = (Number(amountOut) / Math.pow(10, state.outputToken.decimals)).toFixed(6);
       const rate = (Number(amountOut) / Number(amountInMicro)).toFixed(6);
 
@@ -305,9 +312,9 @@ export function SwapInterface() {
         outputAmount: outputAmountFormatted,
         quote: {
           amountOut: outputAmountFormatted,
-          priceImpact: priceImpact.toFixed(2),
-          fee: "0.3%", // ALEX standard AMM fee
-          rate: rate,
+          priceImpact: '0.30',
+          fee: '0.3%',
+          rate,
         },
         isFetchingQuote: false,
       }));
@@ -315,7 +322,7 @@ export function SwapInterface() {
       console.error('Failed to fetch quote via ALEX SDK:', error);
       setState(prev => ({
         ...prev,
-        error: 'Failed to get quote from ALEX. Pool may not exist or liquidity is low.',
+        error: 'No liquidity pool found for this pair on ALEX.',
         isFetchingQuote: false,
       }));
     }
