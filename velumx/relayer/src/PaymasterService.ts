@@ -17,7 +17,7 @@ import {
 import { StacksNetwork, STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'node:crypto';
-import { AlexSDK } from 'alex-sdk';
+import { PricingOracleService } from './services/PricingOracleService.js';
 
 const prisma = new PrismaClient();
 
@@ -36,12 +36,12 @@ export class PaymasterService {
     private mainnetNetwork: StacksNetwork;
     private testnetNetwork: StacksNetwork;
     private relayerKey: string;
-    private alex: AlexSDK;
+    private pricingOracle: PricingOracleService;
 
     constructor() {
         this.mainnetNetwork = STACKS_MAINNET;
         this.testnetNetwork = STACKS_TESTNET;
-        this.alex = new AlexSDK();
+        this.pricingOracle = new PricingOracleService();
         const rawKey = (process.env.RELAYER_PRIVATE_KEY || '').trim();
         this.relayerKey = this.sanitizePrivateKey(rawKey);
 
@@ -114,77 +114,25 @@ export class PaymasterService {
     }
 
     /**
-     * Get real-time Price for a specific token relative to microSTX using ALEX SDK
+     * Get real-time Price for a specific token relative to microSTX using multiple oracles
      * Returns: Amount of STX per 1 unit of token
      */
     public async getTokenRate(token: string): Promise<number> {
-        try {
-            // Standardizing STX for ALEX SDK
-            const tokenIn = (token === 'STX' || token.includes('wstx')) ? 'token-wstx' : token;
-            if (tokenIn === 'token-wstx') return 1.0;
-
-            // Get rate for 1 unit of token (assuming 6 decimals base for simplicity)
-            const unitInMicro = BigInt(1_000_000);
-
-            try {
-                const amountOut = await this.alex.getAmountTo(
-                    tokenIn as any,
-                    unitInMicro,
-                    'token-wstx' as any
-                );
-
-                if (amountOut) {
-                    // amountOut is in microSTX, divide by 1M to get full STX
-                    return Number(amountOut) / 1_000_000;
-                }
-            } catch (e) {
-                console.warn(`Relayer Pricing: Pool not found for ${tokenIn} on ALEX.`);
-            }
-
-            // Fallback: Default rates for common tokens if ALEX fails
-            if (token.includes('sbtc')) return 20000; // Mock 20k STX/BTC
-            if (token.includes('usdc')) return 0.4;   // Mock 0.4 STX/USD
-
-            return 1.0;
-        } catch (error) {
-            console.warn("Relayer: Pricing system failure.", error);
-            return 1.0;
-        }
+        return this.pricingOracle.getTokenRate(token);
     }
 
     /**
-     * Get the current STX price in USD/USDCx
+     * Get the current STX price in USD/USDCx using multiple oracles
      */
     public async getStxPrice(): Promise<number> {
-        try {
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=blockstack&vs_currencies=usd');
-            if (response.ok) {
-                const data = await response.json();
-                return data.blockstack.usd;
-            }
-        } catch (e) {
-            console.warn("Relayer: Coingecko fetch failed, using fallback STX price.");
-        }
-        return 2.50; // Fallback STX price
+        return this.pricingOracle.getStxPrice();
     }
 
     /**
      * Convert any token amount to its USDCx (USD) equivalent
      */
     public async convertToUsdcx(amount: string | bigint, token: string): Promise<number> {
-        const rawAmount = BigInt(amount);
-        if (rawAmount === BigInt(0)) return 0;
-
-        const tokenStxRate = await this.getTokenRate(token);
-        const stxUsdPrice = await this.getStxPrice();
-
-        // 1. Convert token amount to STX (assuming 6 decimals for most SIP-010)
-        const amountInStx = (Number(rawAmount) / 1_000_000) * tokenStxRate;
-
-        // 2. Convert STX to USD (USDCx)
-        const amountInUsdcx = amountInStx * stxUsdPrice;
-
-        return amountInUsdcx;
+        return this.pricingOracle.convertToUsdcx(amount, token);
     }
 
     /**

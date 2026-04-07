@@ -7,6 +7,7 @@ import { getAddressFromPrivateKey } from '@stacks/transactions';
 import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
 import { verifySupabaseToken, AuthRequest } from './auth.js';
+import { createRateLimiters } from './middleware/rateLimiter.js';
 
 import { StatusSyncService } from './StatusSyncService.js';
 
@@ -15,6 +16,9 @@ dotenv.config();
 const prisma = new PrismaClient();
 const statusSync = new StatusSyncService();
 statusSync.start();
+
+// Initialize rate limiters
+const rateLimiters = createRateLimiters();
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -67,7 +71,17 @@ app.get('/', (req: express.Request, res: express.Response) => {
 
 // Health Check
 app.get('/health', (req: express.Request, res: express.Response) => {
-    res.json({ status: 'ok', service: 'VelumX Relayer' });
+    res.json({ 
+        status: 'ok', 
+        service: 'VelumX Relayer',
+        rateLimiters: {
+            estimate: 'active',
+            sponsor: 'active',
+            broadcast: 'active',
+            dashboard: 'active'
+        },
+        pricingOracle: 'active'
+    });
 });
 
 // Authentication Middleware for SDK Integration
@@ -110,7 +124,7 @@ const validateApiKey = async (req: ApiKeyRequest, res: express.Response, next: e
 };
 
 // Estimate Fee
-app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
+app.post('/api/v1/estimate', validateApiKey, rateLimiters.estimate.middleware(), async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { intent, network } = req.body;
         
@@ -130,7 +144,7 @@ app.post('/api/v1/estimate', validateApiKey, async (req: ApiKeyRequest, res: exp
 });
 
 // Sponsor and Submit Intent Endpoint
-app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
+app.post('/api/v1/sponsor', validateApiKey, rateLimiters.sponsor.middleware(), async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { intent } = req.body;
 
@@ -147,7 +161,7 @@ app.post('/api/v1/sponsor', validateApiKey, async (req: ApiKeyRequest, res: expr
 });
 
 // Broadcast Raw Transaction (Gated Native Sponsorship)
-app.post('/api/v1/broadcast', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
+app.post('/api/v1/broadcast', validateApiKey, rateLimiters.broadcast.middleware(), async (req: ApiKeyRequest, res: express.Response) => {
     try {
         const { txHex, userId, feeAmount } = req.body;
         
@@ -187,7 +201,7 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
 // ==========================================
 
 // Get Analytics Overview
-app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
+app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.middleware(), async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
 
@@ -286,7 +300,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, async (req: AuthRequest, re
 });
 
 // Get API Keys
-app.get('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
+app.get('/api/dashboard/keys', verifySupabaseToken, rateLimiters.dashboard.middleware(), async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const keys = await (prisma.apiKey as any).findMany({
@@ -300,7 +314,7 @@ app.get('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res
 });
 
 // Generate new API Key
-app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
+app.post('/api/dashboard/keys', verifySupabaseToken, rateLimiters.dashboard.middleware(), async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const { name } = req.body;
@@ -323,7 +337,7 @@ app.post('/api/dashboard/keys', verifySupabaseToken, async (req: AuthRequest, re
 });
 
 // Get Transaction Logs
-app.get('/api/dashboard/logs', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
+app.get('/api/dashboard/logs', verifySupabaseToken, rateLimiters.dashboard.middleware(), async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
         const { network } = req.query; // Optional filter
