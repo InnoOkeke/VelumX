@@ -37,6 +37,7 @@ export function TokenInput({
 }: TokenInputProps) {
     const [isOpen, setIsOpen] = React.useState(false);
     const [search, setSearch] = React.useState('');
+    const [imageErrors, setImageErrors] = React.useState<Set<string>>(new Set());
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     const gradientClass = variant === 'purple'
@@ -47,6 +48,14 @@ export function TokenInput({
         (t.symbol?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (t.name?.toLowerCase() || '').includes(search.toLowerCase())
     );
+
+    const handleImageError = (tokenAddress: string) => {
+        setImageErrors(prev => new Set(prev).add(tokenAddress));
+    };
+
+    const shouldShowImage = (token: Token | null) => {
+        return token?.logoUrl && !imageErrors.has(token.address);
+    };
 
     // Close dropdown on click outside
     React.useEffect(() => {
@@ -98,8 +107,14 @@ export function TokenInput({
                         className={`flex items-center gap-2 ${gradientClass} text-white px-4 py-2.5 rounded-xl font-bold shadow-lg transition-transform active:scale-95 whitespace-nowrap`}
                         disabled={isProcessing}
                     >
-                        {token?.logoUrl ? (
-                            <img src={token.logoUrl} alt={token.symbol} className="w-5 h-5 rounded-full" />
+                        {shouldShowImage(token) ? (
+                            <img 
+                                src={token!.logoUrl} 
+                                alt={token!.symbol} 
+                                className="w-5 h-5 rounded-full" 
+                                onError={() => handleImageError(token!.address)}
+                                crossOrigin="anonymous"
+                            />
                         ) : (
                             <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
                                 {token?.symbol?.[0]}
@@ -142,8 +157,14 @@ export function TokenInput({
                                             className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
                                         >
                                             <div className="flex items-center gap-3">
-                                                {t.logoUrl ? (
-                                                    <img src={t.logoUrl} alt={t.symbol} className="w-8 h-8 rounded-full" />
+                                                {shouldShowImage(t) ? (
+                                                    <img 
+                                                        src={t.logoUrl} 
+                                                        alt={t.symbol} 
+                                                        className="w-8 h-8 rounded-full" 
+                                                        onError={() => handleImageError(t.address)}
+                                                        crossOrigin="anonymous"
+                                                    />
                                                 ) : (
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white uppercase">
                                                         {t.symbol[0]}

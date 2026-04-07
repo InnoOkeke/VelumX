@@ -110,39 +110,94 @@ export function SwapInterface() {
     const fetchAlexTokens = async () => {
       try {
         setIsDiscovering(true);
-        console.log("Swap: Initializing Token Discovery (v3 Asynchronous)...");
+        console.log("Swap: Initializing Token Discovery (ALEX SDK v3)...");
+        
         const { AlexSDK } = await import('alex-sdk');
-        const alex = new AlexSDK() as any;
+        const alex = new AlexSDK();
         
         let alexTokensList: any[] = [];
         
-        // In v3, discovery methods return Promises or need robust resolution
         try {
-          // Priority 1: Asynchronous Token List (New v3 API)
-          if (typeof alex.getTokenList === 'function') {
-            const res = await alex.getTokenList();
-            alexTokensList = Array.isArray(res) ? res : Object.values(res || {});
-          } 
-          // Priority 2: Asynchronous allTokens property
-          else if (alex.allTokens) {
-            const res = await (typeof alex.allTokens === 'function' ? alex.allTokens() : alex.allTokens);
-            alexTokensList = Array.isArray(res) ? res : Object.values(res || {});
+          // ALEX SDK v3 - Try multiple methods to get token list
+          console.log("Swap: Attempting to fetch token list from ALEX SDK...");
+          
+          // Method 1: Try getFtList (v3 method)
+          if (typeof (alex as any).getFtList === 'function') {
+            console.log("Swap: Using getFtList method...");
+            const ftList = await (alex as any).getFtList();
+            if (ftList && typeof ftList === 'object') {
+              alexTokensList = Object.values(ftList);
+              console.log(`Swap: Found ${alexTokensList.length} tokens via getFtList`);
+            }
           }
+          
+          // Method 2: Try currency property (v3)
+          if (alexTokensList.length === 0 && (alex as any).currency) {
+            console.log("Swap: Using currency property...");
+            const currencies = (alex as any).currency;
+            if (currencies && typeof currencies === 'object') {
+              alexTokensList = Object.values(currencies);
+              console.log(`Swap: Found ${alexTokensList.length} tokens via currency`);
+            }
+          }
+          
+          // Method 3: Try getAllTokens if available
+          if (alexTokensList.length === 0 && typeof (alex as any).getAllTokens === 'function') {
+            console.log("Swap: Using getAllTokens method...");
+            const allTokens = await (alex as any).getAllTokens();
+            if (allTokens) {
+              alexTokensList = Array.isArray(allTokens) ? allTokens : Object.values(allTokens);
+              console.log(`Swap: Found ${alexTokensList.length} tokens via getAllTokens`);
+            }
+          }
+          
+          // Method 4: Hardcoded fallback for common ALEX tokens
+          if (alexTokensList.length === 0) {
+            console.warn("Swap: ALEX SDK methods failed, using hardcoded token list");
+            alexTokensList = [
+              {
+                id: 'token-alex',
+                symbol: 'ALEX',
+                name: 'ALEX Token',
+                decimals: 8,
+                icon: 'https://cryptologos.cc/logos/algorand-algo-logo.svg?v=040'
+              },
+              {
+                id: 'token-susdt',
+                symbol: 'sUSDT',
+                name: 'Stacks USDT',
+                decimals: 8,
+                icon: 'https://cryptologos.cc/logos/tether-usdt-logo.svg?v=040'
+              },
+              {
+                id: 'token-wstx',
+                symbol: 'wSTX',
+                name: 'Wrapped STX',
+                decimals: 6,
+                icon: 'https://cryptologos.cc/logos/stacks-stx-logo.svg?v=040'
+              }
+            ];
+          }
+          
         } catch (innerError) {
-          console.warn("Swap: SDK Discovery Step Failed", innerError);
+          console.error("Swap: SDK Discovery Failed", innerError);
         }
         
         if (!isMounted) return;
 
         if (alexTokensList && alexTokensList.length > 0) {
           // Map ALEX tokens to our Token interface
-          const mappedTokens: Token[] = alexTokensList.map((t: any) => ({
-            symbol: t.symbol || t.name || 'Unknown',
-            name: t.name || t.symbol || 'Unknown Token',
-            address: t.id || t.contractAddress || 'unknown-address',
-            decimals: t.decimals || 8,
-            logoUrl: t.icon || '',
-          })).filter(t => t.symbol !== 'Unknown');
+          const mappedTokens: Token[] = alexTokensList
+            .map((t: any) => ({
+              symbol: t.symbol || t.name || 'Unknown',
+              name: t.name || t.symbol || 'Unknown Token',
+              address: t.id || t.contractAddress || t.address || 'unknown-address',
+              decimals: t.decimals || 8,
+              logoUrl: t.icon || t.logo || t.logoUrl || '',
+            }))
+            .filter(t => t.symbol !== 'Unknown' && t.address !== 'unknown-address');
+
+          console.log(`Swap: Mapped ${mappedTokens.length} valid tokens`);
 
           // Merging logic: Keep Priority tokens at the top, then add discovered ones
           setTokens(prev => {
@@ -156,9 +211,11 @@ export function SwapInterface() {
                 unique.push(mt);
               }
             });
-            console.log(`Swap: Discovery complete. ${unique.length} assets ready.`);
+            console.log(`Swap: Discovery complete. ${unique.length} total assets available.`);
             return unique;
           });
+        } else {
+          console.warn("Swap: No tokens discovered from ALEX SDK");
         }
       } catch (e) {
         console.error("Swap: Discovery Critical Failure", e);
@@ -538,7 +595,13 @@ export function SwapInterface() {
                       className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:shadow-purple-500/20 active:scale-95 whitespace-nowrap"
                     >
                       {state.selectedGasToken?.logoUrl ? (
-                         <img src={state.selectedGasToken.logoUrl} alt={state.selectedGasToken.symbol} className="w-4 h-4 rounded-full" />
+                         <img 
+                           src={state.selectedGasToken.logoUrl} 
+                           alt={state.selectedGasToken.symbol} 
+                           className="w-4 h-4 rounded-full" 
+                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                           crossOrigin="anonymous"
+                         />
                       ) : (
                          <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px]">{state.selectedGasToken?.symbol[0]}</div>
                       )}
@@ -561,7 +624,13 @@ export function SwapInterface() {
                            >
                              <div className="flex items-center gap-3">
                                 {t.logoUrl ? (
-                                  <img src={t.logoUrl} alt={t.symbol} className="w-6 h-6 rounded-full" />
+                                  <img 
+                                    src={t.logoUrl} 
+                                    alt={t.symbol} 
+                                    className="w-6 h-6 rounded-full" 
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    crossOrigin="anonymous"
+                                  />
                                 ) : (
                                   <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px]">{t.symbol[0]}</div>
                                 )}
