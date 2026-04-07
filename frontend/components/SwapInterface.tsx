@@ -67,7 +67,7 @@ const FALLBACK_STX: Token = {
 const VELUMX_PRIORITY_TOKENS: Token[] = [
   {
     symbol: 'USDCx',
-    name: 'VelumX USDC',
+    name: 'Circle USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
     logoUrl: '', // Use letter avatar fallback
@@ -87,6 +87,7 @@ export function SwapInterface() {
   const [tokens, setTokens] = useState<Token[]>([FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS]);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [supportedGasTokens, setSupportedGasTokens] = useState<string[]>([]); // from developer settings
+  const [sponsorshipPolicy, setSponsorshipPolicy] = useState<string>('USER_PAYS');
   const gasDropdownRef = React.useRef<HTMLDivElement>(null);
 
   // Close gas dropdown on outside click
@@ -107,6 +108,9 @@ export function SwapInterface() {
       .then(data => {
         if (data.supportedGasTokens?.length > 0) {
           setSupportedGasTokens(data.supportedGasTokens);
+        }
+        if (data.sponsorshipPolicy) {
+          setSponsorshipPolicy(data.sponsorshipPolicy);
         }
       })
       .catch(() => {}); // silently fail — show all tokens as fallback
@@ -594,8 +598,8 @@ export function SwapInterface() {
             disabled={state.isProcessing}
           />
 
-          {/* Universal Gas Token Selector */}
-          {state.gaslessMode && (
+          {/* Universal Gas Token Selector — hidden when developer sponsors gas */}
+          {state.gaslessMode && sponsorshipPolicy !== 'DEVELOPER_SPONSORS' && (
             <div className="mt-8 p-6 rounded-3xl transition-all duration-300 border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 relative">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                 <div className="flex items-center gap-3">
