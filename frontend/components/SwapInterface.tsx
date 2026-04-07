@@ -305,7 +305,10 @@ export function SwapInterface() {
       }
 
       const outputAmountFormatted = (Number(amountOut) / Math.pow(10, state.outputToken.decimals)).toFixed(6);
-      const rate = (Number(amountOut) / Number(amountInMicro)).toFixed(6);
+      // Rate: how much outputToken per 1 inputToken (both in human units)
+      const inputHuman = Number(amountInMicro) / Math.pow(10, state.inputToken.decimals);
+      const outputHuman = Number(amountOut) / Math.pow(10, state.outputToken.decimals);
+      const rate = (outputHuman / inputHuman).toFixed(6);
 
       setState(prev => ({
         ...prev,
