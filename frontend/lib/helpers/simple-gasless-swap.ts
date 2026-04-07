@@ -1,12 +1,12 @@
 /**
  * Simple Gasless Swap Helper
  *
- * Uses VelumXClient (v3) + @stacks/connect to execute gasless swaps.
+ * Uses VelumXClient (v3) + ALEX SDK's runSwapForSponsoredTx.
  *
  * Flow:
- *   1. Estimate fee in user's chosen SIP-010 token via VelumX relayer
- *   2. Build the swap transaction using ALEX SDK with sponsored: true
- *   3. User signs — wallet produces a raw tx hex
+ *   1. Estimate fee via VelumX relayer
+ *   2. Build sponsored swap tx via alex.runSwapForSponsoredTx()
+ *   3. User signs (wallet shows "Sign" not "Confirm with fee")
  *   4. VelumX relayer sponsors the STX fee and broadcasts
  */
 
@@ -14,14 +14,13 @@ import { getConfig } from '../config';
 import { getVelumXClient } from '../velumx';
 import { getStacksConnect, getNetworkInstance } from '../stacks-loader';
 import { AlexSDK } from 'alex-sdk';
-import { PostConditionMode, Cl } from '@stacks/transactions';
 
 export interface SimpleGaslessSwapParams {
   userAddress: string;
   tokenIn: string;   // ALEX currency id or contract principal
   tokenOut: string;  // ALEX currency id or contract principal
-  amountIn: string;  // Amount in micro units
-  minOut: string;    // Minimum output in micro units
+  amountIn: string;  // Amount in micro units as string e.g. "200000"
+  minOut: string;    // Minimum output in micro units as string
   feeToken?: string; // SIP-010 contract principal for gas payment
   onProgress?: (step: string) => void;
 }
@@ -43,16 +42,20 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const feeAmount = estimate.maxFee || '0';
   const isDeveloperSponsored = estimate.policy === 'DEVELOPER_SPONSORS';
 
-  console.log('VelumX Gasless Swap:', { tokenIn, tokenOut, amountIn, minOut, feeToken: selectedFeeToken, feeAmount, policy: estimate.policy });
+  console.log('VelumX Gasless Swap:', {
+    tokenIn,
+    tokenOut,
+    amountIn,
+    minOut,
+    feeToken: selectedFeeToken,
+    feeAmount,
+    policy: estimate.policy
+  });
 
-  // Step 2: Build the swap transaction using ALEX SDK
+  // Step 2: Resolve ALEX internal currency IDs
   onProgress?.('Preparing transaction...');
-
   const alex = new AlexSDK();
-  const connect = await getStacksConnect();
-  const network = await getNetworkInstance();
 
-  // Resolve ALEX internal currency IDs from contract addresses
   const resolveAlexId = async (token: string): Promise<string> => {
     if (token === 'token-wstx' || token === 'STX') return 'token-wstx';
     try {
@@ -70,8 +73,9 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const alexTokenIn = await resolveAlexId(tokenIn) as any;
   const alexTokenOut = await resolveAlexId(tokenOut) as any;
 
-  // Get the swap transaction from ALEX SDK
-  const swapTx = await alex.runSwap(
+  // Step 3: Build the sponsored swap transaction using ALEX SDK
+  // runSwapForSponsoredTx builds the tx specifically for sponsored mode
+  const swapTx = await alex.runSwapForSponsoredTx(
     params.userAddress,
     alexTokenIn,
     alexTokenOut,
@@ -79,13 +83,15 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     BigInt(minOut)
   );
 
-  // Step 3: User signs the transaction (sponsored = true means user doesn't pay STX)
+  const connect = await getStacksConnect();
+  const network = await getNetworkInstance();
+
+  // Step 4: User signs with sponsored: true — wallet shows "Sign" not "Confirm with fee"
   return new Promise<string>((resolve, reject) => {
     connect.openContractCall({
       ...swapTx,
       network,
       sponsored: true,
-      postConditionMode: PostConditionMode.Allow,
       onFinish: async (data: any) => {
         console.log('Swap signed:', data);
         onProgress?.('Broadcasting via VelumX...');
@@ -93,13 +99,12 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
         try {
           const txRaw = data.txRaw || data.txHex;
           if (!txRaw) {
-            // If wallet already broadcasted (non-sponsored path), use txid directly
             const txid = data.txId || data.txid;
             if (txid) return resolve(txid);
             return reject(new Error('No transaction data returned from wallet'));
           }
 
-          // Step 4: VelumX relayer sponsors the STX fee and broadcasts
+          // Step 5: VelumX relayer sponsors the STX fee and broadcasts
           const result = await velumx.sponsor(txRaw, {
             feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
             feeAmount: isDeveloperSponsored ? '0' : feeAmount,
