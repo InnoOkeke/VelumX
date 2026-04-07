@@ -126,11 +126,14 @@ export function TokenInput({
 
                     {/* Dropdown Menu */}
                     {isOpen && (
-                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-50 border border-white/10 flex flex-col backdrop-blur-xl"
-                            style={{ backgroundColor: 'var(--bg-card)' }}
+                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-50 border flex flex-col"
+                            style={{ 
+                                backgroundColor: 'var(--bg-card)',
+                                borderColor: 'var(--border-color)'
+                            }}
                         >
                             {/* Search */}
-                            <div className="p-4 border-b border-white/5">
+                            <div className="p-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
                                     <input 

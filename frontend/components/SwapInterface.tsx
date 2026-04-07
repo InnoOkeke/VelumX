@@ -59,7 +59,7 @@ const FALLBACK_STX: Token = {
   name: 'Stacks',
   address: 'token-wstx',
   decimals: 6,
-  logoUrl: 'https://cryptologos.cc/logos/stacks-stx-logo.svg?v=040',
+  logoUrl: 'https://assets.coingecko.com/coins/images/2069/small/Stacks_logo_full.png',
 };
 
 // High-priority VelumX assets that must be available even if discovery is pending
@@ -69,7 +69,7 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
     name: 'VelumX USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    logoUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=040',
+    logoUrl: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
   }
 ];
 
@@ -160,21 +160,21 @@ export function SwapInterface() {
                 symbol: 'ALEX',
                 name: 'ALEX Token',
                 decimals: 8,
-                icon: 'https://cryptologos.cc/logos/algorand-algo-logo.svg?v=040'
+                icon: 'https://assets.coingecko.com/coins/images/18776/small/alex-logo.png'
               },
               {
                 id: 'token-susdt',
                 symbol: 'sUSDT',
                 name: 'Stacks USDT',
                 decimals: 8,
-                icon: 'https://cryptologos.cc/logos/tether-usdt-logo.svg?v=040'
+                icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png'
               },
               {
                 id: 'token-wstx',
                 symbol: 'wSTX',
                 name: 'Wrapped STX',
                 decimals: 6,
-                icon: 'https://cryptologos.cc/logos/stacks-stx-logo.svg?v=040'
+                icon: 'https://assets.coingecko.com/coins/images/2069/small/Stacks_logo_full.png'
               }
             ];
           }
@@ -364,18 +364,23 @@ export function SwapInterface() {
       const useGasless = state.gaslessMode;
 
       if (useGasless) {
-        // Use the simple gasless service with sponsored transactions
+        // Use VelumX SDK for gasless swaps
         const { executeSimpleGaslessSwap } = await import('@/lib/helpers/simple-gasless-swap');
         
-        const minAmountOut = (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6);
+        // Convert amounts to micro units (6 decimals for most tokens)
+        const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals).toString();
+        const minAmountOutMicro = parseUnits(
+          (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
+          state.outputToken.decimals
+        ).toString();
         
         const txid = await executeSimpleGaslessSwap({
           userAddress: stacksAddress,
           tokenIn: state.inputToken.symbol === 'STX' ? 'token-wstx' : state.inputToken.address,
           tokenOut: state.outputToken.symbol === 'STX' ? 'token-wstx' : state.outputToken.address,
-          amountIn: state.inputAmount,
-          minOut: minAmountOut,
-          feeToken: state.selectedGasToken?.address, // Universal Gas Token
+          amountIn: amountInMicro,
+          minOut: minAmountOutMicro,
+          feeToken: state.selectedGasToken?.address,
           onProgress: (step) => {
             setState(prev => ({ ...prev, success: step }));
           }
@@ -611,8 +616,11 @@ export function SwapInterface() {
                     
                     {/* Floating Dropdown for Gas Token */}
                     {state.isRegistering && (
-                       <div className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[100] border border-white/10 backdrop-blur-xl p-2"
-                        style={{ backgroundColor: 'var(--bg-card)' }}
+                       <div className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[100] border p-2"
+                        style={{ 
+                          backgroundColor: 'var(--bg-card)',
+                          borderColor: 'var(--border-color)'
+                        }}
                        >
                          {tokens.filter(t => t.symbol !== 'STX').map(t => (
                            <button

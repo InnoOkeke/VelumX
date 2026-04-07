@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'assets.coingecko.com',
+        pathname: '/coins/images/**',
+      },
+      {
+        protocol: 'https',
         hostname: '**.githubusercontent.com',
         pathname: '/**',
       },
