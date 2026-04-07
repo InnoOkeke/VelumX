@@ -13,6 +13,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { getStacksTransactions, getStacksNetwork, getStacksCommon, getStacksConnect, getNetworkInstance } from '@/lib/stacks-loader';
 import { encodeStacksAddress, bytesToHex } from '@/lib/utils/address-encoding';
 import { getVelumXClient } from '@/lib/velumx';
+import { AlexSDK } from 'alex-sdk';
 import { TokenInput } from './ui/TokenInput';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { GaslessToggle } from './ui/GaslessToggle';
@@ -107,34 +108,92 @@ export function SwapInterface() {
   useEffect(() => {
     let isMounted = true;
 
+    const CACHE_KEY = 'velumx_alex_tokens';
+    const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+    const mapTokens = (list: any[]): Token[] =>
+      list
+        .map((t: any) => {
+          const contractAddress = t.wrapToken
+            ? t.wrapToken.split('::')[0]
+            : (t.id || t.contractAddress || t.address || '');
+          const rawIcon = t.icon || '';
+          const logoUrl = rawIcon
+            ? `/api/image-proxy?url=${encodeURIComponent(rawIcon)}`
+            : '';
+          return {
+            symbol: t.name || t.symbol || t.id || 'Unknown',
+            name: t.name || t.symbol || 'Unknown Token',
+            address: contractAddress || t.id || 'unknown-address',
+            decimals: t.wrapTokenDecimals ?? t.underlyingTokenDecimals ?? t.decimals ?? 8,
+            logoUrl,
+          };
+        })
+        .filter(t => t.symbol !== 'Unknown' && t.address !== 'unknown-address');
+
+    const applyTokens = (mapped: Token[]) => {
+      if (!isMounted) return;
+      setTokens(() => {
+        const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
+        mapped.forEach(mt => {
+          const alreadyIn = unique.find(
+            ut => ut.symbol.toLowerCase() === mt.symbol.toLowerCase() ||
+                  ut.address.toLowerCase() === mt.address.toLowerCase()
+          );
+          if (!alreadyIn) unique.push(mt);
+        });
+        console.log(`Swap: ${unique.length} total assets available.`);
+        return unique;
+      });
+    };
+
     const fetchAlexTokens = async () => {
       try {
         setIsDiscovering(true);
-        console.log("Swap: Initializing Token Discovery (ALEX SDK v3)...");
-        
-        const { AlexSDK } = await import('alex-sdk');
-        const alex = new AlexSDK();
-        
-        let alexTokensList: any[] = [];
-        
+
+        // Option 1: Check localStorage cache first — show instantly if fresh
         try {
-          // ALEX SDK v3 - correct API: fetchSwappableCurrency()
-          console.log("Swap: Fetching tokens via fetchSwappableCurrency()...");
-          
-          const tokenInfos: any[] = await alex.fetchSwappableCurrency();
-          console.log(`Swap: fetchSwappableCurrency returned ${tokenInfos?.length} tokens`);
-          
-          if (tokenInfos && tokenInfos.length > 0) {
-            alexTokensList = tokenInfos;
+          const cached = localStorage.getItem(CACHE_KEY);
+          if (cached) {
+            const { timestamp, data } = JSON.parse(cached);
+            if (Date.now() - timestamp < CACHE_TTL && data?.length > 0) {
+              console.log(`Swap: Loaded ${data.length} tokens from cache instantly`);
+              applyTokens(mapTokens(data));
+              setIsDiscovering(false);
+              // Still refresh in background silently
+              const alex = new AlexSDK();
+              alex.fetchSwappableCurrency().then(fresh => {
+                if (fresh?.length > 0) {
+                  localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: fresh }));
+                  applyTokens(mapTokens(fresh));
+                }
+              }).catch(() => {});
+              return;
+            }
           }
-          
+        } catch (e) { /* localStorage unavailable */ }
+
+        // Option 3: Static import already done — no dynamic import delay
+        // Just instantiate and fetch
+        console.log("Swap: Fetching tokens from ALEX SDK...");
+        const alex = new AlexSDK();
+        let alexTokensList: any[] = [];
+
+        try {
+          const tokenInfos = await alex.fetchSwappableCurrency();
+          if (tokenInfos?.length > 0) {
+            alexTokensList = tokenInfos;
+            // Save to cache
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: tokenInfos }));
+            } catch (e) {}
+          }
         } catch (innerError) {
           console.error("Swap: fetchSwappableCurrency failed:", innerError);
         }
-        
+
         // Fallback if SDK fetch failed
         if (alexTokensList.length === 0) {
-          console.warn("Swap: Using hardcoded fallback token list");
           alexTokensList = [
             { id: 'age000-governance-token', name: 'ALEX', icon: '' },
             { id: 'token-susdt', name: 'sUSDT', icon: '' },
@@ -147,61 +206,15 @@ export function SwapInterface() {
             { id: 'token-wmia', name: 'wMIA', icon: '' },
           ];
         }
-        
-        if (!isMounted) return;
 
-        if (alexTokensList && alexTokensList.length > 0) {
-          // Map ALEX TokenInfo to our Token interface
-          const mappedTokens: Token[] = alexTokensList
-            .map((t: any) => {
-              // Extract contract address from wrapToken: "deployer.contract::asset"
-              const contractAddress = t.wrapToken
-                ? t.wrapToken.split('::')[0]
-                : (t.id || t.contractAddress || t.address || '');
-              
-              // Proxy ALEX images through our API to avoid CORS
-              const rawIcon = t.icon || '';
-              const logoUrl = rawIcon
-                ? `/api/image-proxy?url=${encodeURIComponent(rawIcon)}`
-                : '';
-              
-              return {
-                symbol: t.name || t.symbol || t.id || 'Unknown',
-                name: t.name || t.symbol || 'Unknown Token',
-                address: contractAddress || t.id || 'unknown-address',
-                decimals: t.wrapTokenDecimals ?? t.underlyingTokenDecimals ?? t.decimals ?? 8,
-                logoUrl,
-              };
-            })
-            .filter(t => t.symbol !== 'Unknown' && t.address !== 'unknown-address');
-
-          console.log(`Swap: Mapped ${mappedTokens.length} valid tokens`);
-
-          // Merging logic: Keep Priority tokens at the top, then add discovered ones
-          setTokens(prev => {
-            const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
-            mappedTokens.forEach(mt => {
-              const alreadyIn = unique.find(ut => 
-                ut.symbol.toLowerCase() === mt.symbol.toLowerCase() || 
-                ut.address.toLowerCase() === mt.address.toLowerCase()
-              );
-              if (!alreadyIn) {
-                unique.push(mt);
-              }
-            });
-            console.log(`Swap: Discovery complete. ${unique.length} total assets available.`);
-            return unique;
-          });
-        } else {
-          console.warn("Swap: No tokens discovered from ALEX SDK");
-        }
+        applyTokens(mapTokens(alexTokensList));
       } catch (e) {
         console.error("Swap: Discovery Critical Failure", e);
       } finally {
         if (isMounted) setIsDiscovering(false);
       }
     };
-    
+
     fetchAlexTokens();
     return () => { isMounted = false; };
   }, []);
@@ -212,8 +225,7 @@ export function SwapInterface() {
     setState(prev => ({ ...prev, isFetchingQuote: true, error: null }));
 
     try {
-      // Lazy load AlexSDK to optimize bundle size
-      const { AlexSDK, Currency } = await import('alex-sdk');
+      // Use statically imported AlexSDK — no dynamic import delay
       const alex = new AlexSDK() as any;
 
       // Convert input amount to micro units
@@ -374,7 +386,6 @@ export function SwapInterface() {
         }));
       } else {
         // Standard non-gasless swap via ALEX SDK
-        const { AlexSDK } = await import('alex-sdk');
         const alex = new AlexSDK();
         
         const amountInMicro = BigInt(parseUnits(state.inputAmount, state.inputToken.decimals).toString());
@@ -594,11 +605,9 @@ export function SwapInterface() {
                     
                     {/* Floating Dropdown for Gas Token */}
                     {state.isRegistering && (
-                       <div className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[9999] border p-2"
-                        style={{ 
-                          backgroundColor: 'var(--bg-surface)',
-                          borderColor: 'var(--border-color)'
-                        }}
+                       <div 
+                        className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[9999] border p-2 bg-white dark:bg-gray-900"
+                        style={{ borderColor: 'rgba(139, 92, 246, 0.3)' }}
                        >
                          {tokens.filter(t => t.symbol !== 'STX').map(t => (
                            <button
