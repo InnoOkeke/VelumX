@@ -126,12 +126,21 @@ export function TokenInput({
 
                     {/* Dropdown Menu */}
                     {isOpen && (
-                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-[9999] flex flex-col"
-                            style={{ 
-                                backgroundColor: 'var(--bg-card)',
-                                border: '2px solid var(--border-color)'
-                            }}
-                        >
+                        <>
+                            {/* Backdrop */}
+                            <div 
+                                className="fixed inset-0 z-[9998]" 
+                                onClick={() => setIsOpen(false)}
+                                style={{ backgroundColor: 'transparent' }}
+                            />
+                            
+                            {/* Dropdown */}
+                            <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-[9999] flex flex-col"
+                                style={{ 
+                                    backgroundColor: 'var(--bg-card)',
+                                    border: '2px solid var(--border-color)'
+                                }}
+                            >
                             {/* Search */}
                             <div className="p-4" style={{ 
                                 borderBottom: '1px solid var(--border-color)',
@@ -209,6 +218,7 @@ export function TokenInput({
                                 )}
                             </div>
                         </div>
+                        </>
                     )}
                 </div>
             </div>

@@ -124,20 +124,26 @@ export function SwapInterface() {
           
           // Method 1: Access alexSDKData directly (ALEX SDK v3 structure)
           if ((alex as any).alexSDKData) {
-            console.log("Swap: Found alexSDKData, checking structure...");
+            console.log("Swap: Found alexSDKData, inspecting...");
             const sdkData = (alex as any).alexSDKData;
-            console.log("Swap: alexSDKData keys:", Object.keys(sdkData).slice(0, 10));
+            console.log("Swap: alexSDKData type:", typeof sdkData);
+            console.log("Swap: alexSDKData keys:", Object.keys(sdkData));
             
             // Try to find token list in various locations
             if (sdkData.tokens) {
+              console.log("Swap: Found sdkData.tokens");
               alexTokensList = Array.isArray(sdkData.tokens) ? sdkData.tokens : Object.values(sdkData.tokens);
               console.log(`Swap: Found ${alexTokensList.length} tokens via alexSDKData.tokens`);
             } else if (sdkData.currency) {
+              console.log("Swap: Found sdkData.currency");
               alexTokensList = Object.values(sdkData.currency);
               console.log(`Swap: Found ${alexTokensList.length} tokens via alexSDKData.currency`);
             } else if (sdkData.ft) {
+              console.log("Swap: Found sdkData.ft");
               alexTokensList = Array.isArray(sdkData.ft) ? sdkData.ft : Object.values(sdkData.ft);
               console.log(`Swap: Found ${alexTokensList.length} tokens via alexSDKData.ft`);
+            } else {
+              console.log("Swap: alexSDKData exists but no token list found in expected locations");
             }
           }
           
@@ -168,21 +174,29 @@ export function SwapInterface() {
             }
           }
           
-          // Method 4: Try Currency enum directly
+          // Method 4: Try Currency enum directly - ONLY if other methods failed
           if (alexTokensList.length === 0) {
-            console.log("Swap: Trying to import Currency enum...");
+            console.log("Swap: Trying to import Currency enum as last resort...");
             try {
               const { Currency } = await import('alex-sdk');
               if (Currency) {
                 console.log("Swap: Currency enum found, keys:", Object.keys(Currency));
-                alexTokensList = Object.keys(Currency).map(key => ({
+                const enumTokens = Object.keys(Currency).map(key => ({
                   id: (Currency as any)[key],
                   symbol: key,
                   name: key,
                   decimals: 8,
                   icon: ''
                 }));
-                console.log(`Swap: Found ${alexTokensList.length} tokens via Currency enum`);
+                console.log(`Swap: Currency enum has ${enumTokens.length} entries`);
+                
+                // Only use if we got more than 2 tokens
+                if (enumTokens.length > 2) {
+                  alexTokensList = enumTokens;
+                  console.log(`Swap: Using ${alexTokensList.length} tokens from Currency enum`);
+                } else {
+                  console.log("Swap: Currency enum has too few tokens, skipping to fallback");
+                }
               }
             } catch (e) {
               console.warn("Swap: Currency enum import failed:", e);
