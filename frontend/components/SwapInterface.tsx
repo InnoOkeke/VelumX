@@ -118,123 +118,55 @@ export function SwapInterface() {
         let alexTokensList: any[] = [];
         
         try {
-          // ALEX SDK v3 - Try multiple methods to get token list
-          console.log("Swap: Attempting to fetch token list from ALEX SDK...");
-          console.log("Swap: Available SDK properties:", Object.keys(alex));
+          // ALEX SDK v3 - correct API: fetchSwappableCurrency()
+          console.log("Swap: Fetching tokens via fetchSwappableCurrency()...");
           
-          // Method 1: Access alexSDKData directly (ALEX SDK v3 structure)
-          if ((alex as any).alexSDKData) {
-            console.log("Swap: Found alexSDKData, inspecting...");
-            const sdkData = (alex as any).alexSDKData;
-            console.log("Swap: alexSDKData type:", typeof sdkData);
-            console.log("Swap: alexSDKData keys:", Object.keys(sdkData));
-            
-            // Try to find token list in various locations
-            if (sdkData.tokens) {
-              console.log("Swap: Found sdkData.tokens");
-              alexTokensList = Array.isArray(sdkData.tokens) ? sdkData.tokens : Object.values(sdkData.tokens);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via alexSDKData.tokens`);
-            } else if (sdkData.currency) {
-              console.log("Swap: Found sdkData.currency");
-              alexTokensList = Object.values(sdkData.currency);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via alexSDKData.currency`);
-            } else if (sdkData.ft) {
-              console.log("Swap: Found sdkData.ft");
-              alexTokensList = Array.isArray(sdkData.ft) ? sdkData.ft : Object.values(sdkData.ft);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via alexSDKData.ft`);
-            } else {
-              console.log("Swap: alexSDKData exists but no token list found in expected locations");
-            }
-          }
+          const tokenInfos: any[] = await alex.fetchSwappableCurrency();
+          console.log(`Swap: fetchSwappableCurrency returned ${tokenInfos?.length} tokens`);
           
-          // Method 2: Direct currency access (ALEX SDK v3)
-          if (alexTokensList.length === 0 && (alex as any).currency) {
-            console.log("Swap: Found currency property, checking structure...");
-            const currencies = (alex as any).currency;
-            console.log("Swap: Currency type:", typeof currencies);
-            
-            if (currencies && typeof currencies === 'object') {
-              alexTokensList = Object.values(currencies);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via currency property`);
-            }
-          }
-          
-          // Method 3: Try getFtList (v3 method)
-          if (alexTokensList.length === 0 && typeof (alex as any).getFtList === 'function') {
-            console.log("Swap: Trying getFtList method...");
-            try {
-              const ftList = await (alex as any).getFtList();
-              console.log("Swap: getFtList result type:", typeof ftList);
-              if (ftList && typeof ftList === 'object') {
-                alexTokensList = Array.isArray(ftList) ? ftList : Object.values(ftList);
-                console.log(`Swap: Found ${alexTokensList.length} tokens via getFtList`);
-              }
-            } catch (e) {
-              console.warn("Swap: getFtList failed:", e);
-            }
-          }
-          
-          // Method 4: Try Currency enum directly - ONLY if other methods failed
-          if (alexTokensList.length === 0) {
-            console.log("Swap: Trying to import Currency enum as last resort...");
-            try {
-              const { Currency } = await import('alex-sdk');
-              if (Currency) {
-                console.log("Swap: Currency enum found, keys:", Object.keys(Currency));
-                const enumTokens = Object.keys(Currency).map(key => ({
-                  id: (Currency as any)[key],
-                  symbol: key,
-                  name: key,
-                  decimals: 8,
-                  icon: ''
-                }));
-                console.log(`Swap: Currency enum has ${enumTokens.length} entries`);
-                
-                // Only use if we got more than 2 tokens
-                if (enumTokens.length > 2) {
-                  alexTokensList = enumTokens;
-                  console.log(`Swap: Using ${alexTokensList.length} tokens from Currency enum`);
-                } else {
-                  console.log("Swap: Currency enum has too few tokens, skipping to fallback");
-                }
-              }
-            } catch (e) {
-              console.warn("Swap: Currency enum import failed:", e);
-            }
-          }
-          
-          // Method 5: Hardcoded comprehensive token list
-          if (alexTokensList.length === 0) {
-            console.warn("Swap: All ALEX SDK methods failed, using comprehensive hardcoded token list");
-            alexTokensList = [
-              { id: 'age000-governance-token', symbol: 'ALEX', name: 'ALEX Token', decimals: 8, icon: '' },
-              { id: 'token-susdt', symbol: 'sUSDT', name: 'Stacks USDT', decimals: 8, icon: '' },
-              { id: 'token-wstx', symbol: 'wSTX', name: 'Wrapped STX', decimals: 6, icon: '' },
-              { id: 'token-wbtc', symbol: 'xBTC', name: 'Wrapped Bitcoin', decimals: 8, icon: '' },
-              { id: 'token-aeusdc', symbol: 'aeUSDC', name: 'ALEX USDC', decimals: 6, icon: '' },
-              { id: 'token-ausd', symbol: 'aUSD', name: 'ALEX USD', decimals: 6, icon: '' },
-              { id: 'token-wslm', symbol: 'wSLM', name: 'Wrapped Slime', decimals: 6, icon: '' },
-              { id: 'token-wnycc', symbol: 'wNYCC', name: 'Wrapped NYC Coin', decimals: 6, icon: '' },
-              { id: 'token-wmia', symbol: 'wMIA', name: 'Wrapped Miami Coin', decimals: 6, icon: '' },
-            ];
+          if (tokenInfos && tokenInfos.length > 0) {
+            alexTokensList = tokenInfos;
           }
           
         } catch (innerError) {
-          console.error("Swap: SDK Discovery Failed", innerError);
+          console.error("Swap: fetchSwappableCurrency failed:", innerError);
+        }
+        
+        // Fallback if SDK fetch failed
+        if (alexTokensList.length === 0) {
+          console.warn("Swap: Using hardcoded fallback token list");
+          alexTokensList = [
+            { id: 'age000-governance-token', name: 'ALEX', icon: '' },
+            { id: 'token-susdt', name: 'sUSDT', icon: '' },
+            { id: 'token-wstx', name: 'wSTX', icon: '' },
+            { id: 'token-wbtc', name: 'xBTC', icon: '' },
+            { id: 'token-aeusdc', name: 'aeUSDC', icon: '' },
+            { id: 'token-ausd', name: 'aUSD', icon: '' },
+            { id: 'token-wslm', name: 'wSLM', icon: '' },
+            { id: 'token-wnycc', name: 'wNYCC', icon: '' },
+            { id: 'token-wmia', name: 'wMIA', icon: '' },
+          ];
         }
         
         if (!isMounted) return;
 
         if (alexTokensList && alexTokensList.length > 0) {
-          // Map ALEX tokens to our Token interface
+          // Map ALEX TokenInfo to our Token interface
           const mappedTokens: Token[] = alexTokensList
-            .map((t: any) => ({
-              symbol: t.symbol || t.name || 'Unknown',
-              name: t.name || t.symbol || 'Unknown Token',
-              address: t.id || t.contractAddress || t.address || 'unknown-address',
-              decimals: t.decimals || 8,
-              logoUrl: t.icon || t.logo || t.logoUrl || '',
-            }))
+            .map((t: any) => {
+              // Extract contract address from wrapToken: "deployer.contract::asset"
+              const contractAddress = t.wrapToken
+                ? t.wrapToken.split('::')[0]
+                : (t.id || t.contractAddress || t.address || '');
+              
+              return {
+                symbol: t.name || t.symbol || t.id || 'Unknown',
+                name: t.name || t.symbol || 'Unknown Token',
+                address: contractAddress || t.id || 'unknown-address',
+                decimals: t.wrapTokenDecimals ?? t.underlyingTokenDecimals ?? t.decimals ?? 8,
+                logoUrl: t.icon || '',
+              };
+            })
             .filter(t => t.symbol !== 'Unknown' && t.address !== 'unknown-address');
 
           console.log(`Swap: Mapped ${mappedTokens.length} valid tokens`);
