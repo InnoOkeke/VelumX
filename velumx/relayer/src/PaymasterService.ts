@@ -157,17 +157,7 @@ export class PaymasterService {
         const userAddress = intent.target || 'unknown';
         const feeToken = intent.feeToken;
 
-        if (!feeToken) {
-            throw new Error("Universal Gas: Please specify a feeToken contract principal.");
-        }
-
-        // 0. Supported Tokens Check
-        const supportedTokens = apiKey.supportedGasTokens || [];
-        if (supportedTokens.length > 0 && !supportedTokens.includes(feeToken)) {
-            throw new Error(`Gas token ${feeToken} is not supported by this developer's policy.`);
-        }
-
-        // 1. Sponsorship Policy Check (Developer Pays)
+        // 1. Sponsorship Policy Check (Developer Pays) — check FIRST before any token validation
         if ((apiKey.sponsorshipPolicy as string) === 'DEVELOPER_SPONSORS') {
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -181,14 +171,11 @@ export class PaymasterService {
                 select: { feeAmount: true }
             });
 
-            // Note: Monthly limit check for developer sponsorship
-            // We use USD as the base for budget limits
             const totalMonthlySpend = monthlyTransactions.reduce((acc, tx) => {
                 return acc + BigInt(tx.feeAmount || '0');
             }, BigInt(0));
 
-            // Simplified: Limit check
-            if (totalMonthlySpend < BigInt(100_000_000)) { // 100 unit limit example
+            if (totalMonthlySpend < BigInt(100_000_000)) {
                 const sponsoredCount = await prisma.transaction.count({
                     where: {
                         apiKeyId,
@@ -199,9 +186,10 @@ export class PaymasterService {
                 });
 
                 if (sponsoredCount < apiKey.maxSponsoredTxsPerUser) {
+                    // Developer sponsors — user pays nothing, skip all token checks
                     return {
                         maxFee: "0",
-                        feeToken: "STX",
+                        feeToken: feeToken || 'STX',
                         estimatedGas: intent.estimatedGas || 10000,
                         policy: "DEVELOPER_SPONSORS"
                     };
@@ -209,7 +197,17 @@ export class PaymasterService {
             }
         }
 
-        // 2. Universal Pricing (User Pays)
+        // 2. Token validation only applies when user pays
+        if (!feeToken) {
+            throw new Error("Universal Gas: Please specify a feeToken contract principal.");
+        }
+
+        const supportedTokens = apiKey.supportedGasTokens || [];
+        if (supportedTokens.length > 0 && !supportedTokens.includes(feeToken)) {
+            throw new Error(`Gas token ${feeToken} is not supported by this developer's policy.`);
+        }
+
+        // 3. Universal Pricing (User Pays)
         const tokenRate = await this.getTokenRate(feeToken);
         const estimatedGas = intent.estimatedGas || 10000;
         const SAFE_GAS_PRICE = 1;

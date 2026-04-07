@@ -1,18 +1,13 @@
 import { VelumXClient } from '@velumx/sdk';
 import { getConfig } from './config';
 
-/**
- * VelumX SDK Integration for DeFi Frontend
- * This uses the official @velumx/sdk via a secure proxy.
- */
 let clientInstance: VelumXClient | null = null;
 
 export function getVelumXClient(): VelumXClient {
     if (!clientInstance) {
         const config = getConfig();
         clientInstance = new VelumXClient({
-            network: config.stacksNetwork,
-            coreApiUrl: 'https://api.mainnet.hiro.so',
+            network: config.stacksNetwork as 'mainnet' | 'testnet',
             paymasterUrl: '/api/velumx/proxy'
         });
     }

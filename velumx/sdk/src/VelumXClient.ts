@@ -1,124 +1,156 @@
-import { SignedIntent, NetworkConfig, SponsorshipOptions } from './types';
+import { NetworkConfig, SponsorshipOptions, FeeEstimateResult, SponsorResult } from './types';
 
+/**
+ * VelumXClient — The core SDK for integrating VelumX gasless sponsorship.
+ *
+ * The SDK does NOT build transactions. That is the developer's responsibility.
+ * The SDK's job:
+ *   1. estimateFee()  — ask the relayer what the gas cost is in a chosen SIP-010 token
+ *   2. sponsor()      — submit a signed Stacks tx hex to the relayer for STX fee sponsorship
+ *
+ * Integration pattern:
+ *   const txHex = await myDexSDK.buildSwapTx({ ... });          // developer builds tx
+ *   const { maxFee } = await velumx.estimateFee({ feeToken });  // VelumX estimates fee
+ *   const { txid } = await velumx.sponsor(txHex, { feeToken, feeAmount: maxFee }); // VelumX sponsors
+ */
 export class VelumXClient {
     private config: NetworkConfig;
     private relayerUrl: string;
 
     constructor(config: NetworkConfig) {
         if (!config.apiKey && !config.paymasterUrl?.includes('/api/velumx/proxy')) {
-            throw new Error("VelumX Client Error: API Key is required. Please obtain your key from the VelumX Developer Dashboard.");
+            throw new Error(
+                'VelumX: API Key is required. Get yours at the VelumX Developer Dashboard.'
+            );
         }
         this.config = config;
-        // Default to a hosted relayer if not provided
         this.relayerUrl = config.paymasterUrl || 'https://api.velumx.xyz/api/v1';
     }
 
     /**
-     * Get a fee estimation from the relayer for a specific intent
+     * Estimate the gas fee for a transaction in a specific SIP-010 token.
+     *
+     * @param params.feeToken  - Contract principal of the token the user will pay gas with
+     *                           e.g. 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx'
+     * @param params.estimatedGas - Optional gas estimate (default: 150000)
+     *
+     * @returns maxFee (in micro units of feeToken), policy, estimatedGas
+     *
+     * @example
+     * const { maxFee, policy } = await velumx.estimateFee({
+     *   feeToken: 'SP120...usdcx',
+     *   estimatedGas: 150000
+     * });
+     * // If policy === 'DEVELOPER_SPONSORS', maxFee will be "0" — user pays nothing
      */
-    public async estimateFee(intent: any): Promise<{ maxFee: string, estimatedGas: number }> {
-        try {
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (this.config.apiKey && this.config.apiKey !== 'proxied') {
-                headers['x-api-key'] = this.config.apiKey;
-            }
+    public async estimateFee(params: {
+        feeToken: string;
+        estimatedGas?: number;
+    }): Promise<FeeEstimateResult> {
+        const { feeToken, estimatedGas = 150000 } = params;
 
-            const response = await fetch(`${this.relayerUrl}/estimate`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ 
-                    intent: { 
-                        ...intent, 
-                        network: this.config.network 
-                    } 
-                })
-            });
+        const response = await fetch(`${this.relayerUrl}/estimate`, {
+            method: 'POST',
+            headers: this.headers(),
+            body: JSON.stringify({
+                intent: {
+                    feeToken,
+                    estimatedGas,
+                    network: this.config.network
+                }
+            })
+        });
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({ error: 'Unknown error' })) as any;
-                throw new Error(`Fee estimation failed: ${errData.error || errData.message || response.statusText}`);
-            }
-
-            return await response.json() as { maxFee: string, estimatedGas: number };
-        } catch (error) {
-            console.error("VelumX Client Error (estimateFee):", error);
-            throw error;
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: response.statusText })) as any;
+            throw new Error(`Fee estimation failed: ${err.error || err.message || response.statusText}`);
         }
+
+        return response.json() as Promise<FeeEstimateResult>;
     }
 
     /**
-     * Submit a signed intent to the relayer for sponsorship and execution
+     * Sponsor a signed Stacks transaction — the relayer pays the STX network fee.
+     *
+     * The developer builds and signs the transaction with `sponsored: true` using
+     * @stacks/connect or @stacks/transactions. The raw tx hex is then passed here.
+     *
+     * @param txHex    - Raw signed transaction hex (from wallet or @stacks/transactions)
+     * @param options  - Metadata: feeToken, feeAmount (in micro units), network, userId
+     *
+     * @returns txid and status
+     *
+     * @example
+     * // Using @stacks/connect (browser wallet)
+     * openContractCall({
+     *   ...,
+     *   sponsored: true,
+     *   onFinish: async ({ txRaw }) => {
+     *     const { txid } = await velumx.sponsor(txRaw, {
+     *       feeToken: 'SP120...usdcx',
+     *       feeAmount: maxFee
+     *     });
+     *   }
+     * });
+     *
+     * @example
+     * // Using @stacks/transactions (server-side or Node.js)
+     * import { makeContractCall, sponsorTransaction } from '@stacks/transactions';
+     * const tx = await makeContractCall({ ..., sponsored: true });
+     * const serialized = bytesToHex(tx.serialize());
+     * const { txid } = await velumx.sponsor(serialized, { feeToken, feeAmount });
      */
-    public async submitIntent(signedIntent: SignedIntent): Promise<{ txid: string, status: string }> {
-        try {
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (this.config.apiKey && this.config.apiKey !== 'proxied') {
-                headers['x-api-key'] = this.config.apiKey;
-            }
+    public async sponsor(txHex: string, options?: SponsorshipOptions): Promise<SponsorResult> {
+        const response = await fetch(`${this.relayerUrl}/broadcast`, {
+            method: 'POST',
+            headers: this.headers(),
+            body: JSON.stringify({
+                txHex,
+                feeToken: options?.feeToken,
+                feeAmount: options?.feeAmount,
+                userId: options?.userId,
+                network: options?.network || this.config.network
+            })
+        });
 
-            const response = await fetch(`${this.relayerUrl}/sponsor`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ 
-                    intent: { 
-                        ...signedIntent, 
-                        network: this.config.network 
-                    } 
-                })
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({ error: 'Unknown error' })) as any;
-                throw new Error(`Intent sponsorship failed: ${errData.error || errData.message || response.statusText}`);
-            }
-
-            return await response.json() as { txid: string, status: string };
-        } catch (error) {
-            console.error("VelumX Client Error (submitIntent):", error);
-            throw error;
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: response.statusText })) as any;
+            throw new Error(`Sponsorship failed: ${err.error || err.message || response.statusText}`);
         }
+
+        return response.json() as Promise<SponsorResult>;
     }
 
     /**
-     * [New Recommended Method] Request sponsorship for a Stacks transaction
-     * @param txHex The raw transaction hex
-     * @param options Metadata like developer-reported fee and userId
+     * Fetch the developer's relayer configuration.
+     * Returns supported gas tokens and sponsorship policy for this API key.
+     *
+     * @example
+     * const { supportedGasTokens, sponsorshipPolicy } = await velumx.getConfig();
+     * // sponsorshipPolicy === 'DEVELOPER_SPONSORS' → user pays no gas
+     * // supportedGasTokens → filter your gas token UI to only show these
      */
-    public async sponsor(txHex: string, options?: SponsorshipOptions): Promise<{ txid: string, status: string }> {
-        return this.submitRawTransaction(txHex, options);
+    public async getConfig(): Promise<{
+        supportedGasTokens: string[];
+        sponsorshipPolicy: 'DEVELOPER_SPONSORS' | 'USER_PAYS';
+    }> {
+        const response = await fetch(`${this.relayerUrl}/config`, {
+            method: 'GET',
+            headers: this.headers()
+        });
+
+        if (!response.ok) {
+            return { supportedGasTokens: [], sponsorshipPolicy: 'USER_PAYS' };
+        }
+
+        return response.json();
     }
 
-    /**
-     * Submit a raw Stacks transaction hex for native sponsorship
-     */
-    public async submitRawTransaction(txHex: string, options?: SponsorshipOptions): Promise<{ txid: string, status: string }> {
-        try {
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (this.config.apiKey && this.config.apiKey !== 'proxied') {
-                headers['x-api-key'] = this.config.apiKey;
-            }
-
-            const response = await fetch(`${this.relayerUrl}/broadcast`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ 
-                    txHex,
-                    userId: options?.userId,
-                    feeAmount: options?.feeAmount,
-                    feeToken: options?.feeToken,
-                    network: options?.network || this.config.network
-                })
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({ error: 'Unknown error' })) as any;
-                throw new Error(`Transaction broadcast failed: ${errData.error || errData.message || response.statusText}`);
-            }
-
-            return await response.json() as { txid: string, status: string };
-        } catch (error) {
-            console.error("VelumX Client Error (submitRawTransaction):", error);
-            throw error;
+    private headers(): Record<string, string> {
+        const h: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (this.config.apiKey && this.config.apiKey !== 'proxied') {
+            h['x-api-key'] = this.config.apiKey;
         }
+        return h;
     }
 }

@@ -1,120 +1,114 @@
 /**
  * Simple Gasless Bridge Helper
- * Uses Stacks-native sponsored transactions with simple-paymaster-v1
+ *
+ * Uses VelumXClient (v3) + @stacks/connect to execute gasless Stacks → Ethereum bridge.
+ *
+ * Flow:
+ *   1. Estimate fee in user's chosen SIP-010 token via VelumX relayer
+ *   2. Build the burn/bridge transaction with sponsored: true
+ *   3. User signs — wallet produces a raw tx hex
+ *   4. VelumX relayer sponsors the STX fee and broadcasts
  */
 
 import { getStacksConnect, getNetworkInstance } from '../stacks-loader';
-import { 
-  Cl, 
-  PostConditionMode 
-} from '@stacks/transactions';
+import { Cl, PostConditionMode } from '@stacks/transactions';
 import { getConfig } from '../config';
 import { parseUnits } from 'viem';
 import { getVelumXClient } from '../velumx';
 
 export interface SimpleGaslessBridgeParams {
   userAddress: string;
-  amount: string;  // Amount in human-readable format (e.g., "10.5")
-  recipientAddress: string;  // Ethereum address
+  amount: string;           // Human-readable amount e.g. "10.5"
+  recipientAddress: string; // Ethereum address
   onProgress?: (step: string) => void;
 }
 
-/**
- * Execute gasless bridge withdrawal using simple-paymaster
- * User pays gas fees in USDCx, relayer sponsors STX
- */
 export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgeParams): Promise<string> {
   const { amount, recipientAddress, onProgress } = params;
   const config = getConfig();
   const velumx = getVelumXClient();
 
-  // Convert amount to micro units (6 decimals)
   const amountInMicro = parseUnits(amount, 6);
 
-  onProgress?.('Preparing transaction...');
+  // Step 1: Estimate fee
+  onProgress?.('Calculating fees...');
+  const estimate = await velumx.estimateFee({
+    feeToken: config.stacksUsdcxAddress,
+    estimatedGas: 150000
+  });
 
-  // Encode Ethereum address to bytes32
-  const recipientBytes = encodeEthereumAddress(recipientAddress);
+  const feeAmount = estimate.maxFee || '0';
+  const isDeveloperSponsored = estimate.policy === 'DEVELOPER_SPONSORS';
 
-  // Get relayer address from config
-  const relayerAddress = config.velumxRelayerAddress;
+  console.log('VelumX Gasless Bridge:', {
+    amount,
+    recipientAddress,
+    feeToken: config.stacksUsdcxAddress,
+    feeAmount,
+    policy: estimate.policy
+  });
 
-  // SAFETY LOCK: Block the transaction if the address is not configured
-  if (!relayerAddress) {
-    throw new Error('VelumX Configuration Error: Relayer Address is not set. Please add NEXT_PUBLIC_VELUMX_RELAYER_ADDRESS to your environment variables.');
+  if (!config.velumxRelayerAddress) {
+    throw new Error(
+      'VelumX Configuration Error: NEXT_PUBLIC_VELUMX_RELAYER_ADDRESS is not set.'
+    );
   }
+
+  // Step 2: Build the bridge transaction
+  onProgress?.('Preparing transaction...');
 
   const connect = await getStacksConnect();
   const network = await getNetworkInstance();
 
-  // The 0.25 USDCx fee in micro-units
-  const bridgeFeeInMicro = '250000';
+  const recipientBytes = encodeEthereumAddress(recipientAddress);
+  const [contractAddress, contractName] = config.stacksUsdcxProtocolAddress.split('.');
+  const [feeTokenAddress, feeTokenName] = config.stacksUsdcxAddress.split('.');
 
-  // Call bridge-gasless with sponsored=true
-  const result = await new Promise<{ txid?: string; txRaw?: string } | null>((resolve, reject) => {
-    const [paymasterAddress, paymasterName] = config.stacksPaymasterAddress.split('.');
-    const [feeTokenAddress, feeTokenName] = config.stacksUsdcxAddress.split('.');
-
-    // Encode the bridge action payload (bridge-tokens amount recipient)
-    const payloadBuffer = Cl.serialize(Cl.tuple({
-      amount: Cl.uint(amountInMicro.toString()),
-      recipient: Cl.buffer(recipientBytes)
-    }));
-
+  // Step 3: User signs with sponsored: true
+  return new Promise<string>((resolve, reject) => {
     connect.openContractCall({
-      contractAddress: paymasterAddress,
-      contractName: paymasterName,
-      functionName: 'call-gasless',
+      contractAddress,
+      contractName,
+      functionName: 'burn',
       functionArgs: [
-        Cl.contractPrincipal(feeTokenAddress, feeTokenName),
-        Cl.uint(bridgeFeeInMicro),
-        Cl.principal(relayerAddress),
-        Cl.principal('SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE'), // Bridge Contract Address
-        Cl.stringAscii('bridge-tokens'),
-        Cl.buffer(payloadBuffer as any)
+        Cl.uint(amountInMicro.toString()),
+        Cl.uint('0'), // native-domain: 0 for Ethereum
+        Cl.buffer(recipientBytes),
       ],
       network,
+      sponsored: true,
       postConditionMode: PostConditionMode.Allow,
-      onFinish: (data: any) => {
-        console.log('Bridge result received:', data);
-        resolve({ txRaw: data.txRaw });
+      onFinish: async (data: any) => {
+        console.log('Bridge signed:', data);
+        onProgress?.('Broadcasting via VelumX...');
+
+        try {
+          const txRaw = data.txRaw || data.txHex;
+          if (!txRaw) {
+            const txid = data.txId || data.txid;
+            if (txid) return resolve(txid);
+            return reject(new Error('No transaction data returned from wallet'));
+          }
+
+          // Step 4: VelumX sponsors the STX fee
+          const result = await velumx.sponsor(txRaw, {
+            feeToken: isDeveloperSponsored ? undefined : config.stacksUsdcxAddress,
+            feeAmount: isDeveloperSponsored ? '0' : feeAmount,
+            network: config.stacksNetwork as 'mainnet' | 'testnet'
+          });
+
+          console.log('VelumX bridge result:', result);
+          resolve(result.txid);
+        } catch (error) {
+          console.error('Bridge broadcast error:', error);
+          reject(error);
+        }
       },
-      onCancel: () => {
-        reject(new Error('Bridge initiation cancelled'));
-      }
+      onCancel: () => reject(new Error('Bridge cancelled by user'))
     });
   });
-
-  if (!result) {
-    throw new Error('Transaction was cancelled');
-  }
-
-  onProgress?.('Broadcasting via VelumX Relayer...');
-
-  // Execute sponsorship broadcast via VelumX SDK
-  // We pass the raw transaction for sponsorship and explicitly report the 0.25 USDCx fee
-  if (result.txRaw) {
-    const broadcastResult = await velumx.sponsor(result.txRaw, {
-      feeAmount: bridgeFeeInMicro,
-      feeToken: config.stacksUsdcxAddress,
-      network: (network as any).isMainnet() ? 'mainnet' : 'testnet'
-    } as any);
-    console.log('Bridge broadcast result:', broadcastResult);
-    return broadcastResult.txid;
-  }
-
-  // Fallback for immediate TXID (e.g. if already broadcasted by wallet)
-  const txid = result.txid || (result as any).txId || (result as any).result?.txid;
-  if (txid) {
-    return txid;
-  }
-
-  throw new Error('No transaction ID returned from sponsorship');
 }
 
-/**
- * Encode Ethereum address to bytes32 for Stacks contract
- */
 function encodeEthereumAddress(address: string): Uint8Array {
   const hex = address.startsWith('0x') ? address.slice(2) : address;
   const paddedHex = hex.padStart(64, '0');

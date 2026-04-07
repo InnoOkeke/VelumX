@@ -4,12 +4,9 @@ import {
     uintCV,
     principalCV,
     stringAsciiCV,
-    noneCV,
-    someCV,
-    listCV,
     bufferCV
 } from '@stacks/transactions';
-import { WalletIntent, SignedIntent } from './types';
+import { SignedIntent } from './types';
 
 export class IntentBuilder {
     private domainName = "SGAL-Smart-Wallet";
@@ -35,12 +32,12 @@ export class IntentBuilder {
      * Formats the intent into a Clarity Tuple for signing
      * Structure matches the Smart Wallet v10 expectation
      */
-    private formatIntentMessage(intent: WalletIntent) {
+    private formatIntentMessage(intent: Omit<SignedIntent, 'signature'>) {
         return tupleCV({
             target: principalCV(intent.target),
             payload: bufferCV(Buffer.from(intent.payload.startsWith('0x') ? intent.payload.substring(2) : intent.payload, 'hex')),
-            'max-fee': uintCV(intent.maxFee),
-            nonce: uintCV(intent.nonce)
+            'max-fee': uintCV(typeof intent.maxFee === 'string' ? parseInt(intent.maxFee) : intent.maxFee),
+            nonce: uintCV(typeof intent.nonce === 'string' ? parseInt(intent.nonce) : intent.nonce)
         });
     }
 
@@ -49,7 +46,7 @@ export class IntentBuilder {
      * In a browser environment, this would use a wallet popup (e.g. Leather/Xverse)
      * For Node.js/Backend, it signs directly.
      */
-    public signIntent(intent: WalletIntent, privateKey: string): SignedIntent {
+    public signIntent(intent: Omit<SignedIntent, 'signature'>, privateKey: string): SignedIntent {
         const domain = this.getDomain();
         const message = this.formatIntentMessage(intent);
 
