@@ -59,7 +59,7 @@ const FALLBACK_STX: Token = {
   name: 'Stacks',
   address: 'token-wstx',
   decimals: 6,
-  logoUrl: 'https://assets.coingecko.com/coins/images/2069/small/Stacks_logo_full.png',
+  logoUrl: '', // Use letter avatar fallback
 };
 
 // High-priority VelumX assets that must be available even if discovery is pending
@@ -69,7 +69,7 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
     name: 'VelumX USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    logoUrl: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+    logoUrl: '', // Use letter avatar fallback
   }
 ];
 
@@ -120,61 +120,95 @@ export function SwapInterface() {
         try {
           // ALEX SDK v3 - Try multiple methods to get token list
           console.log("Swap: Attempting to fetch token list from ALEX SDK...");
+          console.log("Swap: Available SDK properties:", Object.keys(alex));
           
-          // Method 1: Try getFtList (v3 method)
-          if (typeof (alex as any).getFtList === 'function') {
-            console.log("Swap: Using getFtList method...");
-            const ftList = await (alex as any).getFtList();
-            if (ftList && typeof ftList === 'object') {
-              alexTokensList = Object.values(ftList);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via getFtList`);
+          // Method 1: Direct currency access (ALEX SDK v3)
+          if ((alex as any).currency) {
+            console.log("Swap: Found currency property, checking structure...");
+            const currencies = (alex as any).currency;
+            console.log("Swap: Currency type:", typeof currencies);
+            console.log("Swap: Currency keys:", Object.keys(currencies).slice(0, 5));
+            
+            if (currencies && typeof currencies === 'object') {
+              alexTokensList = Object.values(currencies);
+              console.log(`Swap: Found ${alexTokensList.length} tokens via currency property`);
             }
           }
           
-          // Method 2: Try currency property (v3)
-          if (alexTokensList.length === 0 && (alex as any).currency) {
-            console.log("Swap: Using currency property...");
-            const currencies = (alex as any).currency;
-            if (currencies && typeof currencies === 'object') {
-              alexTokensList = Object.values(currencies);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via currency`);
+          // Method 2: Try getFtList (v3 method)
+          if (alexTokensList.length === 0 && typeof (alex as any).getFtList === 'function') {
+            console.log("Swap: Trying getFtList method...");
+            try {
+              const ftList = await (alex as any).getFtList();
+              console.log("Swap: getFtList result type:", typeof ftList);
+              if (ftList && typeof ftList === 'object') {
+                alexTokensList = Array.isArray(ftList) ? ftList : Object.values(ftList);
+                console.log(`Swap: Found ${alexTokensList.length} tokens via getFtList`);
+              }
+            } catch (e) {
+              console.warn("Swap: getFtList failed:", e);
             }
           }
           
           // Method 3: Try getAllTokens if available
           if (alexTokensList.length === 0 && typeof (alex as any).getAllTokens === 'function') {
-            console.log("Swap: Using getAllTokens method...");
-            const allTokens = await (alex as any).getAllTokens();
-            if (allTokens) {
-              alexTokensList = Array.isArray(allTokens) ? allTokens : Object.values(allTokens);
-              console.log(`Swap: Found ${alexTokensList.length} tokens via getAllTokens`);
+            console.log("Swap: Trying getAllTokens method...");
+            try {
+              const allTokens = await (alex as any).getAllTokens();
+              if (allTokens) {
+                alexTokensList = Array.isArray(allTokens) ? allTokens : Object.values(allTokens);
+                console.log(`Swap: Found ${alexTokensList.length} tokens via getAllTokens`);
+              }
+            } catch (e) {
+              console.warn("Swap: getAllTokens failed:", e);
             }
           }
           
-          // Method 4: Hardcoded fallback for common ALEX tokens
+          // Method 4: Try accessing Currency enum directly
           if (alexTokensList.length === 0) {
-            console.warn("Swap: ALEX SDK methods failed, using hardcoded token list");
+            console.log("Swap: Trying to import Currency enum...");
+            try {
+              const { Currency } = await import('alex-sdk');
+              if (Currency) {
+                console.log("Swap: Currency enum found, extracting values...");
+                alexTokensList = Object.keys(Currency).map(key => ({
+                  id: (Currency as any)[key],
+                  symbol: key,
+                  name: key,
+                  decimals: 8,
+                  icon: ''
+                }));
+                console.log(`Swap: Found ${alexTokensList.length} tokens via Currency enum`);
+              }
+            } catch (e) {
+              console.warn("Swap: Currency enum import failed:", e);
+            }
+          }
+          
+          // Method 5: Hardcoded fallback for common ALEX tokens
+          if (alexTokensList.length === 0) {
+            console.warn("Swap: All ALEX SDK methods failed, using hardcoded token list");
             alexTokensList = [
               {
                 id: 'token-alex',
                 symbol: 'ALEX',
                 name: 'ALEX Token',
                 decimals: 8,
-                icon: 'https://assets.coingecko.com/coins/images/18776/small/alex-logo.png'
+                icon: '' // Use letter avatar
               },
               {
                 id: 'token-susdt',
                 symbol: 'sUSDT',
                 name: 'Stacks USDT',
                 decimals: 8,
-                icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png'
+                icon: '' // Use letter avatar
               },
               {
                 id: 'token-wstx',
                 symbol: 'wSTX',
                 name: 'Wrapped STX',
                 decimals: 6,
-                icon: 'https://assets.coingecko.com/coins/images/2069/small/Stacks_logo_full.png'
+                icon: '' // Use letter avatar
               }
             ];
           }
@@ -311,7 +345,7 @@ export function SwapInterface() {
     } catch (error) {
       console.error('Failed to fetch universal fee estimate:', error);
     }
-  }, [state.gaslessMode, state.selectedGasToken, config.backendUrl]);
+  }, [state.gaslessMode, state.selectedGasToken]);
 
   // Fetch quote and fee estimate when input changes
   useEffect(() => {

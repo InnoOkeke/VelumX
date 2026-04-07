@@ -517,13 +517,9 @@ export function BridgeInterface() {
               disabled={state.isProcessing}
             />
             <div className="flex items-center gap-3 bg-purple-600 dark:bg-purple-600 px-5 py-3 rounded-2xl shadow-lg shadow-purple-500/50 flex-shrink-0">
-               <img 
-                 src="https://assets.coingecko.com/coins/images/6319/small/usdc.png" 
-                 alt={sourceToken} 
-                 className="w-5 h-5 rounded-full"
-                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                 crossOrigin="anonymous"
-               />
+               <div className="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-bold text-white">
+                 {sourceToken[0]}
+               </div>
                <span className="font-bold text-sm text-white">{sourceToken}</span>
             </div>
           </div>
@@ -564,13 +560,9 @@ export function BridgeInterface() {
               {state.amount || '0.00'}
             </div>
             <div className="flex items-center gap-3 bg-blue-600 dark:bg-blue-600 px-5 py-3 rounded-2xl shadow-lg shadow-blue-500/50 flex-shrink-0">
-               <img 
-                 src="https://assets.coingecko.com/coins/images/6319/small/usdc.png" 
-                 alt={destToken} 
-                 className="w-5 h-5 rounded-full"
-                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                 crossOrigin="anonymous"
-               />
+               <div className="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-bold text-white">
+                 {destToken[0]}
+               </div>
                <span className="font-bold text-sm text-white">{destToken}</span>
             </div>
           </div>

@@ -126,28 +126,36 @@ export function TokenInput({
 
                     {/* Dropdown Menu */}
                     {isOpen && (
-                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-50 border flex flex-col"
+                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-50 flex flex-col"
                             style={{ 
                                 backgroundColor: 'var(--bg-card)',
-                                borderColor: 'var(--border-color)'
+                                border: '2px solid var(--border-color)'
                             }}
                         >
                             {/* Search */}
-                            <div className="p-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
+                            <div className="p-4" style={{ 
+                                borderBottom: '1px solid var(--border-color)',
+                                backgroundColor: 'var(--bg-card)'
+                            }}>
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)', opacity: 0.5 }} />
                                     <input 
                                         type="text"
                                         placeholder="Search tokens..."
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
-                                        className="w-full bg-black/5 dark:bg-white/5 rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 transition-all font-medium"
+                                        className="w-full rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-purple-500/50 transition-all font-medium"
+                                        style={{
+                                            backgroundColor: 'var(--bg-surface)',
+                                            color: 'var(--text-primary)',
+                                            border: '1px solid var(--border-color)'
+                                        }}
                                     />
                                 </div>
                             </div>
 
                             {/* Token List */}
-                            <div className="overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+                            <div className="overflow-y-auto" style={{ backgroundColor: 'var(--bg-card)' }}>
                                 {filteredTokens.length > 0 ? (
                                     filteredTokens.map(t => (
                                         <button
@@ -157,7 +165,20 @@ export function TokenInput({
                                                 setIsOpen(false);
                                                 setSearch('');
                                             }}
-                                            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+                                            className="w-full flex items-center justify-between p-4 transition-colors"
+                                            style={{
+                                                backgroundColor: t.symbol === token?.symbol ? 'var(--bg-surface)' : 'transparent'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (t.symbol !== token?.symbol) {
+                                                    e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (t.symbol !== token?.symbol) {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                }
+                                            }}
                                         >
                                             <div className="flex items-center gap-3">
                                                 {shouldShowImage(t) ? (
@@ -175,16 +196,16 @@ export function TokenInput({
                                                 )}
                                                 <div className="text-left">
                                                     <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{t.symbol}</div>
-                                                    <div className="text-[10px] opacity-50 truncate max-w-[120px]" style={{ color: 'var(--text-secondary)' }}>{t.name}</div>
+                                                    <div className="text-[10px] truncate max-w-[120px]" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>{t.name}</div>
                                                 </div>
                                             </div>
                                             {t.symbol === token?.symbol && (
-                                                <div className="w-2 h-2 rounded-full bg-purple-500 shadow-glow" />
+                                                <div className="w-2 h-2 rounded-full bg-purple-500" />
                                             )}
                                         </button>
                                     ))
                                 ) : (
-                                    <div className="p-8 text-center opacity-40 text-sm italic">No tokens found</div>
+                                    <div className="p-8 text-center text-sm italic" style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>No tokens found</div>
                                 )}
                             </div>
                         </div>
