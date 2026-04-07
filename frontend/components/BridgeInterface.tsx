@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '@/lib/hooks/useWallet';
-import { useConfig, USDC_ABI, XRESERVE_ABI } from '@/lib/config';
+import { useConfig, getConfig, USDC_ABI, XRESERVE_ABI } from '@/lib/config';
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem';
 import { Buffer } from 'buffer';
 import { mainnet, sepolia } from 'viem/chains';
@@ -130,9 +130,11 @@ export function BridgeInterface() {
 
     try {
       const velumxClient = getVelumXClient();
+      const config = getConfig();
       const estimate = await velumxClient.estimateFee({
-        estimatedGas: 100000 
-      }) as any;
+        feeToken: config.stacksUsdcxAddress,
+        estimatedGas: 100000
+      });
 
       setState(prev => ({
         ...prev,
