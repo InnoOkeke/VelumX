@@ -159,12 +159,18 @@ export function SwapInterface() {
                 ? t.wrapToken.split('::')[0]
                 : (t.id || t.contractAddress || t.address || '');
               
+              // Proxy ALEX images through our API to avoid CORS
+              const rawIcon = t.icon || '';
+              const logoUrl = rawIcon
+                ? `/api/image-proxy?url=${encodeURIComponent(rawIcon)}`
+                : '';
+              
               return {
                 symbol: t.name || t.symbol || t.id || 'Unknown',
                 name: t.name || t.symbol || 'Unknown Token',
                 address: contractAddress || t.id || 'unknown-address',
                 decimals: t.wrapTokenDecimals ?? t.underlyingTokenDecimals ?? t.decimals ?? 8,
-                logoUrl: t.icon || '',
+                logoUrl,
               };
             })
             .filter(t => t.symbol !== 'Unknown' && t.address !== 'unknown-address');
@@ -495,7 +501,7 @@ export function SwapInterface() {
         />
 
 
-        <div className="relative">
+        <div className="relative overflow-visible" style={{ isolation: 'auto' }}>
           <TokenInput
             label="Sell"
             amount={state.inputAmount}
@@ -510,7 +516,7 @@ export function SwapInterface() {
           />
 
           {/* Switch Button */}
-          <div className="flex justify-center my-4 relative z-10">
+          <div className="flex justify-center my-4">
             <button
               onClick={switchTokens}
               disabled={state.isProcessing}

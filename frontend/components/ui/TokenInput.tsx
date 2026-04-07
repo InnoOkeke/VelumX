@@ -71,7 +71,7 @@ export function TokenInput({
         <div className="group rounded-2xl p-6 transition-all duration-300 relative"
             style={{ border: `1px solid var(--border-color)`, backgroundColor: 'var(--bg-surface)' }}
         >
-            <div className="flex items-center justify-between mb-6 relative z-10">
+            <div className="flex items-center justify-between mb-6">
                 <span className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>{label}</span>
                 <div className="flex items-center gap-2">
                     {tokens.length <= 4 && (
@@ -86,7 +86,7 @@ export function TokenInput({
                 </div>
             </div>
 
-            <div className="flex items-center gap-6 relative z-10">
+            <div className="flex items-center gap-6">
                 <input
                     type="number"
                     value={amount}
@@ -189,7 +189,7 @@ export function TokenInput({
             </div>
 
             {onMax && (
-                <div className="flex justify-between items-center mt-6 relative z-10">
+                <div className="flex justify-between items-center mt-6">
                     <button
                         onClick={onMax}
                         className={`text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-lg transition-all border ${variant === 'purple'
