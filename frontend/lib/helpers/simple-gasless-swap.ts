@@ -73,9 +73,9 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const alexTokenIn = await resolveAlexId(tokenIn) as any;
   const alexTokenOut = await resolveAlexId(tokenOut) as any;
 
-  // Step 3: Build the sponsored swap transaction using ALEX SDK
-  // runSwapForSponsoredTx builds the tx specifically for sponsored mode
-  const swapTx = await alex.runSwapForSponsoredTx(
+  // Step 3: Build the swap transaction
+  // Use runSwap (not runSwapForSponsoredTx) — VelumX handles sponsorship, not ALEX
+  const swapTx = await alex.runSwap(
     params.userAddress,
     alexTokenIn,
     alexTokenOut,
