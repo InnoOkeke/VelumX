@@ -106,14 +106,28 @@ export function SwapInterface() {
     fetch('/api/velumx/proxy/config')
       .then(r => r.json())
       .then(data => {
-        if (data.supportedGasTokens?.length > 0) {
-          setSupportedGasTokens(data.supportedGasTokens);
-        }
         if (data.sponsorshipPolicy) {
           setSponsorshipPolicy(data.sponsorshipPolicy);
         }
+        if (data.supportedGasTokens?.length > 0) {
+          setSupportedGasTokens(data.supportedGasTokens);
+          // Set default gas token to first supported one if current default isn't in the list
+          setState(prev => {
+            const currentAddr = prev.selectedGasToken?.address || '';
+            const isCurrentSupported = data.supportedGasTokens.includes(currentAddr);
+            if (!isCurrentSupported) {
+              // Find the matching token from our token list, or create a minimal one
+              const firstAddr = data.supportedGasTokens[0];
+              const matchedToken = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS].find(
+                t => t.address === firstAddr
+              ) || { symbol: firstAddr.split('.').pop() || 'Token', name: firstAddr, address: firstAddr, decimals: 6 };
+              return { ...prev, selectedGasToken: matchedToken };
+            }
+            return prev;
+          });
+        }
       })
-      .catch(() => {}); // silently fail — show all tokens as fallback
+      .catch(() => {});
   }, []);
   const [state, setState] = useState<SwapState>({
     inputToken: FALLBACK_STX,
