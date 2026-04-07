@@ -123,6 +123,22 @@ const validateApiKey = async (req: ApiKeyRequest, res: express.Response, next: e
     }
 };
 
+// Public config endpoint — returns developer's allowed gas tokens for the given API key
+app.get('/api/v1/config', validateApiKey, async (req: ApiKeyRequest, res: express.Response) => {
+    try {
+        const apiKey = await (prisma.apiKey as any).findUnique({
+            where: { id: req.apiKeyId },
+            select: { supportedGasTokens: true, sponsorshipPolicy: true }
+        });
+        res.json({
+            supportedGasTokens: apiKey?.supportedGasTokens || [],
+            sponsorshipPolicy: apiKey?.sponsorshipPolicy || 'USER_PAYS'
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Estimate Fee
 app.post('/api/v1/estimate', validateApiKey, rateLimiters.estimate.middleware(), async (req: ApiKeyRequest, res: express.Response) => {
     try {

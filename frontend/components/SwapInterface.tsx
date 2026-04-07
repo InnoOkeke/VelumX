@@ -86,6 +86,31 @@ export function SwapInterface() {
 
   const [tokens, setTokens] = useState<Token[]>([FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS]);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [supportedGasTokens, setSupportedGasTokens] = useState<string[]>([]); // from developer settings
+  const gasDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Close gas dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (gasDropdownRef.current && !gasDropdownRef.current.contains(e.target as Node)) {
+        setState(prev => ({ ...prev, isRegistering: false }));
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Fetch developer's supported gas tokens from relayer config
+  React.useEffect(() => {
+    fetch('/api/velumx/proxy/config')
+      .then(r => r.json())
+      .then(data => {
+        if (data.supportedGasTokens?.length > 0) {
+          setSupportedGasTokens(data.supportedGasTokens);
+        }
+      })
+      .catch(() => {}); // silently fail — show all tokens as fallback
+  }, []);
   const [state, setState] = useState<SwapState>({
     inputToken: FALLBACK_STX,
     outputToken: VELUMX_PRIORITY_TOKENS[0], // USDCx
@@ -583,7 +608,7 @@ export function SwapInterface() {
                 </div>
                 
                 <div className="flex items-center gap-3 bg-white/5 p-1 rounded-2xl border border-white/10 group/gas-container">
-                  <div className="relative">
+                  <div className="relative" ref={gasDropdownRef}>
                     <button
                       onClick={() => setState(prev => ({ ...prev, isRegistering: !prev.isRegistering }))}
                       className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:shadow-purple-500/20 active:scale-95 whitespace-nowrap"
@@ -606,10 +631,16 @@ export function SwapInterface() {
                     {/* Floating Dropdown for Gas Token */}
                     {state.isRegistering && (
                        <div 
-                        className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[9999] border p-2 bg-white dark:bg-gray-900"
-                        style={{ borderColor: 'rgba(139, 92, 246, 0.3)' }}
+                        className="absolute right-0 mt-3 w-64 max-h-64 overflow-y-auto rounded-2xl shadow-2xl z-[9999] border p-2"
+                        style={{ 
+                          backgroundColor: 'var(--bg-surface)',
+                          borderColor: 'var(--border-color)'
+                        }}
                        >
-                         {tokens.filter(t => t.symbol !== 'STX').map(t => (
+                         {tokens
+                           .filter(t => t.symbol !== 'STX')
+                           .filter(t => supportedGasTokens.length === 0 || supportedGasTokens.includes(t.address))
+                           .map(t => (
                            <button
                               key={t.symbol}
                               onClick={() => {

@@ -39,9 +39,6 @@
 ;; call-gasless
 ;; Generic executor for ANY contract call sponsored by VelumX
 ;; User signs intent, Relayer sponsors STX, and this contract collects the fee in SIP-010
-;; call-gasless
-;; Generic executor for ANY contract call sponsored by VelumX
-;; User signs intent, Relayer sponsors STX, and this contract collects the fee in SIP-010
 (define-public (call-gasless
     (fee-token <sip-010-trait>)
     (fee-amount uint)
@@ -54,7 +51,7 @@
     (asserts! (is-authorized-relayer relayer) ERR-NOT-AUTHORIZED)
     
     ;; 2. Token Check: Must be an approved gas asset
-    (asserts! (is-token-approved (contract-of fee-token)) ERR-TOKEN-NOT-APPROVED)
+    (asserts! (is-token-approved (contract-of fee-token)) ERR-TOKEN-NOT-AUTHORIZED)
     
     ;; 3. Transfer Fee from User to Relayer (Developer Collects)
     ;; In Stacks sponsored tx, tx-sender is the user/origintor
@@ -70,10 +67,6 @@
       relayer: relayer
     })
     
-    (ok true)
-  )
-)
-
     (ok true)
   )
 )

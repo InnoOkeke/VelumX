@@ -68,7 +68,7 @@ export function TokenInput({
     }, []);
 
     return (
-        <div className="group rounded-2xl p-6 transition-all duration-300 relative"
+        <div className="group rounded-2xl p-6 transition-all duration-300"
             style={{ border: `1px solid var(--border-color)`, backgroundColor: 'var(--bg-surface)' }}
         >
             <div className="flex items-center justify-between mb-6">
