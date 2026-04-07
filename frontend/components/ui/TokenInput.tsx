@@ -126,7 +126,7 @@ export function TokenInput({
 
                     {/* Dropdown Menu */}
                     {isOpen && (
-                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-50 flex flex-col"
+                        <div className="absolute right-0 mt-3 w-72 max-h-96 overflow-hidden rounded-2xl shadow-2xl z-[9999] flex flex-col"
                             style={{ 
                                 backgroundColor: 'var(--bg-card)',
                                 border: '2px solid var(--border-color)'
