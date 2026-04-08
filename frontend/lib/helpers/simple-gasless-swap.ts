@@ -7,7 +7,6 @@
 
 import { getConfig } from '../config';
 import { getVelumXClient } from '../velumx';
-import { getNetworkInstance } from '../stacks-loader';
 import { AlexSDK } from 'alex-sdk';
 import { request } from '@stacks/connect';
 import {
@@ -87,8 +86,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
 
   if (!publicKey) throw new Error('Wallet public key not available. Please reconnect your wallet.');
 
-  // Step 5: Fetch current nonce for the user's address
-  // Some wallets reject transactions with wrong nonce (even for sponsored txs)
+  // Step 5: Fetch current nonce
   let nonce = 0n;
   try {
     const nonceRes = await fetch(
@@ -103,8 +101,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     console.warn('Failed to fetch nonce, using 0:', e);
   }
 
-  const network = await getNetworkInstance();
-  console.log('Building sponsored tx, network:', network?.chainId);
+  console.log('Building sponsored tx...');
 
   const transaction = await makeUnsignedContractCall({
     contractAddress: swapTx.contractAddress,
@@ -113,7 +110,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     functionArgs: swapTx.functionArgs,
     postConditionMode: PostConditionMode.Allow,
     postConditions: [],
-    network: network,
+    network: 'mainnet', // resolves to STACKS_MAINNET with transactionVersion: 0
     sponsored: true,
     publicKey,
     fee: 0n,
