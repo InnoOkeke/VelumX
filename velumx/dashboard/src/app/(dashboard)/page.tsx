@@ -12,6 +12,15 @@ import { useWallet } from '@/components/providers/WalletContext';
 
 import { RELAYER_URL } from '@/lib/config';
 
+// Format a USD value with enough precision to show small amounts
+function formatUsd(value: string | number): string {
+  const n = parseFloat(value as string) || 0;
+  if (n === 0) return '0.00';
+  if (n < 0.01) return n.toFixed(6);
+  if (n < 1) return n.toFixed(4);
+  return n.toFixed(2);
+}
+
 export default function DashboardOverview() {
   const [isClient, setIsClient] = useState(false);
   const { user, loading: userLoading } = useUser();
@@ -99,7 +108,7 @@ export default function DashboardOverview() {
   const metricCards = [
     {
       title: 'Total Gas Sponsored',
-      value: `${parseFloat(currentStats.totalSponsored || '0').toFixed(2)} USD`,
+      value: `${formatUsd(currentStats.totalSponsored)} USD`,
       change: '0%',
       trend: 'up',
       icon: BatteryCharging,
@@ -154,8 +163,7 @@ export default function DashboardOverview() {
             <div className="flex flex-col">
               <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Rev. ({currentNetwork})</span>
               <span className={`text-[11px] font-bold font-mono ${currentNetwork === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {parseFloat(currentStats.relayerFeeBalance || '0').toFixed(2)} <span className="opacity-40 font-medium">USD</span>
-              </span>
+                {formatUsd(currentStats.relayerFeeBalance)} <span className="opacity-40 font-medium">USD</span>
             </div>
           </div>
         )}

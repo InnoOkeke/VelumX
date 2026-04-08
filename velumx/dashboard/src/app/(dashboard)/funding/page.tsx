@@ -6,6 +6,15 @@ import { Wallet, RefreshCcw, History, Activity } from 'lucide-react';
 import { useWallet } from '@/components/providers/WalletContext';
 import { RELAYER_URL } from '@/lib/config';
 
+// Format a USD value with enough precision to show small amounts
+function formatUsd(value: string | number): string {
+  const n = parseFloat(value as string) || 0;
+  if (n === 0) return '0.00';
+  if (n < 0.01) return n.toFixed(6);
+  if (n < 1) return n.toFixed(4);
+  return n.toFixed(2);
+}
+
 export default function FundingPage() {
     const [isClient, setIsClient] = useState(false);
     const { user, loading: userLoading } = useUser();
@@ -38,7 +47,7 @@ export default function FundingPage() {
                 setStats({
                     relayerAddress: s.relayerAddress || 'Not Configured',
                     relayerStxBalance: (parseInt(s.relayerStxBalance || '0') / 1_000_000).toFixed(2),
-                    relayerFeeBalance: parseFloat(s.relayerFeeBalance || '0').toFixed(2),
+                    relayerFeeBalance: formatUsd(s.relayerFeeBalance || '0'),
                 });
             }
 

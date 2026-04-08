@@ -254,16 +254,24 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     if (txListRes.ok) {
                         const txList = await txListRes.json();
                         const txs: any[] = txList.results || [];
-                        // Sum fee_rate (microSTX) for all sponsored transactions where this address is the sponsor
+                        console.log(`[${networkType}] Fetched ${txs.length} txs for relayer ${relayerAddress}`);
+
+                        // Sum fee_rate (microSTX) only for transactions where this address is the sponsor.
+                        // Fallback: if no sponsor_address field found, sum all txs from this address
+                        // (relayer only broadcasts sponsored transactions).
+                        let sponsoredCount = 0;
+                        let hasSponsorField = txs.some((tx: any) => tx.sponsor_address !== undefined);
                         const totalMicroStx = txs.reduce((acc: number, tx: any) => {
-                            // Only count txs where our relayer is the sponsor (not the sender)
-                            const isSponsor = tx.sponsor_address === relayerAddress ||
-                                             tx.tx_type === 'contract_call'; // all our broadcasts are contract calls
+                            const isSponsor = hasSponsorField
+                                ? tx.sponsor_address === relayerAddress
+                                : tx.sender_address === relayerAddress; // fallback
                             if (isSponsor && tx.fee_rate) {
+                                sponsoredCount++;
                                 return acc + parseInt(tx.fee_rate);
                             }
                             return acc;
                         }, 0);
+                        console.log(`[${networkType}] Found ${sponsoredCount} sponsored txs, total microSTX: ${totalMicroStx}`);
                         const totalStx = totalMicroStx / 1_000_000;
                         totalSponsoredUsd = totalStx * stxPrice;
                     }
@@ -271,7 +279,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     console.warn(`Could not fetch on-chain tx fees for ${networkType}:`, e);
                 }
 
-                const totalSponsored = totalSponsoredUsd.toFixed(4);
+                const totalSponsored = totalSponsoredUsd.toFixed(6); // Keep full precision, dashboard will format
 
                 let relayerStxBalance = "0";
                 let relayerFeeBalance = "0";
