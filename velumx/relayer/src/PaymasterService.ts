@@ -270,42 +270,26 @@ export class PaymasterService {
         }
 
         // 3. Universal Pricing (User Pays)
-        // Base fee = $0.05 USD worth of the fee token + developer markup.
-        // This covers the relayer's STX cost and ensures a meaningful fee regardless of token.
-        const estimatedGas = intent.estimatedGas || 10000;
+        // Base fee = $0.15 USD floor (or developer markup)
+        const estimatedGas = intent.estimatedGas || 100000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const BASE_FEE_USD = 0.02;  // $0.02 USD base fee
-        const MIN_FEE_USD  = 0.02;  // Hard floor
+        const MIN_FEE_USD  = 0.15;  // $0.15 USD Hard floor
 
-        // Fetch token decimals FIRST — needed for accurate rate calculation
-        let tokenDecimals = 6; // safe default
-        try {
-            const [contractAddr, contractName] = feeToken.split('.');
-            const metaRes = await fetch(
-                `https://api.hiro.so/metadata/v1/ft/${contractAddr}.${contractName}`,
-                { signal: AbortSignal.timeout(4000) }
-            );
-            if (metaRes.ok) {
-                const meta = await metaRes.json();
-                if (typeof meta.decimals === 'number') tokenDecimals = meta.decimals;
-            }
-        } catch (e) {
-            console.warn(`Could not fetch decimals for ${feeToken}, defaulting to 6`);
-        }
-
+        // Fetch token metadata reliably using our centralized Oracle
+        const { decimals: tokenDecimals } = await this.pricingOracle.getTokenMetadata(feeToken);
         const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
 
         // Get USD price of 1 full token directly — no STX bridge conversion
         const tokenUsdPrice = await this.pricingOracle.getTokenUsdPrice(feeToken, tokenDecimals);
 
-        // Calculate fee in micro units
-        const feeFromBase  = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
-        const feeFromFloor = Math.ceil((MIN_FEE_USD  / tokenUsdPrice) * tokenMicroUnitsPerToken);
-        const finalFee = Math.max(feeFromBase, feeFromFloor);
+        // 4. Calculate Final Fee
+        // Multiply by markup factor if provided by developer policy
+        const feeInTokens = (MIN_FEE_USD / tokenUsdPrice) * markupFactor;
+        const finalFee = BigInt(Math.ceil(feeInTokens * tokenMicroUnitsPerToken));
 
         // USD value of the final fee (for frontend display)
-        const maxFeeUsd = ((finalFee / tokenMicroUnitsPerToken) * tokenUsdPrice).toFixed(4);
+        const maxFeeUsd = ((Number(finalFee) / tokenMicroUnitsPerToken) * tokenUsdPrice).toFixed(4);
 
         console.log(`[Fee] token=${feeToken} decimals=${tokenDecimals} usdPrice=$${tokenUsdPrice} finalFee=${finalFee} (~$${maxFeeUsd})`);
 

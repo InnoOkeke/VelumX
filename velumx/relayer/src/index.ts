@@ -253,13 +253,15 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
                 // Relayer address and network needed for STX balance display
                 const relayerKey = paymasterService.getUserRelayerKey(userId);
-                const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
-                const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
+                // stacks-transactions getAddressFromPrivateKey needs a network object, not just a string
+                const network = networkType === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
+                const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), network);
+                const hiroApiBase = networkType === 'mainnet' ? 'https://api.hiro.so' : 'https://api.testnet.hiro.so';
 
                 // 3. Real-Time Wallet Fee Audit (FTs only)
                 let walletFeeValueUsd = 0;
                 try {
-                    const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
+                    const balancesRes = await fetch(`${hiroApiBase}/extended/v1/address/${relayerAddress}/balances`);
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         // Iterate through all Fungible Tokens found in the wallet
@@ -269,6 +271,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                             
                             // Convert this token's liquid balance to USD
                             const usdVal = await paymasterService.convertToUsdcx(balance, tokenPrincipal);
+                            console.log(`[Stats-Audit] Found ${tokenPrincipal}: balance=${balance}, USD=$${usdVal}`);
                             walletFeeValueUsd += usdVal;
                         }
                     }
@@ -289,7 +292,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                 // 5. STX Balance (for gas fuel display)
                 let relayerStxBalance = "0";
                 try {
-                    const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
+                    const balancesRes = await fetch(`${hiroApiBase}/extended/v1/address/${relayerAddress}/balances`);
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
