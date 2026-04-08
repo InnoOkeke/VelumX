@@ -304,9 +304,11 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                             if (balance !== '0') {
                                 const decimals = await getTokenDecimals(tokenPrincipal);
                                 const usdEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal, decimals);
+                                console.log(`[${networkType}] Token ${tokenPrincipal}: balance=${balance} decimals=${decimals} usd=${usdEquivalent}`);
                                 totalFeeValueUsd += usdEquivalent;
                             }
                         }
+                        console.log(`[${networkType}] Total relayer fee balance: $${totalFeeValueUsd}`);
                         
                         relayerFeeBalance = totalFeeValueUsd.toFixed(2);
                     }
