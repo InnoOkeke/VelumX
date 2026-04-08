@@ -129,20 +129,26 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
       sponsored: true,
       onFinish: async (data: any) => {
         console.log('Swap signed by wallet:', data);
-        onProgress?.('Broadcasting via VelumX...');
 
         try {
-          // txRaw is the user-signed sponsored tx hex (not yet broadcast)
-          const txRaw = data.txRaw || data.txHex;
+          // txRaw is only present when the wallet respected sponsored: true
+          // and held the tx for the relayer to sign + broadcast.
+          // If txRaw is absent, the wallet broadcast it directly (non-sponsored path).
+          const txRaw = data.txRaw;
 
           if (!txRaw) {
-            // Wallet broadcast it directly (non-sponsored fallback)
+            // Wallet broadcast it directly — tx is already on-chain, just return the txid
             const txid = data.txId || data.txid;
-            if (txid) return resolve(txid);
+            if (txid) {
+              console.warn('Wallet did not return txRaw — tx was broadcast directly (not sponsored). User paid the fee.');
+              return resolve(txid);
+            }
             return reject(new Error('No transaction data returned from wallet'));
           }
 
-          // Step 6: VelumX relayer adds sponsor signature and broadcasts
+          // Wallet returned txRaw — it respected sponsored: true.
+          // Send to VelumX relayer to add sponsor signature and broadcast.
+          onProgress?.('Broadcasting via VelumX...');
           const result = await velumx.sponsor(txRaw, {
             feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
             feeAmount: isDeveloperSponsored ? '0' : feeAmount,

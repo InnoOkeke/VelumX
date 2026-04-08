@@ -20,6 +20,8 @@ export interface WalletBalances {
   stx: string;
   usdcx: string;
   vex: string;
+  // Dynamic SIP-010 token balances keyed by contract principal
+  [contractPrincipal: string]: string;
 }
 
 export interface WalletState {
@@ -150,10 +152,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const stx = BigInt(data.stx?.balance || 0);
       const fungibleTokens = data.fungible_tokens || {};
+
+      // Known tokens by contract prefix
       const usdcxKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksUsdcxAddress));
       const usdcx = usdcxKey ? BigInt(fungibleTokens[usdcxKey].balance) : BigInt(0);
       const vexKey = Object.keys(fungibleTokens).find(key => key.startsWith(config.stacksVexAddress));
       const vex = vexKey ? BigInt(fungibleTokens[vexKey].balance) : BigInt(0);
+
+      // Build a map of all fungible tokens keyed by contract principal (before '::')
+      // e.g. 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex::token-alex' → stored as
+      // 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex'
+      const dynamicBalances: Record<string, string> = {};
+      for (const [key, val] of Object.entries(fungibleTokens)) {
+        const principal = key.split('::')[0];
+        const rawBalance = (val as any).balance || '0';
+        // Store in micro units as string — UI components divide by decimals themselves
+        dynamicBalances[principal] = rawBalance;
+      }
 
       setState(prev => ({
         ...prev,
@@ -162,6 +177,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           stx: formatUnits(stx, TOKEN_DECIMALS.stx),
           usdcx: formatUnits(usdcx, TOKEN_DECIMALS.usdcx),
           vex: formatUnits(vex, TOKEN_DECIMALS.usdcx),
+          ...dynamicBalances,
         }
       }));
     } catch (error) {

@@ -80,6 +80,20 @@ export function SwapInterface() {
 
   const getBalance = (token: Token | null): string => {
     if (!token) return '0';
+
+    // STX is stored by symbol key
+    if (token.symbol === 'STX' || token.address === 'token-wstx') {
+      return (balances as any).stx || '0';
+    }
+
+    // Try contract principal first (most accurate)
+    const byPrincipal = (balances as any)[token.address];
+    if (byPrincipal && byPrincipal !== '0') {
+      // Dynamic balances are stored in micro units — convert to human units
+      return (Number(byPrincipal) / Math.pow(10, token.decimals)).toFixed(6);
+    }
+
+    // Fallback: symbol lookup for known tokens (usdcx, vex, etc.)
     const symbol = token.symbol.toLowerCase();
     return (balances as any)[symbol] || '0';
   };
