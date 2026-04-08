@@ -238,49 +238,17 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
                 const stxPrice = await paymasterService.getStxPrice();
 
-                // 2. Total Gas Sponsored — sum STX fees actually paid on-chain by the relayer
-                //    Source: Hiro explorer API (ground truth, not DB records)
+                // 2. Total Gas Sponsored — calculated from DB tx count × fixed relayer fee per tx
+                //    The relayer always pays exactly 10,000 microSTX (0.01 STX) per sponsored tx.
+                const STX_FEE_PER_TX = 0.01;
+                const totalSponsoredStx = totalTransactions * STX_FEE_PER_TX;
+                const totalSponsoredUsd = totalSponsoredStx * stxPrice;
+                const totalSponsored = totalSponsoredUsd.toFixed(6);
+
+                // Relayer address and network needed for balance fetch below
                 const relayerKey = paymasterService.getUserRelayerKey(userId);
                 const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
                 const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
-
-                let totalSponsoredUsd = 0;
-                try {
-                    // Try v2 endpoint first, fall back to v1
-                    let txs: any[] = [];
-                    const v2Res = await fetch(
-                        `https://api.${stxNetwork}.hiro.so/extended/v2/addresses/${relayerAddress}/transactions?limit=200`,
-                        { signal: AbortSignal.timeout(6000) }
-                    );
-                    if (v2Res.ok) {
-                        const v2Data = await v2Res.json();
-                        txs = v2Data.results || [];
-                    } else {
-                        const v1Res = await fetch(
-                            `https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/transactions?limit=200`,
-                            { signal: AbortSignal.timeout(6000) }
-                        );
-                        if (v1Res.ok) {
-                            const v1Data = await v1Res.json();
-                            txs = v1Data.results || [];
-                        }
-                    }
-
-                    console.log(`[${networkType}] Fetched ${txs.length} txs for relayer ${relayerAddress}`);
-
-                    // Sum ALL fees — relayer wallet only ever broadcasts sponsored transactions
-                    const totalMicroStx = txs.reduce((acc: number, tx: any) => {
-                        // v2 wraps the tx under tx.tx, v1 has it directly
-                        const fee = tx.tx?.fee_rate ?? tx.fee_rate;
-                        return acc + (parseInt(fee) || 0);
-                    }, 0);
-                    console.log(`[${networkType}] Total microSTX fees: ${totalMicroStx}`);
-                    totalSponsoredUsd = (totalMicroStx / 1_000_000) * stxPrice;
-                } catch (e) {
-                    console.warn(`Could not fetch on-chain tx fees for ${networkType}:`, e);
-                }
-
-                const totalSponsored = totalSponsoredUsd.toFixed(6); // Keep full precision, dashboard will format
 
                 let relayerStxBalance = "0";
                 let relayerFeeBalance = "0";

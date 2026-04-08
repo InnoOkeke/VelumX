@@ -143,17 +143,25 @@ export class PricingOracleService {
         }
 
         // Standardize token identifier
-        const tokenIn = (token === 'STX' || token.includes('wstx')) ? 'token-wstx' : token;
-        if (tokenIn === 'token-wstx') return 1.0;
+        // ALEX SDK expects its internal token ID (e.g. 'age000-governance-token'), not a full principal.
+        // Extract the contract name from the principal if needed.
+        const rawTokenIn = (token === 'STX' || token.includes('wstx')) ? 'token-wstx' : token;
+        if (rawTokenIn === 'token-wstx') return 1.0;
+
+        // Map full principals to ALEX SDK token IDs
+        const PRINCIPAL_TO_ALEX_ID: Record<string, string> = {
+            'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex': 'age000-governance-token',
+            'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc': 'token-aeusdc',
+            'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token': 'token-wbtc', // sBTC maps to xBTC in ALEX
+            'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx': 'token-susdt',
+        };
+        const tokenIn = PRINCIPAL_TO_ALEX_ID[rawTokenIn] || rawTokenIn;
 
         const sources: TokenRateSource[] = [
             {
                 name: 'ALEX SDK',
                 getRate: async (token: string) => {
                     try {
-                        // Use exactly 1 full token in micro units based on actual decimals.
-                        // Previously hardcoded to 1_000_000 (assumes 6 decimals), which was
-                        // wrong for tokens like sBTC (8 decimals) or any non-6-decimal token.
                         const unitInMicro = BigInt(10 ** tokenDecimals);
                         const amountOut = await this.alex.getAmountTo(
                             token as any,
@@ -175,29 +183,56 @@ export class PricingOracleService {
                 }
             },
             {
-                name: 'Velar DEX',
+                name: 'CoinGecko',
                 getRate: async (token: string) => {
+                    // Map ALEX SDK IDs to CoinGecko IDs for direct USD price
+                    const COINGECKO_IDS: Record<string, string> = {
+                        'age000-governance-token': 'alexgo',
+                        'token-wbtc': 'bitcoin',
+                        'token-susdt': 'tether',
+                        'token-aeusdc': 'usd-coin',
+                    };
+                    const cgId = COINGECKO_IDS[token];
+                    if (!cgId) return null;
                     try {
-                        // Placeholder for Velar DEX integration
-                        // Would require Velar SDK or direct contract calls
-                        console.log(`Velar DEX integration not yet implemented for ${token}`);
-                        return null;
+                        const res = await fetch(
+                            `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`,
+                            { signal: AbortSignal.timeout(5000) }
+                        );
+                        if (res.ok) {
+                            const data = await res.json();
+                            const usdPrice = data[cgId]?.usd;
+                            if (usdPrice && usdPrice > 0) {
+                                // Convert USD price to STX rate: stxRate = usdPrice / stxUsdPrice
+                                const stxUsd = await this.getStxPrice();
+                                const stxRate = usdPrice / stxUsd;
+                                console.log(`Token rate from CoinGecko: ${token} = ${stxRate} STX (${usdPrice} USD)`);
+                                return stxRate;
+                            }
+                        }
                     } catch (e) {
-                        console.warn(`Velar DEX rate fetch failed for ${token}:`, e);
-                        return null;
+                        console.warn(`CoinGecko rate fetch failed for ${token}:`, e);
                     }
+                    return null;
                 }
             },
             {
                 name: 'Hardcoded Fallback',
                 getRate: async (token: string) => {
-                    // Conservative fallback rates for common tokens
+                    // Fallback rates in STX per token — based on real market prices
+                    // ALEX: $0.00063 / $0.40 STX = 0.001575 STX per ALEX
+                    // sBTC/xBTC: $70,000 / $0.40 = 175,000 STX per BTC
+                    // USDCx/sUSDT/aeUSDC: $1.00 / $0.40 = 2.5 STX per USD-stable
                     const fallbackRates: Record<string, number> = {
-                        'sbtc': 20000,      // ~20k STX per BTC (conservative)
-                        'usdc': 0.4,        // ~0.4 STX per USD (conservative)
-                        'usdcx': 0.4,       // ~0.4 STX per USD
-                        'alex': 0.5,        // ~0.5 STX per ALEX
-                        'aeusdc': 0.4,      // ~0.4 STX per aeUSDC
+                        'age000-governance-token': 0.001575,
+                        'alex':    0.001575,
+                        'token-wbtc': 175000,
+                        'sbtc':    175000,
+                        'token-susdt': 2.5,
+                        'usdc':    2.5,
+                        'usdcx':   2.5,
+                        'token-aeusdc': 2.5,
+                        'aeusdc':  2.5,
                     };
 
                     for (const [key, rate] of Object.entries(fallbackRates)) {
@@ -207,8 +242,8 @@ export class PricingOracleService {
                         }
                     }
 
-                    console.warn(`No fallback rate found for ${token}, using 1.0`);
-                    return 1.0; // Default 1:1 if unknown
+                    console.warn(`No fallback rate found for ${token}, using 2.5 STX (1 USD equivalent)`);
+                    return 2.5;
                 }
             }
         ];

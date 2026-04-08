@@ -497,6 +497,11 @@ export function SwapInterface() {
           outputAmount: '',
           quote: null,
         }));
+
+        // Poll balances at 5s, 15s, 30s to catch when tx confirms on-chain
+        if (fetchBalances) {
+          [5000, 15000, 30000].forEach(delay => setTimeout(() => fetchBalances(), delay));
+        }
       } else {
         // Standard non-gasless swap via ALEX SDK
         const alex = new AlexSDK();
@@ -553,20 +558,13 @@ export function SwapInterface() {
               quote: null,
             }));
             if (fetchBalances) {
-              setTimeout(() => fetchBalances(), 3000);
+              [5000, 15000, 30000].forEach(delay => setTimeout(() => fetchBalances(), delay));
             }
           },
           onCancel: () => {
             setState(prev => ({ ...prev, isProcessing: false }));
           }
         });
-      }
-
-      // Refresh balances after successful transaction
-      if (fetchBalances) {
-        setTimeout(() => {
-          fetchBalances();
-        }, 3000);
       }
     } catch (error) {
       console.error('Swap error:', error);

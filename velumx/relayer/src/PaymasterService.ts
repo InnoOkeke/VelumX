@@ -234,8 +234,8 @@ export class PaymasterService {
         const estimatedGas = intent.estimatedGas || 10000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const BASE_FEE_USD = 10;  // $0.05 USD minimum base — covers STX cost + margin
-        const MIN_FEE_USD  = 5;  // Hard floor: never collect less than $0.02 equivalent
+        const BASE_FEE_USD = 0.02;  // $0.02 USD — covers 0.01 STX relayer cost + margin
+        const MIN_FEE_USD  = 0.02;  // Hard floor: always collect at least $0.02 equivalent
 
         // Fetch token decimals FIRST — needed for accurate rate calculation
         let tokenDecimals = 6; // safe default
