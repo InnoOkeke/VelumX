@@ -227,11 +227,16 @@ export function SwapInterface() {
       setTokens(() => {
         const unique = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS];
         mapped.forEach(mt => {
-          const alreadyIn = unique.find(
+          const existingIdx = unique.findIndex(
             ut => ut.symbol.toLowerCase() === mt.symbol.toLowerCase() ||
                   ut.address.toLowerCase() === mt.address.toLowerCase()
           );
-          if (!alreadyIn) unique.push(mt);
+          if (existingIdx === -1) {
+            unique.push(mt);
+          } else if (mt.logoUrl) {
+            // SDK version has logo/metadata — update the existing entry
+            unique[existingIdx] = { ...unique[existingIdx], logoUrl: mt.logoUrl, name: mt.name };
+          }
         });
         console.log(`Swap: ${unique.length} total assets available.`);
         return unique;
