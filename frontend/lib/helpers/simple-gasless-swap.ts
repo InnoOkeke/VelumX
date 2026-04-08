@@ -91,18 +91,20 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   const network = await getNetworkInstance();
 
   // publicKey is required for makeUnsignedContractCall.
-  // If not available, fetch it now via stx_getAddresses.
+  // Fetch it via stx_getAddresses if not already available.
   let publicKey = params.userPublicKey || '';
   if (!publicKey) {
     try {
+      console.log('Fetching public key via stx_getAddresses...');
       const addrResult = await request('stx_getAddresses') as any;
+      console.log('stx_getAddresses result:', JSON.stringify(addrResult));
       const stxEntry = (addrResult?.addresses || []).find((a: any) =>
         a.address === params.userAddress
       ) || (addrResult?.addresses || [])[0];
       publicKey = stxEntry?.publicKey || '';
-      console.log('Fetched public key:', publicKey ? publicKey.slice(0, 10) + '...' : 'NOT FOUND');
+      console.log('Public key:', publicKey ? publicKey.slice(0, 10) + '...' : 'NOT FOUND');
     } catch (e) {
-      console.warn('Could not fetch public key via stx_getAddresses:', e);
+      console.error('stx_getAddresses failed:', e);
     }
   }
 
@@ -113,29 +115,31 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     );
   }
 
-  const transaction = await txLib.makeUnsignedContractCall({
-    contractAddress: swapTx.contractAddress,
-    contractName: swapTx.contractName,
-    functionName: swapTx.functionName,
-    functionArgs: swapTx.functionArgs,
-    postConditions: swapTx.postConditions ?? [],
-    network,
-    sponsored: true,   // sets AuthType.Sponsored — relayer MUST co-sign before broadcast
-    publicKey,
-    fee: 0n,           // placeholder — relayer sets the real fee
-    validateWithAbi: false,
-  });
+  let txHex: string;
+  try {
+    console.log('Building unsigned sponsored tx with publicKey:', publicKey.slice(0, 10) + '...');
+    const transaction = await txLib.makeUnsignedContractCall({
+      contractAddress: swapTx.contractAddress,
+      contractName: swapTx.contractName,
+      functionName: swapTx.functionName,
+      functionArgs: swapTx.functionArgs,
+      postConditions: swapTx.postConditions ?? [],
+      network,
+      sponsored: true,
+      publicKey,
+      fee: 0n,
+      validateWithAbi: false,
+    });
+    txHex = Buffer.from(transaction.serialize()).toString('hex');
+    console.log('Built AuthType.Sponsored tx OK, length:', txHex.length);
+  } catch (buildErr: any) {
+    console.error('makeUnsignedContractCall failed:', buildErr);
+    throw new Error(`Failed to build sponsored transaction: ${buildErr?.message || buildErr}`);
+  }
 
-  const txHex = Buffer.from(transaction.serialize()).toString('hex');
-  console.log('Built AuthType.Sponsored tx:', txHex.slice(0, 20) + '...');
-
-  // Step 5: Wallet signs the sponsored tx WITHOUT broadcasting
-  // request('stx_signTransaction') is the correct v8 API:
-  //   - wallet shows confirmation popup
-  //   - wallet signs the tx (adds origin signature)
-  //   - wallet does NOT broadcast (unlike stx_callContract)
-  //   - returns { txHex: signedHex }
+  // Step 5: Wallet signs WITHOUT broadcasting
   onProgress?.('Waiting for wallet signature...');
+  console.log('Calling stx_signTransaction...');
 
   let signedTxHex: string;
   try {
@@ -144,10 +148,12 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
       network: 'mainnet',
     } as any);
 
+    console.log('stx_signTransaction result keys:', Object.keys(signResult || {}));
     signedTxHex = (signResult as any).txHex || (signResult as any).transaction;
     if (!signedTxHex) throw new Error('Wallet did not return signed tx hex');
-    console.log('Wallet signed sponsored tx (AuthType.Sponsored preserved)');
+    console.log('Wallet signed sponsored tx OK');
   } catch (err: any) {
+    console.error('stx_signTransaction error:', err);
     if (err?.message?.toLowerCase().includes('cancel') || err?.code === 4001) {
       throw new Error('Swap cancelled by user');
     }
