@@ -312,6 +312,18 @@ export class PaymasterService {
             const cleanHex = txHex.replace(/^0x/, '');
             const transaction = deserializeTransaction(cleanHex);
 
+            // Guard: transaction MUST have AuthType.Sponsored (0x05)
+            // If it's Standard (0x04), the frontend built it without sponsored:true
+            // and sponsorTransaction() will throw a cryptic error.
+            const authType = (transaction.auth as any).authType;
+            if (authType !== 0x05) {
+                throw new Error(
+                    `Transaction must be constructed with sponsored:true (AuthType.Sponsored=0x05). ` +
+                    `Received AuthType=0x${authType?.toString(16) ?? '??'}. ` +
+                    `The wallet built a standard transaction instead of a sponsored one.`
+                );
+            }
+
             // Introspect: Try to find real address and fee
             let userAddress = 'unknown';
             let feeAmount = '0';
