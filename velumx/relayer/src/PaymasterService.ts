@@ -130,8 +130,8 @@ export class PaymasterService {
      * Get real-time Price for a specific token relative to microSTX using multiple oracles
      * Returns: Amount of STX per 1 unit of token
      */
-    public async getTokenRate(token: string): Promise<number> {
-        return this.pricingOracle.getTokenRate(token);
+    public async getTokenRate(token: string, tokenDecimals: number = 6): Promise<number> {
+        return this.pricingOracle.getTokenRate(token, tokenDecimals);
     }
 
     /**
@@ -144,8 +144,8 @@ export class PaymasterService {
     /**
      * Convert any token amount to its USDCx (USD) equivalent
      */
-    public async convertToUsdcx(amount: string | bigint, token: string): Promise<number> {
-        return this.pricingOracle.convertToUsdcx(amount, token);
+    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals: number = 6): Promise<number> {
+        return this.pricingOracle.convertToUsdcx(amount, token, tokenDecimals);
     }
 
     /**
@@ -230,23 +230,12 @@ export class PaymasterService {
 
         // 3. Universal Pricing (User Pays)
         // Target fee = $0.02 USD worth of the fee token + developer markup.
-        // This ensures consistent USD value regardless of which token is used.
         const estimatedGas = intent.estimatedGas || 10000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
         const BASE_FEE_USD = 0.02; // $0.02 USD base fee
 
-        // Get token USD price via STX as bridge:
-        // tokenRateInSTX = how many STX per 1 token
-        // stxUsdPrice = USD per 1 STX
-        // tokenUsdPrice = tokenRateInSTX * stxUsdPrice
-        const tokenRateInSTX = await this.getTokenRate(feeToken);
-        const stxUsdPrice = await this.getStxPrice();
-        const tokenUsdPrice = tokenRateInSTX * stxUsdPrice;
-
-        // tokens needed = BASE_FEE_USD / tokenUsdPrice
-        // in micro units (assuming 6 decimals for most SIP-010, 8 for ALEX/sBTC)
-        // Fetch token decimals on-chain — works for any SIP-010 token
+        // Fetch token decimals FIRST — needed for accurate rate calculation
         let tokenDecimals = 6; // safe default
         try {
             const [contractAddr, contractName] = feeToken.split('.');
@@ -260,7 +249,15 @@ export class PaymasterService {
             }
         } catch (e) {
             console.warn(`Could not fetch decimals for ${feeToken}, defaulting to 6`);
-        }        const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
+        }
+
+        const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
+
+        // Get token USD price via STX as bridge, passing decimals so the oracle
+        // prices exactly 1 full token (not 1_000_000 micro units which assumes 6 decimals).
+        const tokenRateInSTX = await this.getTokenRate(feeToken, tokenDecimals);
+        const stxUsdPrice = await this.getStxPrice();
+        const tokenUsdPrice = tokenRateInSTX * stxUsdPrice;
 
         const finalFee = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
 

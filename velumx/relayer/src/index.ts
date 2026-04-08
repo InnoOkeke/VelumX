@@ -240,21 +240,34 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                 const totalTransactions = transactions.length;
 
                 // 2. Batch Convert Fees to USDCx
-                // Standardize on 6-decimal USDCx units
+                // Standardize on USD value regardless of which token was used
                 let totalRevenueUsdcx = 0;
                 
-                // Optimized pricing: cache token rates for this batch
-                const tokenRates: Record<string, number> = {};
+                // Cache token rates for this batch to avoid redundant oracle calls
+                const tokenRateCache: Record<string, number> = {};
                 const stxPrice = await paymasterService.getStxPrice();
 
+                // Token decimals lookup — same map as the dashboard UI
+                const TOKEN_DECIMALS: Record<string, number> = {
+                    'token-alex': 8, 'age000-governance-token': 8,
+                    'sbtc-token': 8, 'usdcx': 6, 'token-aeusdc': 6,
+                    'token-wstx': 6, 'stx': 6,
+                };
+
                 for (const tx of transactions) {
-                    const token = tx.feeToken || 'Token';
-                    if (!tokenRates[token]) {
-                        tokenRates[token] = await paymasterService.getTokenRate(token);
+                    const rawToken = tx.feeToken || 'Token';
+                    // feeToken may be a full principal or just the contract name
+                    const contractName = rawToken.includes('.') ? rawToken.split('.').pop()! : rawToken;
+                    const decimals = TOKEN_DECIMALS[contractName.toLowerCase()] ?? 6;
+
+                    const cacheKey = contractName.toLowerCase();
+                    if (!tokenRateCache[cacheKey]) {
+                        // Pass decimals so the oracle prices exactly 1 full token
+                        tokenRateCache[cacheKey] = await paymasterService.getTokenRate(rawToken, decimals);
                     }
                     
-                    const amountInToken = Number(tx.feeAmount || '0') / 1_000_000;
-                    const amountInUsdcx = (amountInToken * tokenRates[token]) * stxPrice;
+                    const amountInToken = Number(tx.feeAmount || '0') / Math.pow(10, decimals);
+                    const amountInUsdcx = amountInToken * tokenRateCache[cacheKey] * stxPrice;
                     totalRevenueUsdcx += amountInUsdcx;
                 }
 
@@ -283,10 +296,12 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                         
                         for (const tokenKey of Object.keys(ftBalances)) {
                             const tokenPrincipal = tokenKey.split('::')[0];
+                            const contractName = tokenPrincipal.includes('.') ? tokenPrincipal.split('.').pop()! : tokenPrincipal;
+                            const decimals = TOKEN_DECIMALS[contractName.toLowerCase()] ?? 6;
                             const balance = ftBalances[tokenKey].balance;
                             
                             if (balance !== '0') {
-                                const usdcxEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal);
+                                const usdcxEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal, decimals);
                                 totalFeeValueUsdcx += usdcxEquivalent;
                             }
                         }

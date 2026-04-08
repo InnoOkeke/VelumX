@@ -128,10 +128,13 @@ export class PricingOracleService {
     }
 
     /**
-     * Get token rate relative to STX with multiple oracle fallbacks
+     * Get token rate relative to STX with multiple oracle fallbacks.
+     * @param token - Token identifier (contract principal or ALEX SDK ID)
+     * @param tokenDecimals - Actual decimals of the token (default 6). Used to price
+     *                        exactly 1 full token via the ALEX SDK.
      */
-    public async getTokenRate(token: string): Promise<number> {
-        const cacheKey = `token-rate-${token}`;
+    public async getTokenRate(token: string, tokenDecimals: number = 6): Promise<number> {
+        const cacheKey = `token-rate-${token}-${tokenDecimals}`;
         const cached = this.priceCache.get(cacheKey);
 
         // Return cached rate if still valid
@@ -148,7 +151,10 @@ export class PricingOracleService {
                 name: 'ALEX SDK',
                 getRate: async (token: string) => {
                     try {
-                        const unitInMicro = BigInt(1_000_000);
+                        // Use exactly 1 full token in micro units based on actual decimals.
+                        // Previously hardcoded to 1_000_000 (assumes 6 decimals), which was
+                        // wrong for tokens like sBTC (8 decimals) or any non-6-decimal token.
+                        const unitInMicro = BigInt(10 ** tokenDecimals);
                         const amountOut = await this.alex.getAmountTo(
                             token as any,
                             unitInMicro,
@@ -156,8 +162,9 @@ export class PricingOracleService {
                         );
 
                         if (amountOut) {
+                            // wSTX always has 6 decimals, so divide output by 1_000_000
                             const rate = Number(amountOut) / 1_000_000;
-                            console.log(`Token rate from ALEX: ${token} = ${rate} STX`);
+                            console.log(`Token rate from ALEX: ${token} = ${rate} STX (decimals=${tokenDecimals})`);
                             return rate;
                         }
                         return null;
@@ -223,17 +230,17 @@ export class PricingOracleService {
     /**
      * Convert any token amount to its USDCx (USD) equivalent
      */
-    public async convertToUsdcx(amount: string | bigint, token: string): Promise<number> {
+    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals: number = 6): Promise<number> {
         const rawAmount = BigInt(amount);
         if (rawAmount === BigInt(0)) return 0;
 
-        const tokenStxRate = await this.getTokenRate(token);
+        const tokenStxRate = await this.getTokenRate(token, tokenDecimals);
         const stxUsdPrice = await this.getStxPrice();
 
-        // 1. Convert token amount to STX (assuming 6 decimals for most SIP-010)
-        const amountInStx = (Number(rawAmount) / 1_000_000) * tokenStxRate;
+        // Convert token micro-amount to full tokens using actual decimals
+        const amountInStx = (Number(rawAmount) / Math.pow(10, tokenDecimals)) * tokenStxRate;
 
-        // 2. Convert STX to USD (USDCx)
+        // Convert STX to USD (USDCx)
         const amountInUsdcx = amountInStx * stxUsdPrice;
 
         return amountInUsdcx;

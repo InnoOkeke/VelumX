@@ -99,7 +99,7 @@ export default function DashboardOverview() {
   const metricCards = [
     {
       title: 'Total Gas Sponsored',
-      value: `${(parseInt(currentStats.totalSponsored) / 1_000_000).toFixed(2)} ${currentStats.feeToken || 'Tokens'}`,
+      value: `${parseFloat(currentStats.totalSponsored || '0').toFixed(2)} ${currentStats.feeToken || 'USDCx'}`,
       change: '0%',
       trend: 'up',
       icon: BatteryCharging,
@@ -154,7 +154,7 @@ export default function DashboardOverview() {
             <div className="flex flex-col">
               <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Rev. ({currentNetwork})</span>
               <span className={`text-[11px] font-bold font-mono ${currentNetwork === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {(parseInt(currentStats.relayerFeeBalance || 0) / 1_000_000).toFixed(2)} <span className="opacity-40 font-medium">{currentStats.feeToken || 'Tokens'}</span>
+                {parseFloat(currentStats.relayerFeeBalance || '0').toFixed(2)} <span className="opacity-40 font-medium">{currentStats.feeToken || 'USDCx'}</span>
               </span>
             </div>
           </div>
@@ -210,8 +210,14 @@ export default function DashboardOverview() {
 
             const dailyTotals = last7Days.map(date => {
               const dayLogs = logs.filter(log => log.createdAt.startsWith(date));
-              const total = dayLogs.reduce((acc, log) => acc + (parseInt(log.feeAmount) || 0), 0);
-              return total / 1_000_000;
+              const total = dayLogs.reduce((acc, log) => {
+                const contractName = (log.feeToken || '').includes('.')
+                  ? log.feeToken.split('.').pop()
+                  : log.feeToken || '';
+                const decimals = ({ 'token-alex': 8, 'age000-governance-token': 8, 'sbtc-token': 8 } as Record<string, number>)[contractName.toLowerCase()] ?? 6;
+                return acc + (parseInt(log.feeAmount) || 0) / Math.pow(10, decimals);
+              }, 0);
+              return total;
             });
 
             const maxTotal = Math.max(...dailyTotals, 10);
@@ -264,7 +270,14 @@ export default function DashboardOverview() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-white text-xs font-bold font-mono">{(parseInt(log.feeAmount) || 0) / 1_000_000} {log.feeToken || 'Tokens'}</p>
+                <p className="text-white text-xs font-bold font-mono">
+                  {(() => {
+                    const cn = (log.feeToken || '').includes('.') ? log.feeToken.split('.').pop() : log.feeToken || '';
+                    const dec = ({ 'token-alex': 8, 'age000-governance-token': 8, 'sbtc-token': 8 } as Record<string, number>)[cn.toLowerCase()] ?? 6;
+                    const sym = ({ 'token-alex': 'ALEX', 'usdcx': 'USDCx', 'token-aeusdc': 'aeUSDC', 'sbtc-token': 'sBTC' } as Record<string, string>)[cn.toLowerCase()] || cn.toUpperCase();
+                    return `${((parseInt(log.feeAmount) || 0) / Math.pow(10, dec)).toFixed(dec > 6 ? 6 : 4)} ${sym}`;
+                  })()}
+                </p>
                 <p className={`text-[10px] font-bold mt-0.5 ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>{log.status}</p>
               </div>
             </div>

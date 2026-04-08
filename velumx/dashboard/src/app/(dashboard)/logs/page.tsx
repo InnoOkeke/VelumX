@@ -7,6 +7,26 @@ import { useWallet } from '@/components/providers/WalletContext';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'http://localhost:4000';
 
+// Maps contract name/principal fragments to display symbol and decimals.
+// feeToken in the DB is stored as the contract name (e.g. "token-alex", "usdcx").
+const TOKEN_META: Record<string, { symbol: string; decimals: number }> = {
+    'token-alex':              { symbol: 'ALEX',   decimals: 8 },
+    'age000-governance-token': { symbol: 'ALEX',   decimals: 8 },
+    'usdcx':                   { symbol: 'USDCx',  decimals: 6 },
+    'token-aeusdc':            { symbol: 'aeUSDC', decimals: 6 },
+    'sbtc-token':              { symbol: 'sBTC',   decimals: 8 },
+    'token-wstx':              { symbol: 'STX',    decimals: 6 },
+    'stx':                     { symbol: 'STX',    decimals: 6 },
+};
+
+function resolveTokenMeta(feeToken: string): { symbol: string; decimals: number } {
+    if (!feeToken) return { symbol: 'Token', decimals: 6 };
+    // feeToken may be a full principal like "SP...contract-name" or just the contract name
+    const contractName = feeToken.includes('.') ? feeToken.split('.').pop()! : feeToken;
+    const key = contractName.toLowerCase();
+    return TOKEN_META[key] || { symbol: contractName.toUpperCase(), decimals: 6 };
+}
+
 export default function TransactionLogsPage() {
     const [isClient, setIsClient] = useState(false);
     const { user, loading: userLoading } = useUser();
@@ -116,8 +136,16 @@ export default function TransactionLogsPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-bold font-mono text-white">{(parseInt(log.feeAmount) / 1_000_000).toFixed(2)}</span>
-                                            <span className="text-[9px] font-bold text-white/40 uppercase">{log.feeToken}</span>
+                                            {(() => {
+                                                const { symbol, decimals } = resolveTokenMeta(log.feeToken);
+                                                const amount = (parseInt(log.feeAmount) / Math.pow(10, decimals)).toFixed(decimals > 6 ? 6 : 2);
+                                                return (
+                                                    <>
+                                                        <span className="text-xs font-bold font-mono text-white">{amount}</span>
+                                                        <span className="text-[9px] font-bold text-white/40 uppercase">{symbol}</span>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
