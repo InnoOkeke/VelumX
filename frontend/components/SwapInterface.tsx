@@ -187,7 +187,7 @@ export function SwapInterface() {
     error: null,
     success: null,
     quote: null,
-    gasFee: '0.2',
+    gasFee: '0',
     slippage: 0.5,
     showSettings: false,
     isRegistering: false,
@@ -407,8 +407,6 @@ export function SwapInterface() {
       if (estimate && estimate.maxFee) {
         const fee = estimate.maxFee;
         const tokenAmount = (Number(fee) / Math.pow(10, state.selectedGasToken?.decimals || 6)).toFixed(4);
-        // Also compute USD equivalent: BASE_FEE_USD is $0.02, so just show ~$0.02
-        // We display token amount + USD hint
         setState(prev => ({
           ...prev,
           gasFee: tokenAmount,
@@ -778,7 +776,6 @@ export function SwapInterface() {
                     <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400">
                       {state.gasFee} {state.selectedGasToken?.symbol}
                     </span>
-                    <span className="text-[8px] opacity-60 font-bold text-purple-500 dark:text-purple-400">≈ $0.15 USD gas fee</span>
                   </div>
                 </div>
               </div>

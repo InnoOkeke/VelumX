@@ -626,7 +626,6 @@ export function BridgeInterface() {
                 color: 'var(--text-primary)'
               }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Fee:</span> <span className="font-mono font-semibold">{parseFloat(state.feeEstimate.usdcx).toFixed(4)}</span> USDCx
-                <span className="ml-2 text-[10px] opacity-60">≈ $0.15 USD gas fee</span>
               </div>
             )}
           </div>

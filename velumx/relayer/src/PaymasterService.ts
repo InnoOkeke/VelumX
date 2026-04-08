@@ -271,8 +271,8 @@ export class PaymasterService {
         const estimatedGas = intent.estimatedGas || 10000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const BASE_FEE_USD = 0.15;  // $0.15 USD — covers 0.01 STX relayer cost + higher margin
-        const MIN_FEE_USD  = 0.15;  // Hard floor: always collect at least $0.15 equivalent
+        const BASE_FEE_USD = 0.02;  // $0.02 USD base fee
+        const MIN_FEE_USD  = 0.02;  // Hard floor
 
         // Fetch token decimals FIRST — needed for accurate rate calculation
         let tokenDecimals = 6; // safe default
@@ -292,23 +292,22 @@ export class PaymasterService {
 
         const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
 
-        // Get token USD price directly — CoinGecko returns USD price converted to STX rate,
-        // so we multiply back by STX price to get USD. But simpler: fetch USD price directly.
-        const tokenRateInSTX = await this.getTokenRate(feeToken, tokenDecimals);
-        const stxUsdPrice = await this.getStxPrice();
-        // tokenRateInSTX = USD_price_of_token / stxUsdPrice (from CoinGecko source)
-        // So tokenUsdPrice = tokenRateInSTX * stxUsdPrice = USD_price_of_token ✓
-        const tokenUsdPrice = tokenRateInSTX * stxUsdPrice;
+        // Get USD price of 1 full token directly — no STX bridge conversion
+        const tokenUsdPrice = await this.pricingOracle.getTokenUsdPrice(feeToken, tokenDecimals);
 
-        // Calculate fee with markup, then enforce the minimum floor
-        const feeFromBase = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
+        // Calculate fee in micro units
+        const feeFromBase  = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
         const feeFromFloor = Math.ceil((MIN_FEE_USD  / tokenUsdPrice) * tokenMicroUnitsPerToken);
         const finalFee = Math.max(feeFromBase, feeFromFloor);
 
-        console.log(`Fee estimate: token=${feeToken} decimals=${tokenDecimals} tokenUsdPrice=${tokenUsdPrice} finalFee=${finalFee} microUnits`);
+        // USD value of the final fee (for frontend display)
+        const maxFeeUsd = ((finalFee / tokenMicroUnitsPerToken) * tokenUsdPrice).toFixed(4);
+
+        console.log(`[Fee] token=${feeToken} decimals=${tokenDecimals} usdPrice=$${tokenUsdPrice} finalFee=${finalFee} (~$${maxFeeUsd})`);
 
         return {
             maxFee: finalFee.toString(),
+            maxFeeUsd,
             feeToken,
             estimatedGas,
             policy: "USER_PAYS"

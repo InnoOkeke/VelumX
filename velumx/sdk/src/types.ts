@@ -47,6 +47,8 @@ export interface FeeEstimateResult {
     estimatedGas: number;
     /** 'DEVELOPER_SPONSORS' | 'USER_PAYS' */
     policy: string;
+    /** USD value of the fee (e.g. "0.0200") — for display purposes */
+    maxFeeUsd?: string;
     /** Developer's relayer STX address — used as fee recipient in paymaster txs */
     relayerAddress?: string;
     /** VelumX paymaster contract address for this network */
