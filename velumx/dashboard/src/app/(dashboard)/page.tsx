@@ -164,6 +164,7 @@ export default function DashboardOverview() {
               <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Rev. ({currentNetwork})</span>
               <span className={`text-[11px] font-bold font-mono ${currentNetwork === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {formatUsd(currentStats.relayerFeeBalance)} <span className="opacity-40 font-medium">USD</span>
+              </span>
             </div>
           </div>
         )}
