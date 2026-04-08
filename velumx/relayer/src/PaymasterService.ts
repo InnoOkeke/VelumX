@@ -130,14 +130,14 @@ export class PaymasterService {
      * Get real-time Price for a specific token relative to microSTX using multiple oracles
      * Returns: Amount of STX per 1 unit of token
      */
-    public async getTokenRate(token: string, tokenDecimals: number = 6): Promise<number> {
+    public async getTokenRate(token: string, tokenDecimals: number = 6): Promise<number | null> {
         return this.pricingOracle.getTokenRate(token, tokenDecimals);
     }
 
     /**
      * Get the current STX price in USD/USDCx using multiple oracles
      */
-    public async getStxPrice(): Promise<number> {
+    public async getStxPrice(): Promise<number | null> {
         return this.pricingOracle.getStxPrice();
     }
 
@@ -148,7 +148,7 @@ export class PaymasterService {
     /**
      * Convert any token amount to its USDCx (USD) equivalent
      */
-    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals: number = 6): Promise<number> {
+    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals: number = 6): Promise<number | null> {
         return this.pricingOracle.convertToUsdcx(amount, token, tokenDecimals);
     }
 
@@ -282,6 +282,9 @@ export class PaymasterService {
 
         // Get USD price of 1 full token directly — no STX bridge conversion
         const tokenUsdPrice = await this.pricingOracle.getTokenUsdPrice(feeToken, tokenDecimals);
+        if (!tokenUsdPrice || tokenUsdPrice <= 0) {
+            throw new Error(`Pricing oracle unavailable for ${feeToken}. Live market data required.`);
+        }
 
         // 4. Calculate Final Fee
         // Multiply by markup factor if provided by developer policy

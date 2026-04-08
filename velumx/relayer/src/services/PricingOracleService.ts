@@ -79,7 +79,7 @@ export class PricingOracleService {
 
     // ─── STX Price ────────────────────────────────────────────────────────────
 
-    public async getStxPrice(): Promise<number> {
+    public async getStxPrice(): Promise<number | null> {
         const cacheKey = 'stx-usd';
         const cached = this.priceCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) return cached.price;
@@ -118,10 +118,16 @@ export class PricingOracleService {
                 }
             },
             {
-                name: 'Fallback',
+                name: 'CoinCap',
                 getPrice: async () => {
-                    console.warn('[Oracle] Using fallback STX price $0.021');
-                    return 0.021;
+                    try {
+                        const res = await fetch('https://api.coincap.io/v2/assets/blockstack', { signal: AbortSignal.timeout(10000) });
+                        if (res.ok) {
+                            const data = await res.json();
+                            return parseFloat(data.data.priceUsd) || null;
+                        }
+                        return null;
+                    } catch { return null; }
                 }
             }
         ];
@@ -134,7 +140,9 @@ export class PricingOracleService {
                 return price;
             }
         }
-        return 0.021;
+        
+        console.error('[Oracle] ALL price sources failed. No fallback available.');
+        return null; // Explicit failure
     }
 
     // ─── Token USD Price ──────────────────────────────────────────────────────
@@ -144,23 +152,16 @@ export class PricingOracleService {
      * Stablecoins always return $1.00.
      * Other tokens use ALEX SDK DEX price converted to USD via STX price.
      */
-    public async getTokenUsdPrice(token: string, tokenDecimals: number = 6): Promise<number> {
+    public async getTokenUsdPrice(token: string, tokenDecimals: number = 6): Promise<number | null> {
         const cacheKey = `token-usd-${token}-${tokenDecimals}`;
         const cached = this.priceCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) return cached.price;
 
         // STX/wSTX — return live STX price
         if (token === 'STX' || token.includes('wstx')) {
-            return this.getStxPrice();
-        }
-
-        // Stablecoins — always $1.00, no oracle needed
-        const STABLECOINS = ['usdcx', 'token-aeusdc', 'token-susdt', 'aeusdc', 'usdc', 'susdt'];
-        const contractName = token.includes('.') ? token.split('.').pop()!.toLowerCase() : token.toLowerCase();
-        if (STABLECOINS.some(s => contractName.includes(s))) {
-            console.log(`[Oracle] ${token} is a stablecoin → $1.00`);
-            this.priceCache.set(cacheKey, { price: 1.0, timestamp: Date.now() });
-            return 1.0;
+            const price = await this.getStxPrice();
+            if (price === null) return null;
+            return price;
         }
 
         // Map full principals to ALEX SDK token IDs
@@ -184,6 +185,8 @@ export class PricingOracleService {
                         // amountOut is in micro-wSTX (8 decimals on ALEX)
                         const stxPerToken = Number(amountOut) / 100_000_000;
                         const stxUsd = await this.getStxPrice();
+                        if (stxUsd === null) return null;
+                        
                         const usdPrice = stxPerToken * stxUsd;
                         console.log(`[Oracle] ${id} via ALEX SDK: ${stxPerToken} STX = $${usdPrice}`);
                         return usdPrice > 0 ? usdPrice : null;
@@ -241,9 +244,10 @@ export class PricingOracleService {
 
     // ─── Legacy compatibility (returns STX per token) ─────────────────────────
 
-    public async getTokenRate(token: string, tokenDecimals: number = 6): Promise<number> {
+    public async getTokenRate(token: string, tokenDecimals: number = 6): Promise<number | null> {
         const usdPrice = await this.getTokenUsdPrice(token, tokenDecimals);
         const stxUsd = await this.getStxPrice();
+        if (usdPrice === null || stxUsd === null || stxUsd === 0) return null;
         return usdPrice / stxUsd; // STX per token
     }
 
@@ -252,7 +256,7 @@ export class PricingOracleService {
     /**
      * Converts a raw micro-amount of a token to its USD (USDCx) equivalent.
      */
-    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals?: number): Promise<number> {
+    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals?: number): Promise<number | null> {
         const rawAmount = BigInt(amount);
         if (rawAmount === BigInt(0)) return 0;
 
@@ -264,6 +268,8 @@ export class PricingOracleService {
         }
 
         const usdPerToken = await this.getTokenUsdPrice(token, decimals);
+        if (usdPerToken === null) return null;
+        
         const tokenAmount = Number(rawAmount) / Math.pow(10, decimals);
         return tokenAmount * usdPerToken;
     }

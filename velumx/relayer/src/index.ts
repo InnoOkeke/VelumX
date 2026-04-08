@@ -246,9 +246,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                 // Total Gas Sponsored — calculate ONLY from successful/mined transactions, 
                 // since dropped/pending transactions haven't consumed gas.
                 // The relayer always pays exactly 10,000 microSTX (0.01 STX) per sponsored tx.
-                const STX_FEE_PER_TX = 0.01;
-                const totalSponsoredStx = successfulTxs.length * STX_FEE_PER_TX;
-                const totalSponsoredUsd = totalSponsoredStx * stxPrice;
+                const totalSponsoredUsd = (stxPrice || 0) * (successfulTxs.length * 0.01);
                 const totalSponsored = totalSponsoredUsd.toFixed(6);
 
                 // Relayer address and network needed for STX balance display
@@ -272,7 +270,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                             // Convert this token's liquid balance to USD
                             const usdVal = await paymasterService.convertToUsdcx(balance, tokenPrincipal);
                             console.log(`[Stats-Audit] Found ${tokenPrincipal}: balance=${balance}, USD=$${usdVal}`);
-                            walletFeeValueUsd += usdVal;
+                            if (usdVal) walletFeeValueUsd += usdVal;
                         }
                     }
                 } catch (e) {
@@ -286,7 +284,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     
                     // convertToUsdcx now auto-resolves decimals correctly
                     const usdEquivalent = await paymasterService.convertToUsdcx(tx.feeAmount, tx.feeToken);
-                    totalFeeValueUsd += usdEquivalent;
+                    if (usdEquivalent) totalFeeValueUsd += usdEquivalent;
                 }
 
                 // 5. STX Balance (for gas fuel display)
