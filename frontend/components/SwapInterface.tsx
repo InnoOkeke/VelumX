@@ -206,6 +206,8 @@ export function SwapInterface() {
           const contractAddress = t.wrapToken
             ? t.wrapToken.split('::')[0]
             : (t.contractAddress || t.address || '');
+          // Resolve known ALEX SDK IDs (e.g. 'age000-governance-token') to correct contract principals
+          const resolvedAddress = resolveTokenAddress(contractAddress || t.id || '');
           const rawIcon = t.icon || '';
           const logoUrl = rawIcon
             ? `/api/image-proxy?url=${encodeURIComponent(rawIcon)}`
@@ -213,7 +215,7 @@ export function SwapInterface() {
           return {
             symbol: t.name || t.symbol || t.id || 'Unknown',
             name: t.name || t.symbol || 'Unknown Token',
-            address: contractAddress || 'unknown-address',
+            address: resolvedAddress || 'unknown-address',
             decimals: t.wrapTokenDecimals ?? t.underlyingTokenDecimals ?? t.decimals ?? 8,
             logoUrl,
           };
