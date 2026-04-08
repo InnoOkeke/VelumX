@@ -274,63 +274,64 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const connectStacks = useCallback(async (preferredWallet?: StacksWalletType) => {
     setState(prev => ({ ...prev, isConnecting: true }));
     try {
-      const connectLib = await getStacksConnect();
-      if (!connectLib) throw new Error('Stacks library not available');
-      return new Promise<string>((resolve, reject) => {
-        connectLib.showConnect({
-          appDetails: { name: 'VelumX DEX', icon: window.location.origin + '/favicon.ico' },
-          onFinish: (authData: any) => {
-            const address = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.address;
-            
-            // Comprehensive Public Key Resolution
-            let publicKey = "";
-            
-            try {
-              // Path 1: Directly from authData profile
-              publicKey = authData.authResponsePayload?.profile?.stxAddress?.publicKey || "";
-              
-              // Path 2: From the userSession loadUserData (Standard Stacks Connect)
-              if (!publicKey && authData.userSession) {
-                const userData = authData.userSession.loadUserData();
-                publicKey = userData.profile?.stxAddress?.publicKey || userData.publicKey || "";
-              }
-              
-              // Path 3: From LocalStorage fallback (if already persisted by extension)
-              if (!publicKey) {
-                publicKey = connectLib.getLocalStorage()?.addresses?.stx?.[0]?.publicKey || "";
-              }
-            } catch (e) {
-              console.warn("Wallet: Error during public key extraction", e);
-            }
+      // Use @stacks/connect v8 request API — always returns publicKey
+      const { request: stacksRequest, connect: stacksConnect } = await import('@stacks/connect');
 
-            console.log('Stacks Wallet Connected:', { address, hasPublicKey: !!publicKey });
+      // connect() triggers wallet selection + returns addresses with public keys
+      const response = await stacksConnect({ forceWalletSelect: true }) as any;
 
-            if (address) {
-              if (!publicKey) {
-                console.warn('Stacks Public Key not found. Gasless transactions will not work.');
-                // We don't throw here to allow standard transactions to work
-              }
+      // response.addresses is an array of { address, publicKey }
+      const addresses = response?.addresses || [];
+      const stxEntry = addresses.find((a: any) =>
+        a.address?.startsWith('SP') || a.address?.startsWith('ST')
+      );
 
-              setState(prev => ({
-                ...prev,
-                stacksAddress: address,
-                stacksPublicKey: publicKey,
-                stacksConnected: true,
-                stacksWalletType: preferredWallet || 'leather',
-                isConnecting: false,
-              }));
-              fetchStacksBalances(address);
-              resolve(address);
-            } else reject(new Error('No address found'));
-          },
-          onCancel: () => {
-            setState(prev => ({ ...prev, isConnecting: false }));
-            reject(new Error('Cancelled'));
+      if (!stxEntry?.address) throw new Error('No Stacks address returned from wallet');
+
+      const address: string = stxEntry.address;
+      const publicKey: string = stxEntry.publicKey || '';
+
+      console.log('Stacks Wallet Connected:', { address, hasPublicKey: !!publicKey });
+
+      if (!publicKey) {
+        // Fallback: try stx_getAddresses which explicitly returns publicKey
+        try {
+          const addrResult = await stacksRequest('stx_getAddresses') as any;
+          const stxAddr = (addrResult?.addresses || []).find((a: any) =>
+            a.address?.startsWith('SP') || a.address?.startsWith('ST')
+          );
+          if (stxAddr?.publicKey) {
+            console.log('Public key fetched via stx_getAddresses');
+            setState(prev => ({
+              ...prev,
+              stacksAddress: address,
+              stacksPublicKey: stxAddr.publicKey,
+              stacksConnected: true,
+              stacksWalletType: preferredWallet || 'leather',
+              isConnecting: false,
+            }));
+            fetchStacksBalances(address);
+            return address;
           }
-        });
-      });
-    } catch (e) {
+        } catch (e) {
+          console.warn('stx_getAddresses fallback failed:', e);
+        }
+        console.warn('Public key not available — sponsored transactions may not work');
+      }
+
+      setState(prev => ({
+        ...prev,
+        stacksAddress: address,
+        stacksPublicKey: publicKey,
+        stacksConnected: true,
+        stacksWalletType: preferredWallet || 'leather',
+        isConnecting: false,
+      }));
+      fetchStacksBalances(address);
+      return address;
+    } catch (e: any) {
       setState(prev => ({ ...prev, isConnecting: false }));
+      if (e?.message?.toLowerCase().includes('cancel')) throw new Error('Cancelled');
       throw e;
     }
   }, [fetchStacksBalances]);
@@ -361,25 +362,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!state.stacksAddress) throw new Error('Stacks wallet not connected');
 
     try {
+      const { request: stacksRequest } = await import('@stacks/connect');
+
+      // stx_getAddresses always returns publicKey in v8
+      const result = await stacksRequest('stx_getAddresses') as any;
+      const stxEntry = (result?.addresses || []).find((a: any) =>
+        a.address === state.stacksAddress
+      ) || (result?.addresses || [])[0];
+
+      const publicKey = stxEntry?.publicKey || '';
+      if (publicKey) {
+        console.log('Recovered public key via stx_getAddresses');
+        setState(prev => ({ ...prev, stacksPublicKey: publicKey }));
+        return publicKey;
+      }
+
+      // Fallback: sign a message to extract public key
       const connectLib = await getStacksConnect();
-      if (!connectLib) throw new Error('Stacks library not available');
-
+      if (!connectLib) return null;
       const showSignMessage = connectLib.showSignMessage || connectLib.openSignatureRequestPopup;
-      if (!showSignMessage) throw new Error('Sign message function not available');
+      if (!showSignMessage) return null;
 
-      return new Promise<string | null>((resolve, reject) => {
+      return new Promise<string | null>((resolve) => {
         showSignMessage({
           message: 'Verify Account ownership to enable gasless transactions.',
           appDetails: { name: 'VelumX', icon: window.location.origin + '/favicon.ico' },
           onFinish: (data: any) => {
-            console.log('Verify Wallet Response:', data); // Log full data
-            const publicKey = data.publicKey;
-            if (publicKey) {
-              console.log('Recovered Public Key:', publicKey);
-              setState(prev => ({ ...prev, stacksPublicKey: publicKey }));
-              resolve(publicKey);
+            const pk = data.publicKey;
+            if (pk) {
+              setState(prev => ({ ...prev, stacksPublicKey: pk }));
+              resolve(pk);
             } else {
-              console.error('Public Key missing in signature response', Object.keys(data));
               resolve(null);
             }
           },

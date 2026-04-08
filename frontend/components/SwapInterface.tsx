@@ -431,28 +431,18 @@ export function SwapInterface() {
         // Use VelumX SDK for gasless swaps
         const { executeSimpleGaslessSwap } = await import('@/lib/helpers/simple-gasless-swap');
         
-        // amountIn: token's native micro units (e.g. STX = 6 decimals)
-        // minOut: outputAmount is already in human units (ALEX 1e8 → divided by 1e8 in quote)
-        //         pass as 1e8 micro units so toAlexAmount(x, 8) = x unchanged
         const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals).toString();
         const minOutHuman = parseFloat(state.outputAmount) * (1 - state.slippage / 100);
         const minAmountOutMicro = BigInt(Math.floor(minOutHuman * 1e8)).toString();
-        
-        // Ensure we have the user's public key for building the sponsored tx
-        let pubKey = stacksPublicKey;
-        if (!pubKey) {
-          pubKey = await recoverPublicKey() || undefined;
-        }
 
         const txid = await executeSimpleGaslessSwap({
           userAddress: stacksAddress,
-          userPublicKey: pubKey || '',
+          userPublicKey: stacksPublicKey || undefined,
           tokenIn: state.inputToken.symbol === 'STX' ? 'token-wstx' : state.inputToken.address,
           tokenOut: state.outputToken.symbol === 'STX' ? 'token-wstx' : state.outputToken.address,
           amountIn: amountInMicro,
           minOut: minAmountOutMicro,
           tokenInDecimals: state.inputToken.decimals,
-          tokenOutDecimals: 8, // minOut is in ALEX's 1e8 units
           feeToken: state.selectedGasToken?.address,
           onProgress: (step) => {
             setState(prev => ({ ...prev, success: step }));
