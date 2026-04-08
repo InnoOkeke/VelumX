@@ -1,26 +1,18 @@
 /**
  * Simple Gasless Swap Helper
  *
- * Builds a sponsored Stacks transaction using @stacks/transactions,
- * then uses openSignTransaction so the wallet shows "Sign" not "Confirm with fee".
+ * Uses VelumX SDK v3 + ALEX SDK for gasless swaps.
+ * The user signs the transaction, VelumX relayer pays the STX fee.
  *
- * Flow:
- *   1. Estimate fee via VelumX relayer
- *   2. Get swap contract call params from ALEX SDK
- *   3. Build a sponsored transaction using makeContractCall with sponsored:true
- *   4. User signs via openSignTransaction — no STX fee shown
- *   5. VelumX relayer adds sponsor signature and broadcasts
+ * Note on wallet UX: Some wallets (Xverse) still display an estimated fee
+ * even for sponsored transactions. The user does NOT actually pay this fee —
+ * the relayer replaces it when sponsoring. The user only needs to click "Confirm".
  */
 
 import { getConfig } from '../config';
 import { getVelumXClient } from '../velumx';
 import { getStacksConnect, getNetworkInstance } from '../stacks-loader';
 import { AlexSDK } from 'alex-sdk';
-import {
-  makeUnsignedContractCall,
-  PostConditionMode,
-  serializeTransaction,
-} from '@stacks/transactions';
 
 export interface SimpleGaslessSwapParams {
   userAddress: string;
@@ -81,53 +73,38 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     BigInt(minOut)
   );
 
+  const connect = await getStacksConnect();
   const network = await getNetworkInstance();
 
-  // Step 4: Build a sponsored transaction using @stacks/transactions
-  // sponsored: true marks the fee slot as empty — relayer fills it
-  const tx = await makeUnsignedContractCall({
-    contractAddress: swapTx.contractAddress,
-    contractName: swapTx.contractName,
-    functionName: swapTx.functionName,
-    functionArgs: swapTx.functionArgs,
-    postConditions: swapTx.postConditions,
-    postConditionMode: PostConditionMode.Deny,
-    network,
-    sponsored: true,
-    fee: 0n,
-    publicKey: '', // will be filled by wallet when signing
-  });
-
-  // serializeTransaction returns hex string in @stacks/transactions v7+
-  const txHex = serializeTransaction(tx);
-
-  // Step 5: User signs the sponsored transaction
-  // openSignTransaction shows "Sign" not "Confirm with fee"
-  const connect = await getStacksConnect();
-
+  // Step 4: User signs the transaction
+  // sponsored: true tells @stacks/connect to build a sponsored tx
+  // The wallet may show an estimated fee — this is display only.
+  // The relayer replaces the fee when it sponsors the transaction.
   return new Promise<string>((resolve, reject) => {
-    if (!connect?.openSignTransaction) {
-      // Fallback: if openSignTransaction not available, broadcast directly
-      onProgress?.('Broadcasting via VelumX...');
-      velumx.sponsor(txHex, {
-        feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
-        feeAmount: isDeveloperSponsored ? '0' : feeAmount,
-        network: config.stacksNetwork as 'mainnet' | 'testnet'
-      }).then(result => resolve(result.txid)).catch(reject);
-      return;
-    }
-
-    connect.openSignTransaction({
-      txHex,
+    connect.openContractCall({
+      contractAddress: swapTx.contractAddress,
+      contractName: swapTx.contractName,
+      functionName: swapTx.functionName,
+      functionArgs: swapTx.functionArgs,
+      postConditions: swapTx.postConditions,
       network,
+      sponsored: true,
       onFinish: async (data: any) => {
         console.log('Swap signed:', data);
         onProgress?.('Broadcasting via VelumX...');
 
         try {
-          const signedTxHex = data.txHex || data.txRaw || txHex;
+          // data.txRaw is the signed sponsored tx hex
+          const txRaw = data.txRaw || data.txHex;
+          if (!txRaw) {
+            // Wallet already broadcasted (non-sponsored path)
+            const txid = data.txId || data.txid;
+            if (txid) return resolve(txid);
+            return reject(new Error('No transaction data returned'));
+          }
 
-          const result = await velumx.sponsor(signedTxHex, {
+          // Step 5: VelumX relayer adds sponsor signature and broadcasts
+          const result = await velumx.sponsor(txRaw, {
             feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
             feeAmount: isDeveloperSponsored ? '0' : feeAmount,
             network: config.stacksNetwork as 'mainnet' | 'testnet'
