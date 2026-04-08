@@ -141,6 +141,10 @@ export class PaymasterService {
         return this.pricingOracle.getStxPrice();
     }
 
+    public async getTokenMetadata(token: string) {
+        return this.pricingOracle.getTokenMetadata(token);
+    }
+
     /**
      * Convert any token amount to its USDCx (USD) equivalent
      */

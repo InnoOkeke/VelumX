@@ -251,71 +251,58 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                 const totalSponsoredUsd = totalSponsoredStx * stxPrice;
                 const totalSponsored = totalSponsoredUsd.toFixed(6);
 
-                // Calculate Revenue strictly from Database to avoid counting unrelated wallet tokens
-                let totalFeeValueUsd = 0;
-                const decimalsCache: Record<string, number> = {
-                    'token-alex': 8, 'age000-governance-token': 8,
-                    'sbtc-token': 8, 'usdcx': 6, 'token-aeusdc': 6,
-                    'token-wstx': 6, 'stx': 6,
-                };
-                
-                const getTokenDecimals = async (principal: string): Promise<number> => {
-                    if (decimalsCache[principal] !== undefined) return decimalsCache[principal];
-                    const contractName = principal.includes('.') ? principal.split('.').pop()! : principal;
-                    if (decimalsCache[contractName.toLowerCase()] !== undefined) {
-                        return decimalsCache[contractName.toLowerCase()];
-                    }
-                    try {
-                        const [addr, name] = principal.split('.');
-                        const metaRes = await fetch(
-                            `https://api.hiro.so/metadata/v1/ft/${addr}.${name}`,
-                            { signal: AbortSignal.timeout(4000) }
-                        );
-                        if (metaRes.ok) {
-                            const meta = await metaRes.json();
-                            if (typeof meta.decimals === 'number') {
-                                decimalsCache[principal] = meta.decimals;
-                                return meta.decimals;
-                            }
-                        }
-                    } catch (e) { /* fall through */ }
-                    decimalsCache[principal] = 6;
-                    return 6;
-                };
-
-                for (const tx of successfulTxs) {
-                    if (!tx.feeAmount || tx.feeAmount === '0') continue;
-                    
-                    const tokenPrincipal = tx.feeToken;
-                    const decimals = await getTokenDecimals(tokenPrincipal);
-                    const usdEquivalent = await paymasterService.convertToUsdcx(tx.feeAmount, tokenPrincipal, decimals);
-                    
-                    totalFeeValueUsd += usdEquivalent;
-                }
-                const relayerFeeBalance = totalFeeValueUsd.toFixed(2);
-
                 // Relayer address and network needed for STX balance display
                 const relayerKey = paymasterService.getUserRelayerKey(userId);
                 const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
                 const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
 
-                let relayerStxBalance = "0";
-
+                // 3. Real-Time Wallet Fee Audit (FTs only)
+                let walletFeeValueUsd = 0;
                 try {
                     const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
+                    if (balancesRes.ok) {
+                        const balances = await balancesRes.json();
+                        // Iterate through all Fungible Tokens found in the wallet
+                        for (const [tokenPrincipal, balanceInfo] of Object.entries(balances.fungible_tokens || {})) {
+                            const balance = (balanceInfo as any).balance;
+                            if (balance === '0') continue;
+                            
+                            // Convert this token's liquid balance to USD
+                            const usdVal = await paymasterService.convertToUsdcx(balance, tokenPrincipal);
+                            walletFeeValueUsd += usdVal;
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[Stats] Wallet audit failed for ${relayerAddress}:`, e);
+                }
+
+                // 4. Log-based Revenue Analysis (Corrected for decimals)
+                let totalFeeValueUsd = 0;
+                for (const tx of successfulTxs) {
+                    if (!tx.feeAmount || tx.feeAmount === '0') continue;
                     
+                    // convertToUsdcx now auto-resolves decimals correctly
+                    const usdEquivalent = await paymasterService.convertToUsdcx(tx.feeAmount, tx.feeToken);
+                    totalFeeValueUsd += usdEquivalent;
+                }
+
+                // 5. STX Balance (for gas fuel display)
+                let relayerStxBalance = "0";
+                try {
+                    const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
                     }
-                } catch (e) { console.warn("Balance check failed", e); }
+                } catch (e) {}
 
                 return {
                     totalTransactions,
                     totalSponsored: totalSponsored.toString(),
                     relayerAddress,
                     relayerStxBalance,
-                    relayerFeeBalance,
+                    relayerFeeBalance: walletFeeValueUsd.toFixed(2), // Real-time profit in wallet
+                    revenueMainnet: totalFeeValueUsd.toFixed(2),    // Historical log estimate
                     feeToken: 'USD'
                 };
             } catch (err) {

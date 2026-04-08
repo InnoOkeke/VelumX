@@ -18,9 +18,63 @@ export class PricingOracleService {
     private alex: AlexSDK;
     private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
     private readonly CACHE_TTL = 30000; // 30 seconds
+    private metadataCache: Map<string, { symbol: string, decimals: number }> = new Map();
+    private readonly KNOWN_DECIMALS: Record<string, number> = {
+        'token-alex': 8, 'age000-governance-token': 8,
+        'sbtc-token': 8, 'token-wbtc': 8, 
+        'usdcx': 6, 'token-aeusdc': 6, 'aeusdc': 6,
+        'token-wstx': 6, 'stx': 6, 'token-susdt': 8
+    };
 
     constructor() {
         this.alex = new AlexSDK();
+    }
+
+    /**
+     * Resolves token metadata (symbol and decimals) reliably.
+     * Order: Hardcoded -> ALEX SDK -> Hiro API -> Fallback 6.
+     */
+    public async getTokenMetadata(token: string): Promise<{ symbol: string, decimals: number }> {
+        const normalized = token.includes('.') ? token.split('.').pop()!.toLowerCase() : token.toLowerCase();
+        
+        // 1. Check Hardcoded & Cache
+        if (this.KNOWN_DECIMALS[normalized]) return { symbol: normalized.toUpperCase(), decimals: this.KNOWN_DECIMALS[normalized] };
+        if (this.metadataCache.has(token)) return this.metadataCache.get(token)!;
+
+        // 2. Try ALEX SDK
+        try {
+            const allTokens = await this.alex.fetchSwappableCurrency();
+            const match = allTokens.find((t: any) => {
+                const contractAddr = t.wrapToken ? t.wrapToken.split('::')[0] : t.id;
+                return contractAddr?.toLowerCase() === token.toLowerCase() || t.id?.toLowerCase() === token.toLowerCase();
+            });
+            if (match) {
+                const meta = { 
+                    symbol: match.name || match.id || 'TOKEN', 
+                    decimals: match.wrapTokenDecimals ?? match.underlyingTokenDecimals ?? 8 
+                };
+                this.metadataCache.set(token, meta);
+                return meta;
+            }
+        } catch (e) {}
+
+        // 3. Try Hiro API
+        if (token.includes('.')) {
+            try {
+                const [addr, name] = token.split('.');
+                const res = await fetch(`https://api.hiro.so/metadata/v1/ft/${addr}.${name}`, { signal: AbortSignal.timeout(3000) });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.decimals !== undefined) {
+                        const meta = { symbol: data.symbol || 'TOKEN', decimals: data.decimals };
+                        this.metadataCache.set(token, meta);
+                        return meta;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        return { symbol: normalized.toUpperCase(), decimals: 6 };
     }
 
     // ─── STX Price ────────────────────────────────────────────────────────────
@@ -195,12 +249,22 @@ export class PricingOracleService {
 
     // ─── Convert token amount to USD ──────────────────────────────────────────
 
-    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals: number = 6): Promise<number> {
+    /**
+     * Converts a raw micro-amount of a token to its USD (USDCx) equivalent.
+     */
+    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals?: number): Promise<number> {
         const rawAmount = BigInt(amount);
         if (rawAmount === BigInt(0)) return 0;
 
-        const usdPerToken = await this.getTokenUsdPrice(token, tokenDecimals);
-        const tokenAmount = Number(rawAmount) / Math.pow(10, tokenDecimals);
+        // Auto-resolve decimals if not provided
+        let decimals = tokenDecimals;
+        if (decimals === undefined) {
+            const meta = await this.getTokenMetadata(token);
+            decimals = meta.decimals;
+        }
+
+        const usdPerToken = await this.getTokenUsdPrice(token, decimals);
+        const tokenAmount = Number(rawAmount) / Math.pow(10, decimals);
         return tokenAmount * usdPerToken;
     }
 
