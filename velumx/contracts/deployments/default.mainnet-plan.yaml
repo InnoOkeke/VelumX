@@ -9,17 +9,31 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: relayer-registry-v3
+            contract-name: mock-token
             expected-sender: SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW
-            cost: 3740
-            path: "contracts\\relayer-registry-v3.clar"
+            cost: 9090
+            path: "contracts\\mock-token.clar"
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
-            contract-name: simple-paymaster-v1
+            contract-name: simple-paymaster-v2
             expected-sender: SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW
-            cost: 38780
-            path: "contracts\\simple-paymaster-v1.clar"
+            cost: 84880
+            path: "contracts\\simple-paymaster-v2.clar"
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: universal-paymaster-v1
+            expected-sender: SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW
+            cost: 64230
+            path: "contracts\\universal-paymaster-v1.clar"
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: universal-paymaster-v1-testnet
+            expected-sender: SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW
+            cost: 47800
+            path: "contracts\\universal-paymaster-v1-testnet.clar"
             anchor-block-only: true
             clarity-version: 3
       epoch: "3.0"

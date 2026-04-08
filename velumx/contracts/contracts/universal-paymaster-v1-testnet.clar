@@ -1,17 +1,8 @@
-;; Universal Paymaster v2 - VelumX Protocol (Mainnet)
-;; Collects SIP-010 gas fees for any sponsored transaction type:
-;; swaps, transfers, bridges, staking, LP, and more.
+;; Universal Paymaster v2 - VelumX Protocol (Testnet)
+;; Identical to mainnet version except for the SIP-010 trait address.
 ;;
-;; Architecture:
-;;   USER_PAYS flow (two sponsored txs, same block):
-;;     Tx 1: user calls call-gasless → fee collected on-chain → relayer sponsors STX cost
-;;     Tx 2: relayer sponsors the actual action (swap/bridge/transfer)
-;;
-;;   DEVELOPER_SPONSORS flow:
-;;     Relayer sponsors the action tx directly — this contract is NOT involved.
-;;
-;; Mainnet SIP-010 trait
-(use-trait sip-010-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
+;; Testnet SIP-010 trait
+(use-trait sip-010-trait 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; -------------------------------------------------------
 ;; Constants
@@ -22,7 +13,6 @@
 (define-constant ERR-ZERO-FEE (err u103))
 (define-constant ERR-SELF-TRANSFER (err u104))
 
-;; Transaction type identifiers (for logging/analytics)
 (define-constant TX-TYPE-SWAP u1)
 (define-constant TX-TYPE-TRANSFER u2)
 (define-constant TX-TYPE-BRIDGE u3)
@@ -35,15 +25,10 @@
 ;; -------------------------------------------------------
 (define-data-var admin principal tx-sender)
 (define-data-var treasury principal tx-sender)
-(define-data-var max-fee-cap uint u10000000000) ;; 10,000 tokens (in micro units) safety cap
+(define-data-var max-fee-cap uint u10000000000)
 
-;; Approved gas tokens: contract principal → { approved, max-fee }
 (define-map ApprovedFeeTokens principal { approved: bool, max-fee: uint })
-
-;; Authorized relayers (multi-tenant)
 (define-map AuthorizedRelayers principal bool)
-
-;; Per-user nonce to prevent replay attacks on fee collection
 (define-map UserNonces principal uint)
 
 ;; -------------------------------------------------------
@@ -67,16 +52,6 @@
 
 ;; -------------------------------------------------------
 ;; Core: collect-fee
-;; Generic fee collection for any transaction type.
-;; Called by the user (tx-sender) in a sponsored transaction.
-;; The relayer sponsors the STX cost of this call.
-;;
-;; Parameters:
-;;   fee-token   - SIP-010 token the user pays gas with (e.g. ALEX, USDCx)
-;;   fee-amount  - Amount in micro units of fee-token
-;;   relayer     - Authorized VelumX relayer receiving the fee
-;;   tx-type     - u1=swap, u2=transfer, u3=bridge, u4=stake, u5=lp, u99=other
-;;   ref-id      - Optional reference ID (txid of the action tx, for reconciliation)
 ;; -------------------------------------------------------
 (define-public (collect-fee
     (fee-token <sip-010-trait>)
@@ -89,28 +64,16 @@
     (token-principal (contract-of fee-token))
     (token-max-fee (get-token-max-fee token-principal))
   )
-    ;; 1. Relayer must be authorized
     (asserts! (is-authorized-relayer relayer) ERR-NOT-AUTHORIZED)
-
-    ;; 2. Token must be approved
     (asserts! (is-token-approved token-principal) ERR-TOKEN-NOT-APPROVED)
-
-    ;; 3. Fee must be > 0
     (asserts! (> fee-amount u0) ERR-ZERO-FEE)
-
-    ;; 4. Fee must not exceed the token's max-fee cap
     (asserts! (<= fee-amount token-max-fee) ERR-FEE-TOO-HIGH)
-
-    ;; 5. User cannot be the relayer (no self-payment)
     (asserts! (not (is-eq user relayer)) ERR-SELF-TRANSFER)
 
-    ;; 6. Transfer fee from user to relayer
     (try! (contract-call? fee-token transfer fee-amount user relayer none))
 
-    ;; 7. Increment user nonce
     (map-set UserNonces user (+ (get-user-nonce user) u1))
 
-    ;; 8. Emit event for off-chain indexing
     (print {
       event: "fee-collected",
       version: "v2",
@@ -127,11 +90,7 @@
   )
 )
 
-;; -------------------------------------------------------
-;; Legacy: call-gasless (kept for backward compatibility)
-;; Wraps collect-fee with the old parameter shape.
-;; New integrations should use collect-fee directly.
-;; -------------------------------------------------------
+;; Legacy compatibility
 (define-public (call-gasless
     (fee-token <sip-010-trait>)
     (fee-amount uint)

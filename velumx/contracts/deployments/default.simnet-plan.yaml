@@ -64,18 +64,13 @@ plan:
     - id: 0
       transactions:
         - emulated-contract-publish:
-            contract-name: relayer-registry-v3
+            contract-name: mock-token
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\relayer-registry-v3.clar"
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: simple-paymaster-v1
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\simple-paymaster-v1.clar"
+            path: "contracts/mock-token.clar"
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: universal-paymaster-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\universal-paymaster-v1.clar"
+            path: "contracts/universal-paymaster-v1-testnet.clar"
             clarity-version: 3
       epoch: "3.0"

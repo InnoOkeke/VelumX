@@ -33,13 +33,6 @@ plan:
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
-            contract-name: relayer-registry
-            expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
-            cost: 29340
-            path: "contracts\\relayer-registry.clar"
-            anchor-block-only: true
-            clarity-version: 3
-        - contract-publish:
             contract-name: smart-wallet
             expected-sender: STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P
             cost: 28550

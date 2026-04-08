@@ -1,8 +1,17 @@
 /**
- * Simple Gasless Swap Helper — Sponsored Transaction Flow
+ * Simple Gasless Swap Helper
  *
- * Uses makeUnsignedContractCall (direct import) + stx_signTransaction.
- * Direct import avoids the stacks-loader cache which may return wrong module version.
+ * DEVELOPER_SPONSORS flow (unchanged):
+ *   - Build unsigned swap tx directly on ALEX AMM
+ *   - Wallet signs via stx_signTransaction (no broadcast)
+ *   - Relayer co-signs + broadcasts (pays STX fee)
+ *   - User pays nothing
+ *
+ * USER_PAYS flow (new - uses simple-paymaster-v1):
+ *   - Build unsigned tx calling swap-gasless on the paymaster contract
+ *   - swap-gasless collects the fee token AND executes the ALEX swap atomically
+ *   - Wallet signs via stx_signTransaction (no broadcast)
+ *   - Relayer co-signs + broadcasts (pays STX fee, gets reimbursed in fee token)
  */
 
 import { getConfig } from '../config';
@@ -12,6 +21,11 @@ import { request } from '@stacks/connect';
 import {
   makeUnsignedContractCall,
   PostConditionMode,
+  Cl,
+  principalCV,
+  uintCV,
+  someCV,
+  noneCV,
 } from '@stacks/transactions';
 
 export interface SimpleGaslessSwapParams {
@@ -80,37 +94,84 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
       const stxEntry = (addrResult?.addresses || []).find((a: any) => a.address === params.userAddress)
         || (addrResult?.addresses || [])[0];
       publicKey = stxEntry?.publicKey || '';
-      console.log('Public key from stx_getAddresses:', publicKey ? publicKey.slice(0, 10) + '...' : 'NOT FOUND');
     } catch (e) { console.warn('stx_getAddresses failed:', e); }
   }
-
   if (!publicKey) throw new Error('Wallet public key not available. Please reconnect your wallet.');
 
-  // Step 5: Fetch current nonce
+  // Step 5: Fetch nonce
   let nonce = 0n;
   try {
-    const nonceRes = await fetch(
-      `https://api.mainnet.hiro.so/v2/accounts/${params.userAddress}?proof=0`
-    );
+    const nonceRes = await fetch(`https://api.mainnet.hiro.so/v2/accounts/${params.userAddress}?proof=0`);
     if (nonceRes.ok) {
       const accountData = await nonceRes.json();
       nonce = BigInt(accountData.nonce ?? 0);
-      console.log('Fetched nonce:', nonce.toString());
     }
-  } catch (e) {
-    console.warn('Failed to fetch nonce, using 0:', e);
+  } catch (e) { console.warn('Failed to fetch nonce:', e); }
+
+  // Step 6: Build the unsigned sponsored tx
+  // DEVELOPER_SPONSORS: call ALEX swap directly (relayer pays STX, user pays nothing)
+  // USER_PAYS: call swap-gasless on paymaster (fee collected + swap executed atomically)
+  let contractAddress: string;
+  let contractName: string;
+  let functionName: string;
+  let functionArgs: any[];
+
+  if (isDeveloperSponsored) {
+    // Direct ALEX swap — relayer sponsors STX, no token fee
+    contractAddress = swapTx.contractAddress;
+    contractName = swapTx.contractName;
+    functionName = swapTx.functionName;
+    functionArgs = swapTx.functionArgs;
+  } else {
+    // Paymaster swap — fee collected in feeToken + ALEX swap executed atomically
+    // swap-gasless(token-x-trait, token-y-trait, factor, dx, min-dy, fee-amount, relayer, fee-token)
+    const paymasterAddress = (estimate as any).paymasterAddress || config.stacksPaymasterAddress;
+    if (!paymasterAddress) throw new Error('Paymaster address not available from relayer');
+    const [pmContract, pmName] = paymasterAddress.split('.');
+    contractAddress = pmContract;
+    contractName = pmName;
+    functionName = 'swap-gasless';
+
+    // Get relayer address from the estimate response or derive it
+    // The relayer address is returned by the /estimate endpoint
+    const relayerAddress = (estimate as any).relayerAddress || config.velumxRelayerAddress;
+    if (!relayerAddress) throw new Error('Relayer address not available');
+
+    // Parse ALEX factor from the swap tx args (index 2 in swap-helper)
+    // swap-helper(token-x-trait, token-y-trait, factor, dx, min-dy)
+    const alexFactor = swapTx.functionArgs[2]; // factor uint
+    const alexDx = swapTx.functionArgs[3];     // dx uint
+    const alexMinDy = swapTx.functionArgs[4];  // min-dy (optional uint)
+
+    // Parse token contract addresses from ALEX swap tx
+    const [tokenXAddress, tokenXName] = tokenIn === 'token-wstx'
+      ? ['SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM', 'token-wstx-v2']
+      : tokenIn.split('.');
+    const [tokenYAddress, tokenYName] = tokenOut === 'token-wstx'
+      ? ['SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM', 'token-wstx-v2']
+      : tokenOut.split('.');
+    const [feeTokenAddress, feeTokenName] = selectedFeeToken.split('.');
+
+    functionArgs = [
+      Cl.contractPrincipal(tokenXAddress, tokenXName),  // token-x-trait
+      Cl.contractPrincipal(tokenYAddress, tokenYName),  // token-y-trait
+      alexFactor,                                        // factor
+      alexDx,                                            // dx
+      alexMinDy,                                         // min-dy (optional uint)
+      uintCV(BigInt(feeAmount)),                         // fee-amount
+      principalCV(relayerAddress),                       // relayer
+      Cl.contractPrincipal(feeTokenAddress, feeTokenName), // fee-token
+    ];
   }
 
-  console.log('Building sponsored tx...');
-
   const transaction = await makeUnsignedContractCall({
-    contractAddress: swapTx.contractAddress,
-    contractName: swapTx.contractName,
-    functionName: swapTx.functionName,
-    functionArgs: swapTx.functionArgs,
+    contractAddress,
+    contractName,
+    functionName,
+    functionArgs,
     postConditionMode: PostConditionMode.Allow,
     postConditions: [],
-    network: 'mainnet', // resolves to STACKS_MAINNET with transactionVersion: 0
+    network: 'mainnet',
     sponsored: true,
     publicKey,
     fee: 0n,
@@ -119,9 +180,9 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   });
 
   const txHex = transaction.serialize();
-  console.log('Built sponsored tx, length:', txHex.length, 'starts with:', txHex.slice(0, 8));
+  console.log('Built sponsored tx:', txHex.slice(0, 8), 'length:', txHex.length, isDeveloperSponsored ? '(direct swap)' : '(paymaster swap)');
 
-  // Step 6: Wallet signs WITHOUT broadcasting
+  // Step 7: Wallet signs WITHOUT broadcasting
   onProgress?.('Waiting for wallet signature...');
   let signedTxHex: string;
   try {
@@ -131,16 +192,14 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     });
     signedTxHex = (signResult as any).transaction || (signResult as any).txHex;
     if (!signedTxHex) throw new Error('Wallet did not return signed tx hex');
-    console.log('Wallet signed tx, length:', signedTxHex.length);
   } catch (err: any) {
-    console.error('stx_signTransaction error:', err?.message, err?.code);
     if (err?.message?.toLowerCase().includes('cancel') || err?.code === 4001) {
       throw new Error('Swap cancelled by user');
     }
     throw err;
   }
 
-  // Step 7: Relayer adds sponsor sig and broadcasts
+  // Step 8: Relayer co-signs + broadcasts
   onProgress?.('Broadcasting via VelumX...');
   const result = await velumx.sponsor(signedTxHex, {
     feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,

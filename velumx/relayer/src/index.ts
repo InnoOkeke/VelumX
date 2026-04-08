@@ -152,7 +152,15 @@ app.post('/api/v1/estimate', validateApiKey, rateLimiters.estimate.middleware(),
         const estimationIntent = { ...intent, network: network || intent.network || 'mainnet' };
 
         const estimation = await paymasterService.estimateFee(estimationIntent, req.apiKeyId!);
-        res.json(estimation);
+
+        // Include the developer's relayer address and paymaster contract
+        // so frontend can build paymaster txs without any env config
+        const targetNetwork = estimationIntent.network as 'mainnet' | 'testnet';
+        const relayerKey = paymasterService.getUserRelayerKey(req.userId!);
+        const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), targetNetwork);
+        const paymasterAddress = paymasterService.getPaymasterAddress(targetNetwork);
+
+        res.json({ ...estimation, relayerAddress, paymasterAddress });
     } catch (error: any) {
         console.error("Estimation Error:", error);
         res.status(500).json({ error: error.message });

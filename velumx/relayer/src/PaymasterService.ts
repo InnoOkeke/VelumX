@@ -56,11 +56,10 @@ export class PaymasterService {
      * Get the correct Paymaster contract address for the target network
      */
     public getPaymasterAddress(network: 'mainnet' | 'testnet'): string {
-        // Strict mapping to network-specific environment variables
         if (network === 'mainnet') {
-            return process.env.PAYMASTER_CONTRACT_MAINNET || 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.universal-paymaster-v1';
+            return process.env.PAYMASTER_CONTRACT_MAINNET || 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.simple-paymaster-v2';
         }
-        return process.env.PAYMASTER_CONTRACT_TESTNET || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.universal-paymaster-v1';
+        return process.env.PAYMASTER_CONTRACT_TESTNET || 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v2';
     }
 
 
@@ -349,12 +348,24 @@ export class PaymasterService {
                         let feeIndex = -1;
                         let tokenIndex = -1;
 
-                        if (functionName === 'call-gasless') {
-                            tokenIndex = 0;
-                            feeIndex = 1;
-                        } else if (functionName === 'bridge-gasless' || functionName === 'bridge-tokens') feeIndex = 2;
-                        else if (functionName === 'swap-gasless' || functionName === 'swap-v1') feeIndex = 4;
-                        else if (functionName === 'transfer-gasless' || functionName === 'transfer') feeIndex = 3;
+                        // simple-paymaster-v1 functions (new)
+                        // swap-gasless(token-x, token-y, factor, dx, min-dy, fee-amount, relayer, fee-token)
+                        //   fee-amount at index 5, fee-token at index 7
+                        if (functionName === 'swap-gasless') { feeIndex = 5; tokenIndex = 7; }
+                        // bridge-gasless(amount, recipient, fee-amount, relayer, fee-token)
+                        //   fee-amount at index 2, fee-token at index 4
+                        else if (functionName === 'bridge-gasless') { feeIndex = 2; tokenIndex = 4; }
+                        // transfer-gasless(amount, recipient, memo, fee-amount, relayer, fee-token, target-token)
+                        //   fee-amount at index 3, fee-token at index 5
+                        else if (functionName === 'transfer-gasless') { feeIndex = 3; tokenIndex = 5; }
+                        // execute-gasless(executor, payload, fee-amount, relayer, fee-token)
+                        //   fee-amount at index 2, fee-token at index 4
+                        else if (functionName === 'execute-gasless') { feeIndex = 2; tokenIndex = 4; }
+                        // Legacy universal-paymaster-v1 functions
+                        else if (functionName === 'call-gasless') { tokenIndex = 0; feeIndex = 1; }
+                        else if (functionName === 'bridge-tokens') { feeIndex = 2; }
+                        else if (functionName === 'swap-v1') { feeIndex = 4; }
+                        else if (functionName === 'transfer-gasless-legacy' || functionName === 'transfer') { feeIndex = 3; }
 
                         // Extract Fee Amount
                         if (feeIndex !== -1 && args[feeIndex] && args[feeIndex].type === 1) { // 1 = uint

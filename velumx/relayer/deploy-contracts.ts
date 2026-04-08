@@ -8,24 +8,23 @@ import {
     ClarityVersion,
 } from '@stacks/transactions';
 import { generateWallet } from '@stacks/wallet-sdk';
-import { STACKS_TESTNET } from '@stacks/network';
+import { STACKS_MAINNET } from '@stacks/network';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const tomlPath = join('..', 'contracts', 'settings', 'Testnet.toml');
+const tomlPath = join('..', 'contracts', 'settings', 'Mainnet.toml');
 const tomlContent = readFileSync(tomlPath, 'utf8');
 const mnemonicMatch = tomlContent.match(/mnemonic\s*=\s*"(.*)"/);
-if (!mnemonicMatch || !mnemonicMatch[1]) throw new Error("Mnemonic not found in Testnet.toml");
+if (!mnemonicMatch || !mnemonicMatch[1]) throw new Error("Mnemonic not found in Mainnet.toml");
 const mnemonic: string = mnemonicMatch[1];
-const network = STACKS_TESTNET;
+const network = STACKS_MAINNET;
 
 const contracts = [
-    { name: 'sip-010-trait-ft-standard-v5', path: 'contracts/traits/sip-010-trait-ft-standard-v5.clar' },
-    { name: 'simple-paymaster-v1', path: 'contracts/simple-paymaster-v1.clar' },
+    { name: 'simple-paymaster-v2', path: 'contracts/simple-paymaster-v2.clar' },
 ];
 
 async function deploy() {
-    console.log("Starting deployment to Testnet...");
+    console.log("Starting deployment to Mainnet...");
 
     const wallet = await generateWallet({
         secretKey: mnemonic,
@@ -36,7 +35,7 @@ async function deploy() {
     const privateKey = account.stxPrivateKey;
 
     // Explicitly use testnet network for address derivation
-    const address = getAddressFromPrivateKey(privateKey, "testnet");
+    const address = getAddressFromPrivateKey(privateKey, "mainnet");
     console.log(`Derived Address: ${address}`);
 
     let nonce = await fetchNonce({ address, network });
@@ -55,8 +54,8 @@ async function deploy() {
                 senderKey: privateKey,
                 network,
                 nonce,
-                fee: 100000n, // Fixed fee to bypass estimation
-                clarityVersion: ClarityVersion.Clarity2,
+                fee: 50000n, // 0.5 STX - sufficient for contract deployment
+                clarityVersion: ClarityVersion.Clarity3,
                 anchorMode: AnchorMode.Any,
                 postConditionMode: PostConditionMode.Allow,
             };
