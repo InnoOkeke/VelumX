@@ -130,7 +130,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
       fee: 0n,
       validateWithAbi: false,
     });
-    txHex = Buffer.from(transaction.serialize()).toString('hex');
+    txHex = transaction.serialize(); // already returns hex string in @stacks/transactions 7.x
     console.log('Built AuthType.Sponsored tx OK, length:', txHex.length);
   } catch (buildErr: any) {
     console.error('makeUnsignedContractCall failed:', buildErr);
@@ -144,12 +144,12 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   let signedTxHex: string;
   try {
     const signResult = await request('stx_signTransaction', {
-      txHex,
-      network: 'mainnet',
-    } as any);
+      transaction: txHex,  // correct param name per SignTransactionParams type
+      broadcast: false,    // explicitly do NOT broadcast — relayer handles this
+    });
 
     console.log('stx_signTransaction result keys:', Object.keys(signResult || {}));
-    signedTxHex = (signResult as any).txHex || (signResult as any).transaction;
+    signedTxHex = (signResult as any).transaction || (signResult as any).txHex;
     if (!signedTxHex) throw new Error('Wallet did not return signed tx hex');
     console.log('Wallet signed sponsored tx OK');
   } catch (err: any) {

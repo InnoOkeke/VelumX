@@ -92,10 +92,10 @@ export async function executeSimpleGaslessBridge(params: SimpleGaslessBridgePara
   let signedTxHex: string;
   try {
     const signResult = await request('stx_signTransaction', {
-      txHex,
-      network: 'mainnet',
-    } as any);
-    signedTxHex = (signResult as any).txHex || (signResult as any).transaction;
+      transaction: txHex,
+      broadcast: false,
+    });
+    signedTxHex = (signResult as any).transaction || (signResult as any).txHex;
     if (!signedTxHex) throw new Error('Wallet did not return signed tx hex');
   } catch (err: any) {
     if (err?.message?.toLowerCase().includes('cancel') || err?.code === 4001) {
