@@ -238,35 +238,32 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
                 const stxPrice = await paymasterService.getStxPrice();
 
-                // 2. Total Gas Sponsored — calculated from DB tx count × fixed relayer fee per tx
-                //    The relayer always pays exactly 10,000 microSTX (0.01 STX) per sponsored tx.
+                // 2. Fetch all successful transactions to calculate exact revenue and gas
+                const successfulTxs = await (prisma.transaction as any).findMany({
+                    where: { userId, network: networkType, status: 'Success' }
+                });
+
+                // Total Gas Sponsored — calculate ONLY from successful/mined transactions, 
+                // since dropped/pending transactions haven't consumed gas.
+                // The relayer always pays exactly 10,000 microSTX (0.01 STX) per sponsored tx.
                 const STX_FEE_PER_TX = 0.01;
-                const totalSponsoredStx = totalTransactions * STX_FEE_PER_TX;
+                const totalSponsoredStx = successfulTxs.length * STX_FEE_PER_TX;
                 const totalSponsoredUsd = totalSponsoredStx * stxPrice;
                 const totalSponsored = totalSponsoredUsd.toFixed(6);
 
-                // Relayer address and network needed for balance fetch below
-                const relayerKey = paymasterService.getUserRelayerKey(userId);
-                const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
-                const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
-
-                let relayerStxBalance = "0";
-                let relayerFeeBalance = "0";
-
-                // Fetch token decimals from Hiro metadata API — accurate for any SIP-010 token.
-                // Falls back to a known-good map, then 6 as last resort.
-                const KNOWN_DECIMALS: Record<string, number> = {
+                // Calculate Revenue strictly from Database to avoid counting unrelated wallet tokens
+                let totalFeeValueUsd = 0;
+                const decimalsCache: Record<string, number> = {
                     'token-alex': 8, 'age000-governance-token': 8,
                     'sbtc-token': 8, 'usdcx': 6, 'token-aeusdc': 6,
                     'token-wstx': 6, 'stx': 6,
                 };
-                const decimalsCache: Record<string, number> = {};
+                
                 const getTokenDecimals = async (principal: string): Promise<number> => {
                     if (decimalsCache[principal] !== undefined) return decimalsCache[principal];
                     const contractName = principal.includes('.') ? principal.split('.').pop()! : principal;
-                    if (KNOWN_DECIMALS[contractName.toLowerCase()] !== undefined) {
-                        decimalsCache[principal] = KNOWN_DECIMALS[contractName.toLowerCase()];
-                        return decimalsCache[principal];
+                    if (decimalsCache[contractName.toLowerCase()] !== undefined) {
+                        return decimalsCache[contractName.toLowerCase()];
                     }
                     try {
                         const [addr, name] = principal.split('.');
@@ -286,31 +283,30 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     return 6;
                 };
 
+                for (const tx of successfulTxs) {
+                    if (!tx.feeAmount || tx.feeAmount === '0') continue;
+                    
+                    const tokenPrincipal = tx.feeToken;
+                    const decimals = await getTokenDecimals(tokenPrincipal);
+                    const usdEquivalent = await paymasterService.convertToUsdcx(tx.feeAmount, tokenPrincipal, decimals);
+                    
+                    totalFeeValueUsd += usdEquivalent;
+                }
+                const relayerFeeBalance = totalFeeValueUsd.toFixed(2);
+
+                // Relayer address and network needed for STX balance display
+                const relayerKey = paymasterService.getUserRelayerKey(userId);
+                const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
+                const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
+
+                let relayerStxBalance = "0";
+
                 try {
                     const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
                     
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
-                        
-                        // Calculate total USD value of all fungible tokens held by relayer
-                        let totalFeeValueUsd = 0;
-                        const ftBalances = balances.fungible_tokens || {};
-                        
-                        for (const tokenKey of Object.keys(ftBalances)) {
-                            const tokenPrincipal = tokenKey.split('::')[0];
-                            const balance = ftBalances[tokenKey].balance;
-                            
-                            if (balance !== '0') {
-                                const decimals = await getTokenDecimals(tokenPrincipal);
-                                const usdEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal, decimals);
-                                console.log(`[${networkType}] Token ${tokenPrincipal}: balance=${balance} decimals=${decimals} usd=${usdEquivalent}`);
-                                totalFeeValueUsd += usdEquivalent;
-                            }
-                        }
-                        console.log(`[${networkType}] Total relayer fee balance: $${totalFeeValueUsd}`);
-                        
-                        relayerFeeBalance = totalFeeValueUsd.toFixed(2);
                     }
                 } catch (e) { console.warn("Balance check failed", e); }
 

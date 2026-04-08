@@ -149,6 +149,43 @@ export class PaymasterService {
     }
 
     /**
+     * Validate if a user has enough balance of a specific token
+     * @param userAddress - Stacks address of the user
+     * @param tokenPrincipal - Contract principal of the token
+     * @param requiredAmount - Minimum required amount in micro-units
+     * @param network - 'mainnet' or 'testnet'
+     */
+    public async validateUserBalance(userAddress: string, tokenPrincipal: string, requiredAmount: bigint, network: 'mainnet' | 'testnet' = 'mainnet'): Promise<boolean> {
+        try {
+            const apiBase = network === 'mainnet' ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so';
+            const res = await fetch(`${apiBase}/extended/v1/address/${userAddress}/balances`, { signal: AbortSignal.timeout(5000) });
+            
+            if (!res.ok) return true; // Default to true on API error to avoid blocking legit txs
+
+            const data = await res.json();
+            
+            // 1. Handle STX
+            if (tokenPrincipal === 'STX' || tokenPrincipal === 'token-wstx' || tokenPrincipal.toLocaleLowerCase().includes('wstx')) {
+                const balance = BigInt(data.stx?.balance || '0');
+                return balance >= requiredAmount;
+            }
+
+            // 2. Handle Fungible Tokens
+            const ftBalances = data.fungible_tokens || {};
+            // The key in ftBalances is "PRINCIPAL::NAME"
+            const matchingKey = Object.keys(ftBalances).find(k => k.startsWith(tokenPrincipal));
+            
+            if (!matchingKey) return requiredAmount === 0n;
+
+            const balance = BigInt(ftBalances[matchingKey].balance || '0');
+            return balance >= requiredAmount;
+        } catch (error) {
+            console.warn(`Balance validation failed for ${userAddress}:`, error);
+            return true; // Conservative fallback
+        }
+    }
+
+    /**
      * Estimate Universal fee for a transaction intent
      */
     public async estimateFee(intent: any, apiKeyId: string) {
@@ -234,8 +271,8 @@ export class PaymasterService {
         const estimatedGas = intent.estimatedGas || 10000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const BASE_FEE_USD = 0.02;  // $0.02 USD — covers 0.01 STX relayer cost + margin
-        const MIN_FEE_USD  = 0.02;  // Hard floor: always collect at least $0.02 equivalent
+        const BASE_FEE_USD = 0.15;  // $0.15 USD — covers 0.01 STX relayer cost + higher margin
+        const MIN_FEE_USD  = 0.15;  // Hard floor: always collect at least $0.15 equivalent
 
         // Fetch token decimals FIRST — needed for accurate rate calculation
         let tokenDecimals = 6; // safe default
@@ -291,6 +328,12 @@ export class PaymasterService {
         });
 
         const targetNetwork = intent.network || (process.env.NETWORK as 'mainnet' | 'testnet') || 'mainnet';
+
+        // Perform balance validation to prevent relayer wasting gas
+        const hasBalance = await this.validateUserBalance(intent.target, intent.feeToken, BigInt(intent.maxFee), targetNetwork);
+        if (!hasBalance) {
+            throw new Error(`Insufficient ${intent.feeToken} balance in user wallet to cover the paymaster fee.`);
+        }
         const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
         const paymasterAddress = this.getPaymasterAddress(targetNetwork);
         const [contractAddress, contractName] = paymasterAddress.split('.');
@@ -458,6 +501,14 @@ export class PaymasterService {
             const txVersion = (transaction as any).transactionVersion ?? (transaction as any).version;
             const targetNetwork = txVersion === 0 ? 'mainnet' : 'testnet';
             const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
+
+            // Perform balance validation if a fee amount was detected
+            if (feeAmount !== '0' && feeTokenFromTx !== 'Token' && userAddress !== 'unknown') {
+                const hasBalance = await this.validateUserBalance(userAddress, feeTokenFromTx, BigInt(feeAmount), targetNetwork);
+                if (!hasBalance) {
+                    throw new Error(`Insufficient ${feeTokenFromTx} balance in user wallet to cover the sponsorship fee.`);
+                }
+            }
 
             // Sign as sponsor
             const RELAYER_FEE = 10000n; // 0.01 STX (microSTX)

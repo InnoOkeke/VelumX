@@ -458,6 +458,13 @@ export function SwapInterface() {
       setState(prev => ({ ...prev, error: 'Please enter a valid amount' }));
       return;
     }
+    
+    // Validate sufficient balance
+    const currentBalance = parseFloat(getBalance(state.inputToken));
+    if (parseFloat(state.inputAmount) > currentBalance) {
+      setState(prev => ({ ...prev, error: `Insufficient ${state.inputToken?.symbol} balance` }));
+      return;
+    }
 
     if (!state.quote) {
       setState(prev => ({ ...prev, error: 'Please wait for quote' }));
@@ -771,7 +778,7 @@ export function SwapInterface() {
                     <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400">
                       {state.gasFee} {state.selectedGasToken?.symbol}
                     </span>
-                    <span className="text-[8px] opacity-60 font-bold text-purple-500 dark:text-purple-400">≈ $0.02 USD gas fee</span>
+                    <span className="text-[8px] opacity-60 font-bold text-purple-500 dark:text-purple-400">≈ $0.15 USD gas fee</span>
                   </div>
                 </div>
               </div>
@@ -780,32 +787,59 @@ export function SwapInterface() {
 
           <TransactionStatus error={state.error} success={state.success} />
 
-          <button
-            onClick={handleSwap}
-            disabled={!stacksConnected || state.isProcessing || !state.inputAmount || !state.outputAmount}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {state.isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Processing...
-              </>
-            ) : !stacksConnected ? (
-              'Connect Wallet'
-            ) : state.gaslessMode && !stacksPublicKey ? (
-              <span onClick={async (e) => {
-                e.preventDefault();
-                await recoverPublicKey();
-              }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
-                Verify Wallet (Enable Gasless)
-              </span>
-            ) : (
-              <>
-                <ArrowDownUp className="w-5 h-5" />
-                Swap Tokens
-              </>
-            )}
-          </button>
+          {(() => {
+            const inputVal = parseFloat(state.inputAmount) || 0;
+            const inputBalance = parseFloat(getBalance(state.inputToken));
+            const gasFeeVal = parseFloat(state.gasFee) || 0;
+            const gasTokenBalance = parseFloat(getBalance(state.selectedGasToken));
+            
+            let isInsufficient = false;
+            let disabledReason = "";
+
+            if (inputVal > inputBalance) {
+                isInsufficient = true;
+                disabledReason = `Insufficient ${state.inputToken?.symbol} Balance`;
+            } else if (state.gaslessMode && gasFeeVal > gasTokenBalance) {
+                isInsufficient = true;
+                disabledReason = `Insufficient Gas Token (${state.selectedGasToken?.symbol})`;
+            } else if (state.gaslessMode && state.inputToken?.address === state.selectedGasToken?.address) {
+                if (inputVal + gasFeeVal > inputBalance) {
+                    isInsufficient = true;
+                    disabledReason = "Insufficient Balance for Swap + Fee";
+                }
+            }
+
+            return (
+              <button
+                onClick={handleSwap}
+                disabled={!stacksConnected || state.isProcessing || !state.inputAmount || !state.outputAmount || isInsufficient}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/30 dark:shadow-purple-500/50 hover:shadow-purple-500/50 dark:hover:shadow-purple-500/70 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {state.isProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Processing...
+                  </>
+                ) : !stacksConnected ? (
+                  'Connect Wallet'
+                ) : isInsufficient ? (
+                  disabledReason
+                ) : state.gaslessMode && !stacksPublicKey ? (
+                  <span onClick={async (e) => {
+                    e.preventDefault();
+                    await recoverPublicKey();
+                  }} className="flex items-center gap-2 cursor-pointer w-full justify-center h-full">
+                    Verify Wallet (Enable Gasless)
+                  </span>
+                ) : (
+                  <>
+                    <ArrowDownUp className="w-5 h-5" />
+                    Swap Tokens
+                  </>
+                )}
+              </button>
+            );
+          })()}
         </div>
 
         {/* Info Footer */}

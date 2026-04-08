@@ -116,7 +116,13 @@ export function BridgeInterface() {
         return `Minimum withdrawal is ${MIN_BRIDGE_OUT} USDCx (covers bridge fees)`;
       }
       
-      if (numAmount > parseFloat(balances.usdcx)) {
+      const usdcxBalance = parseFloat(balances.usdcx);
+      const gaslessFee = state.gaslessMode && state.feeEstimate ? parseFloat(state.feeEstimate.usdcx) : 0;
+      
+      if (numAmount + gaslessFee > usdcxBalance) {
+        if (state.gaslessMode && gaslessFee > 0) {
+          return `Insufficient USDCx balance (Amount + ${gaslessFee.toFixed(4)} fee)`;
+        }
         return 'Insufficient USDCx balance';
       }
     }
@@ -620,6 +626,7 @@ export function BridgeInterface() {
                 color: 'var(--text-primary)'
               }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Fee:</span> <span className="font-mono font-semibold">{parseFloat(state.feeEstimate.usdcx).toFixed(4)}</span> USDCx
+                <span className="ml-2 text-[10px] opacity-60">≈ $0.15 USD gas fee</span>
               </div>
             )}
           </div>
