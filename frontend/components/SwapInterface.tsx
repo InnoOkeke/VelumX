@@ -431,8 +431,15 @@ export function SwapInterface() {
           state.outputToken.decimals
         ).toString();
         
+        // Ensure we have the user's public key for building the sponsored tx
+        let pubKey = stacksPublicKey;
+        if (!pubKey) {
+          pubKey = await recoverPublicKey() || undefined;
+        }
+
         const txid = await executeSimpleGaslessSwap({
           userAddress: stacksAddress,
+          userPublicKey: pubKey || '',
           tokenIn: state.inputToken.symbol === 'STX' ? 'token-wstx' : state.inputToken.address,
           tokenOut: state.outputToken.symbol === 'STX' ? 'token-wstx' : state.outputToken.address,
           amountIn: amountInMicro,

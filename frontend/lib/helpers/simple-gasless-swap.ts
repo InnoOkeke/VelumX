@@ -1,40 +1,43 @@
 /**
- * Simple Gasless Swap Helper
+ * Simple Gasless Swap Helper — Sponsored Transaction Flow
  *
- * Flow:
- *  1. Use ALEX SDK to get swap tx params (runSwap returns params, does NOT open wallet)
- *  2. Call openContractCall ONCE with sponsored: true — opens the Stacks wallet
- *  3. Receive txRaw (user-signed sponsored tx hex) in onFinish
- *  4. Send txRaw to VelumX relayer — relayer adds sponsor sig and broadcasts
+ * Correct flow per @stacks/connect v8 + @stacks/transactions docs:
  *
- * Key notes:
- *  - ALEX SDK uses 1e8 (8 decimals) internally for all amounts
- *  - Token IDs must be ALEX internal IDs (e.g. 'token-wstx'), not contract addresses
- *  - sponsored: true tells the wallet to sign but NOT broadcast
+ *  1. ALEX SDK: get swap route/contract call params (no wallet interaction)
+ *  2. @stacks/transactions makeUnsignedContractCall({ sponsored: true, publicKey })
+ *     — builds the tx with the user's public key, marks auth as sponsored
+ *  3. @stacks/connect request('stx_signTransaction', { txHex })
+ *     — wallet signs the tx WITHOUT broadcasting it, returns signed hex
+ *  4. VelumX relayer: sponsorTransaction() adds sponsor co-sig, then broadcasts
+ *
+ * Key: makeUnsignedContractCall requires the user's publicKey (not senderKey).
+ * The wallet signs via stx_signTransaction — the only v8 API that returns signed hex
+ * without broadcasting.
  */
 
 import { getConfig } from '../config';
 import { getVelumXClient } from '../velumx';
-import { getStacksConnect, getNetworkInstance } from '../stacks-loader';
+import { getNetworkInstance, getStacksTransactions } from '../stacks-loader';
 import { AlexSDK } from 'alex-sdk';
+import { request } from '@stacks/connect';
 
 export interface SimpleGaslessSwapParams {
   userAddress: string;
-  tokenIn: string;       // contract address or ALEX token ID
-  tokenOut: string;      // contract address or ALEX token ID
-  amountIn: string;      // micro units in the token's native decimals
-  minOut: string;        // micro units in the token's native decimals
-  tokenInDecimals?: number;   // defaults to 6
-  tokenOutDecimals?: number;  // defaults to 6
+  userPublicKey: string;     // required for building unsigned sponsored tx
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;          // micro units in token's native decimals
+  minOut: string;            // micro units in token's native decimals
+  tokenInDecimals?: number;
+  tokenOutDecimals?: number;
   feeToken?: string;
   onProgress?: (step: string) => void;
 }
 
-// ALEX SDK uses 1e8 internally — convert from token micro units to ALEX micro units
+// ALEX SDK uses 1e8 (8 decimals) internally
 function toAlexAmount(microUnits: string, tokenDecimals: number): bigint {
-  const ALEX_DECIMALS = 8;
   const human = Number(microUnits) / Math.pow(10, tokenDecimals);
-  return BigInt(Math.floor(human * Math.pow(10, ALEX_DECIMALS)));
+  return BigInt(Math.floor(human * 1e8));
 }
 
 export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams): Promise<string> {
@@ -43,10 +46,14 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     tokenInDecimals = 6, tokenOutDecimals = 6,
     feeToken, onProgress
   } = params;
+
   const config = getConfig();
   const velumx = getVelumXClient();
-
   const selectedFeeToken = feeToken || config.stacksUsdcxAddress;
+
+  if (!params.userPublicKey) {
+    throw new Error('User public key is required for sponsored transactions. Please reconnect your wallet.');
+  }
 
   // Step 1: Estimate fee
   onProgress?.('Calculating fees...');
@@ -54,29 +61,18 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     feeToken: selectedFeeToken,
     estimatedGas: 150000
   });
-
   const feeAmount = estimate.maxFee || '0';
   const isDeveloperSponsored = estimate.policy === 'DEVELOPER_SPONSORS';
 
-  console.log('VelumX Gasless Swap:', {
-    tokenIn, tokenOut, amountIn, minOut,
-    feeToken: selectedFeeToken, feeAmount, policy: estimate.policy
-  });
+  console.log('VelumX Gasless Swap:', { tokenIn, tokenOut, amountIn, minOut, feeAmount, policy: estimate.policy });
 
-  // Step 2: Resolve ALEX internal currency IDs
-  // ALEX SDK requires its own internal IDs (e.g. 'token-wstx', 'age000-governance-token')
-  // not raw contract addresses
+  // Step 2: Resolve ALEX internal token IDs
   onProgress?.('Preparing transaction...');
   const alex = new AlexSDK();
 
   const resolveAlexId = async (token: string): Promise<string> => {
     if (token === 'token-wstx' || token === 'STX') return 'token-wstx';
-
-    // Already an ALEX internal ID (no dots, no SP prefix)
-    if (!token.includes('.') && !token.startsWith('SP') && !token.startsWith('ST')) {
-      return token;
-    }
-
+    if (!token.includes('.') && !token.startsWith('SP') && !token.startsWith('ST')) return token;
     try {
       const allTokens = await alex.fetchSwappableCurrency();
       const match = allTokens.find((t: any) => {
@@ -88,26 +84,15 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     } catch (e) {
       console.warn('ALEX token resolution failed:', e);
     }
-
-    throw new Error(`Token not supported by ALEX: ${token}. Check that the token is listed on ALEX DEX.`);
+    throw new Error(`Token not supported by ALEX: ${token}`);
   };
 
   const alexTokenIn = await resolveAlexId(tokenIn) as any;
   const alexTokenOut = await resolveAlexId(tokenOut) as any;
-
-  // Step 3: Convert amounts to ALEX's 1e8 decimal format
   const alexAmountIn = toAlexAmount(amountIn, tokenInDecimals);
   const alexMinOut = toAlexAmount(minOut, tokenOutDecimals);
 
-  console.log('ALEX swap params:', {
-    alexTokenIn, alexTokenOut,
-    alexAmountIn: alexAmountIn.toString(),
-    alexMinOut: alexMinOut.toString()
-  });
-
-  // Step 4: Get swap tx params from ALEX SDK
-  // runSwap() returns { contractAddress, contractName, functionName, functionArgs, postConditions }
-  // It does NOT open the wallet — we do that ourselves below with openContractCall
+  // Step 3: Get swap tx params from ALEX SDK (no wallet popup)
   const swapTx = await alex.runSwap(
     params.userAddress,
     alexTokenIn,
@@ -115,54 +100,62 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     alexAmountIn,
     alexMinOut
   );
+  console.log('ALEX swap tx params:', swapTx);
 
-  const connect = await getStacksConnect();
+  // Step 4: Build unsigned sponsored tx using makeUnsignedContractCall
+  // This requires the user's publicKey (not senderKey) and sets sponsored: true
+  // so the auth type is set to sponsored — relayer must co-sign before broadcast
+  const txLib = await getStacksTransactions();
   const network = await getNetworkInstance();
 
-  // Step 5: Open the Stacks wallet ONCE with sponsored: true
-  // The wallet signs the tx but does NOT broadcast it.
-  // onFinish receives txRaw — the user-signed sponsored tx hex ready for the relayer.
-  return new Promise<string>((resolve, reject) => {
-    connect.openContractCall({
-      ...swapTx,
-      network,
-      sponsored: true,
-      onFinish: async (data: any) => {
-        console.log('Swap signed by wallet:', data);
-
-        try {
-          // txRaw is only present when the wallet respected sponsored: true
-          // and held the tx for the relayer to sign + broadcast.
-          // If txRaw is absent, the wallet broadcast it directly (non-sponsored path).
-          const txRaw = data.txRaw;
-
-          if (!txRaw) {
-            // Wallet broadcast it directly — tx is already on-chain, just return the txid
-            const txid = data.txId || data.txid;
-            if (txid) {
-              console.warn('Wallet did not return txRaw — tx was broadcast directly (not sponsored). User paid the fee.');
-              return resolve(txid);
-            }
-            return reject(new Error('No transaction data returned from wallet'));
-          }
-
-          // Wallet returned txRaw — it respected sponsored: true.
-          // Send to VelumX relayer to add sponsor signature and broadcast.
-          onProgress?.('Broadcasting via VelumX...');
-          const result = await velumx.sponsor(txRaw, {
-            feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
-            feeAmount: isDeveloperSponsored ? '0' : feeAmount,
-            network: config.stacksNetwork as 'mainnet' | 'testnet'
-          });
-
-          console.log('VelumX sponsor result:', result);
-          resolve(result.txid);
-        } catch (error) {
-          console.error('Broadcast error:', error);
-          reject(error);
-        }
-      },
-      onCancel: () => reject(new Error('Swap cancelled by user'))
-    });
+  const transaction = await txLib.makeUnsignedContractCall({
+    contractAddress: swapTx.contractAddress,
+    contractName: swapTx.contractName,
+    functionName: swapTx.functionName,
+    functionArgs: swapTx.functionArgs,
+    postConditions: swapTx.postConditions ?? [],
+    network,
+    sponsored: true,
+    publicKey: params.userPublicKey,
+    fee: 0n,
+    validateWithAbi: false,
   });
+
+  const txHex = txLib.bytesToHex(transaction.serialize());
+  console.log('Built unsigned sponsored tx:', txHex.slice(0, 40) + '...');
+
+  // Step 5: Wallet signs the sponsored tx WITHOUT broadcasting
+  // stx_signTransaction is the correct @stacks/connect v8 API:
+  // — wallet signs the tx and returns the signed hex
+  // — wallet does NOT broadcast (unlike stx_callContract which broadcasts immediately)
+  onProgress?.('Waiting for wallet signature...');
+
+  let signedTxHex: string;
+  try {
+    const signResult = await request('stx_signTransaction', {
+      txHex,
+      network: 'mainnet',
+    } as any);
+
+    signedTxHex = (signResult as any).txHex || (signResult as any).transaction;
+    if (!signedTxHex) throw new Error('Wallet did not return signed tx hex');
+    console.log('Wallet signed sponsored tx:', signedTxHex.slice(0, 40) + '...');
+  } catch (err: any) {
+    if (err?.message?.toLowerCase().includes('cancel') || err?.code === 4001) {
+      throw new Error('Swap cancelled by user');
+    }
+    throw err;
+  }
+
+  // Step 6: Send signed sponsored tx to VelumX relayer
+  // Relayer calls sponsorTransaction() to add its co-signature, then broadcasts
+  onProgress?.('Broadcasting via VelumX...');
+  const result = await velumx.sponsor(signedTxHex, {
+    feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
+    feeAmount: isDeveloperSponsored ? '0' : feeAmount,
+    network: config.stacksNetwork as 'mainnet' | 'testnet'
+  });
+
+  console.log('VelumX sponsor result:', result);
+  return result.txid;
 }
