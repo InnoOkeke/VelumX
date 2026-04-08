@@ -93,13 +93,13 @@ export default function DashboardOverview() {
     relayerAddress: '',
     relayerStxBalance: '0',
     relayerFeeBalance: '0',
-    feeToken: 'Tokens'
+    feeToken: 'USD'
   };
 
   const metricCards = [
     {
       title: 'Total Gas Sponsored',
-      value: `${parseFloat(currentStats.totalSponsored || '0').toFixed(2)} ${currentStats.feeToken || 'USDCx'}`,
+      value: `${parseFloat(currentStats.totalSponsored || '0').toFixed(2)} USD`,
       change: '0%',
       trend: 'up',
       icon: BatteryCharging,
@@ -154,7 +154,7 @@ export default function DashboardOverview() {
             <div className="flex flex-col">
               <span className="text-[9px] text-white/20 uppercase font-black tracking-widest mb-1">Rev. ({currentNetwork})</span>
               <span className={`text-[11px] font-bold font-mono ${currentNetwork === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {parseFloat(currentStats.relayerFeeBalance || '0').toFixed(2)} <span className="opacity-40 font-medium">{currentStats.feeToken || 'USDCx'}</span>
+                {parseFloat(currentStats.relayerFeeBalance || '0').toFixed(2)} <span className="opacity-40 font-medium">USD</span>
               </span>
             </div>
           </div>
@@ -231,7 +231,7 @@ export default function DashboardOverview() {
                   className="w-full rounded-sm bg-white/20 hover:bg-white/40 transition-colors relative group"
                 >
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                    {total.toFixed(2)} {currentStats.feeToken || 'Tokens'}
+                    {total.toFixed(2)} USD
                   </div>
                 </div>
               );

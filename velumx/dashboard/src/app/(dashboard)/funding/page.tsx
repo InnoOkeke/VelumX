@@ -47,8 +47,8 @@ export default function FundingPage() {
                 setStats({
                     relayerAddress: currentStats.relayerAddress,
                     relayerStxBalance: (parseInt(currentStats.relayerStxBalance || '0') / 1_000_000).toFixed(2),
-                    relayerFeeBalance: (parseInt(currentStats.relayerFeeBalance || '0') / 1_000_000).toFixed(2),
-                    feeToken: currentStats.feeToken || 'Tokens'
+                    relayerFeeBalance: parseFloat(currentStats.relayerFeeBalance || '0').toFixed(2),
+                    feeToken: 'USD'
                 });
 
                 // --- Fetch Recent Logs for History ---
@@ -147,7 +147,7 @@ export default function FundingPage() {
                                 <RefreshCcw className="w-5 h-5 text-emerald-400" />
                             </div>
                             <div>
-                                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Collected Fees (USDCx)</h2>
+                                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Collected Fees (USD)</h2>
                                 <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Standardized Revenue Value</p>
                             </div>
                         </div>
@@ -157,7 +157,7 @@ export default function FundingPage() {
                                 <span className="text-5xl font-black text-white font-mono">
                                     {isFetching ? '...' : stats.relayerFeeBalance}
                                 </span>
-                                <span className="text-lg text-white/40 font-bold">USDCx</span>
+                                <span className="text-lg text-white/40 font-bold">USD</span>
                             </div>
                         </div>
                     </div>
@@ -198,7 +198,14 @@ export default function FundingPage() {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-white text-[11px] font-bold font-mono">{(parseInt(log.feeAmount) / 1_000_000).toFixed(2)} <span className="opacity-40">{log.feeToken || stats.feeToken}</span></p>
+                                <p className="text-white text-[11px] font-bold font-mono">
+                                    {(() => {
+                                        const cn = (log.feeToken || '').includes('.') ? log.feeToken.split('.').pop() : log.feeToken || '';
+                                        const dec = ({ 'token-alex': 8, 'age000-governance-token': 8, 'sbtc-token': 8 } as Record<string, number>)[cn.toLowerCase()] ?? 6;
+                                        const sym = ({ 'token-alex': 'ALEX', 'usdcx': 'USDCx', 'token-aeusdc': 'aeUSDC', 'sbtc-token': 'sBTC' } as Record<string, string>)[cn.toLowerCase()] || (cn || 'Token').toUpperCase();
+                                        return `${((parseInt(log.feeAmount) || 0) / Math.pow(10, dec)).toFixed(dec > 6 ? 6 : 4)} ${sym}`;
+                                    })()}
+                                </p>
                                 <span className={`text-[9px] font-black uppercase tracking-widest ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>
                                     {log.status}
                                 </span>
