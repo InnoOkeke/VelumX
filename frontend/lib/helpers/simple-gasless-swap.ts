@@ -103,8 +103,6 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   console.log('ALEX swap tx params:', swapTx);
 
   // Step 4: Build unsigned sponsored tx using makeUnsignedContractCall
-  // This requires the user's publicKey (not senderKey) and sets sponsored: true
-  // so the auth type is set to sponsored — relayer must co-sign before broadcast
   const txLib = await getStacksTransactions();
   const network = await getNetworkInstance();
 
@@ -121,7 +119,8 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     validateWithAbi: false,
   });
 
-  const txHex = txLib.bytesToHex(transaction.serialize());
+  // bytesToHex is not on @stacks/transactions — use Buffer directly
+  const txHex = Buffer.from(transaction.serialize()).toString('hex');
   console.log('Built unsigned sponsored tx:', txHex.slice(0, 40) + '...');
 
   // Step 5: Wallet signs the sponsored tx WITHOUT broadcasting

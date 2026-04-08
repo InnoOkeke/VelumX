@@ -284,7 +284,12 @@ export function SwapInterface() {
     try {
       const alex = new AlexSDK() as any;
 
-      const amountInMicro = BigInt(parseUnits(state.inputAmount, state.inputToken.decimals).toString());
+      // ALEX SDK expects amounts in 1e8 units regardless of token decimals
+      // Convert: human amount → 1e8 micro units
+      const ALEX_DECIMALS = 8;
+      const amountInAlex = BigInt(Math.floor(
+        parseFloat(state.inputAmount) * Math.pow(10, ALEX_DECIMALS)
+      ));
 
       // ALEX SDK needs its internal currency ID, not the contract address.
       // For STX/wSTX use 'token-wstx'. For others, try to find the matching
@@ -310,18 +315,20 @@ export function SwapInterface() {
       const tokenIn = await resolveAlexId(state.inputToken);
       const tokenOut = await resolveAlexId(state.outputToken);
 
-      console.log(`Swap: Quote request — ${tokenIn} → ${tokenOut}, amount: ${amountInMicro}`);
+      console.log(`Swap: Quote request — ${tokenIn} → ${tokenOut}, amount: ${amountInAlex}`);
 
-      const amountOut = await alex.getAmountTo(tokenIn, amountInMicro, tokenOut);
+      const amountOut = await alex.getAmountTo(tokenIn, amountInAlex, tokenOut);
 
       if (amountOut === undefined || amountOut === null) {
         throw new Error('No liquidity found for this pair on ALEX');
       }
 
-      const outputAmountFormatted = (Number(amountOut) / Math.pow(10, state.outputToken.decimals)).toFixed(6);
-      // Rate: how much outputToken per 1 inputToken (both in human units)
-      const inputHuman = Number(amountInMicro) / Math.pow(10, state.inputToken.decimals);
-      const outputHuman = Number(amountOut) / Math.pow(10, state.outputToken.decimals);
+      // ALEX SDK always returns amounts in 1e8 units regardless of token decimals
+      // Always divide by 1e8 for display
+      const outputAmountFormatted = (Number(amountOut) / Math.pow(10, ALEX_DECIMALS)).toFixed(6);
+      // Rate: both in human units
+      const inputHuman = parseFloat(state.inputAmount);
+      const outputHuman = Number(amountOut) / Math.pow(10, ALEX_DECIMALS);
       const rate = (outputHuman / inputHuman).toFixed(6);
 
       setState(prev => ({
@@ -424,12 +431,12 @@ export function SwapInterface() {
         // Use VelumX SDK for gasless swaps
         const { executeSimpleGaslessSwap } = await import('@/lib/helpers/simple-gasless-swap');
         
-        // Convert amounts to micro units (6 decimals for most tokens)
+        // amountIn: token's native micro units (e.g. STX = 6 decimals)
+        // minOut: outputAmount is already in human units (ALEX 1e8 → divided by 1e8 in quote)
+        //         pass as 1e8 micro units so toAlexAmount(x, 8) = x unchanged
         const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals).toString();
-        const minAmountOutMicro = parseUnits(
-          (parseFloat(state.outputAmount) * (1 - state.slippage / 100)).toFixed(6),
-          state.outputToken.decimals
-        ).toString();
+        const minOutHuman = parseFloat(state.outputAmount) * (1 - state.slippage / 100);
+        const minAmountOutMicro = BigInt(Math.floor(minOutHuman * 1e8)).toString();
         
         // Ensure we have the user's public key for building the sponsored tx
         let pubKey = stacksPublicKey;
@@ -445,7 +452,7 @@ export function SwapInterface() {
           amountIn: amountInMicro,
           minOut: minAmountOutMicro,
           tokenInDecimals: state.inputToken.decimals,
-          tokenOutDecimals: state.outputToken.decimals,
+          tokenOutDecimals: 8, // minOut is in ALEX's 1e8 units
           feeToken: state.selectedGasToken?.address,
           onProgress: (step) => {
             setState(prev => ({ ...prev, success: step }));
