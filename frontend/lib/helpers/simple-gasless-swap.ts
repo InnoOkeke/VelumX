@@ -123,7 +123,11 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
       contractName: swapTx.contractName,
       functionName: swapTx.functionName,
       functionArgs: swapTx.functionArgs,
-      postConditions: swapTx.postConditions ?? [],
+      // ALEX SDK returns post-conditions in @stacks/connect string format,
+      // not the wire format makeUnsignedContractCall expects.
+      // Use Allow mode — the contract enforces min-dy on-chain anyway.
+      postConditionMode: txLib.PostConditionMode?.Allow ?? 1,
+      postConditions: [],
       network,
       sponsored: true,
       publicKey,
