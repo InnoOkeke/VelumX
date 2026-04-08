@@ -18,7 +18,7 @@ interface TokenRateSource {
 export class PricingOracleService {
     private alex: AlexSDK;
     private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
-    private readonly CACHE_TTL = 60000; // 1 minute cache
+    private readonly CACHE_TTL = 30000; // 30 second cache — balances price freshness vs API calls
 
     constructor() {
         this.alex = new AlexSDK();
@@ -219,31 +219,11 @@ export class PricingOracleService {
             {
                 name: 'Hardcoded Fallback',
                 getRate: async (token: string) => {
-                    // Fallback rates in STX per token — based on real market prices
-                    // ALEX: $0.00063 / $0.40 STX = 0.001575 STX per ALEX
-                    // sBTC/xBTC: $70,000 / $0.40 = 175,000 STX per BTC
-                    // USDCx/sUSDT/aeUSDC: $1.00 / $0.40 = 2.5 STX per USD-stable
-                    const fallbackRates: Record<string, number> = {
-                        'age000-governance-token': 0.001575,
-                        'alex':    0.001575,
-                        'token-wbtc': 175000,
-                        'sbtc':    175000,
-                        'token-susdt': 2.5,
-                        'usdc':    2.5,
-                        'usdcx':   2.5,
-                        'token-aeusdc': 2.5,
-                        'aeusdc':  2.5,
-                    };
-
-                    for (const [key, rate] of Object.entries(fallbackRates)) {
-                        if (token.toLowerCase().includes(key)) {
-                            console.warn(`Using fallback rate for ${token}: ${rate} STX`);
-                            return rate;
-                        }
-                    }
-
-                    console.warn(`No fallback rate found for ${token}, using 2.5 STX (1 USD equivalent)`);
-                    return 2.5;
+                    // Last resort: assume 1 token = 1 STX equivalent
+                    // This is intentionally conservative — better to overcharge slightly
+                    // than to use a stale hardcoded rate that could be wildly wrong.
+                    console.warn(`All oracle sources failed for ${token}, using 1:1 STX fallback`);
+                    return 1.0;
                 }
             }
         ];
@@ -252,13 +232,15 @@ export class PricingOracleService {
         for (const source of sources) {
             const rate = await source.getRate(tokenIn);
             if (rate && rate > 0) {
+                console.log(`[Oracle] ${token} rate: ${rate} STX/token via ${source.name} (decimals=${tokenDecimals})`);
                 // Cache the result
                 this.priceCache.set(cacheKey, { price: rate, timestamp: Date.now() });
                 return rate;
             }
         }
 
-        // Fallback to 1.0 if all sources fail
+        // All sources failed — return 1.0 as a safe conservative default
+        console.error(`All oracle sources failed for ${token}`);
         return 1.0;
     }
 

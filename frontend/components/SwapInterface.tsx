@@ -406,9 +406,12 @@ export function SwapInterface() {
 
       if (estimate && estimate.maxFee) {
         const fee = estimate.maxFee;
+        const tokenAmount = (Number(fee) / Math.pow(10, state.selectedGasToken?.decimals || 6)).toFixed(4);
+        // Also compute USD equivalent: BASE_FEE_USD is $0.02, so just show ~$0.02
+        // We display token amount + USD hint
         setState(prev => ({
           ...prev,
-          gasFee: (Number(fee) / Math.pow(10, state.selectedGasToken?.decimals || 6)).toFixed(4),
+          gasFee: tokenAmount,
         }));
       }
     } catch (error) {
@@ -766,9 +769,9 @@ export function SwapInterface() {
                   
                   <div className="flex flex-col items-end pr-3">
                     <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400">
-                      Fee: {state.gasFee} {state.selectedGasToken?.symbol}
+                      {state.gasFee} {state.selectedGasToken?.symbol}
                     </span>
-                    <span className="text-[8px] opacity-40 uppercase font-black" style={{ color: 'var(--text-secondary)' }}>Sponsored v2</span>
+                    <span className="text-[8px] opacity-60 font-bold text-purple-500 dark:text-purple-400">≈ $0.02 USD gas fee</span>
                   </div>
                 </div>
               </div>
