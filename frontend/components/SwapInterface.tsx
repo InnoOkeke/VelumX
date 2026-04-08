@@ -472,6 +472,7 @@ export function SwapInterface() {
         
         const amountInMicro = parseUnits(state.inputAmount, state.inputToken.decimals).toString();
         const minOutHuman = parseFloat(state.outputAmount) * (1 - state.slippage / 100);
+        // ALEX SDK uses 1e8 internally for all tokens — minOut must be in 1e8 units
         const minAmountOutMicro = BigInt(Math.floor(minOutHuman * 1e8)).toString();
 
         const txid = await executeSimpleGaslessSwap({

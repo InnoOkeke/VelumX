@@ -229,14 +229,40 @@ export class PaymasterService {
         }
 
         // 3. Universal Pricing (User Pays)
-        const tokenRate = await this.getTokenRate(feeToken);
+        // Target fee = $0.02 USD worth of the fee token + developer markup.
+        // This ensures consistent USD value regardless of which token is used.
         const estimatedGas = intent.estimatedGas || 10000;
-        const SAFE_GAS_PRICE = 1;
-        const networkFeeMicroSTX = estimatedGas * SAFE_GAS_PRICE;
-
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const finalFee = Math.ceil(networkFeeMicroSTX / tokenRate * markupFactor);
+        const BASE_FEE_USD = 0.02; // $0.02 USD base fee
+
+        // Get token USD price via STX as bridge:
+        // tokenRateInSTX = how many STX per 1 token
+        // stxUsdPrice = USD per 1 STX
+        // tokenUsdPrice = tokenRateInSTX * stxUsdPrice
+        const tokenRateInSTX = await this.getTokenRate(feeToken);
+        const stxUsdPrice = await this.getStxPrice();
+        const tokenUsdPrice = tokenRateInSTX * stxUsdPrice;
+
+        // tokens needed = BASE_FEE_USD / tokenUsdPrice
+        // in micro units (assuming 6 decimals for most SIP-010, 8 for ALEX/sBTC)
+        // Fetch token decimals on-chain — works for any SIP-010 token
+        let tokenDecimals = 6; // safe default
+        try {
+            const [contractAddr, contractName] = feeToken.split('.');
+            const metaRes = await fetch(
+                `https://api.hiro.so/metadata/v1/ft/${contractAddr}.${contractName}`,
+                { signal: AbortSignal.timeout(4000) }
+            );
+            if (metaRes.ok) {
+                const meta = await metaRes.json();
+                if (typeof meta.decimals === 'number') tokenDecimals = meta.decimals;
+            }
+        } catch (e) {
+            console.warn(`Could not fetch decimals for ${feeToken}, defaulting to 6`);
+        }        const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
+
+        const finalFee = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
 
         return {
             maxFee: finalFee.toString(),
