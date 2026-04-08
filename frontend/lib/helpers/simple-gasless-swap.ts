@@ -87,10 +87,23 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
 
   if (!publicKey) throw new Error('Wallet public key not available. Please reconnect your wallet.');
 
-  // Step 5: Build unsigned sponsored tx using direct import (not stacks-loader)
-  // Direct import ensures we use the same @stacks/transactions version as the wallet
-  const network = await getNetworkInstance();
+  // Step 5: Fetch current nonce for the user's address
+  // Some wallets reject transactions with wrong nonce (even for sponsored txs)
+  let nonce = 0n;
+  try {
+    const nonceRes = await fetch(
+      `https://api.mainnet.hiro.so/v2/accounts/${params.userAddress}?proof=0`
+    );
+    if (nonceRes.ok) {
+      const accountData = await nonceRes.json();
+      nonce = BigInt(accountData.nonce ?? 0);
+      console.log('Fetched nonce:', nonce.toString());
+    }
+  } catch (e) {
+    console.warn('Failed to fetch nonce, using 0:', e);
+  }
 
+  const network = await getNetworkInstance();
   console.log('Building sponsored tx, network:', network?.chainId);
 
   const transaction = await makeUnsignedContractCall({
@@ -104,6 +117,7 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     sponsored: true,
     publicKey,
     fee: 0n,
+    nonce,
     validateWithAbi: false,
   });
 
