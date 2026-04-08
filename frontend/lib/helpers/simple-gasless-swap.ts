@@ -143,18 +143,20 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     const alexDx = swapTx.functionArgs[3];     // dx uint
     const alexMinDy = swapTx.functionArgs[4];  // min-dy (optional uint)
 
-    // Parse token contract addresses from ALEX swap tx
-    const [tokenXAddress, tokenXName] = tokenIn === 'token-wstx'
-      ? ['SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM', 'token-wstx-v2']
-      : tokenIn.split('.');
-    const [tokenYAddress, tokenYName] = tokenOut === 'token-wstx'
-      ? ['SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM', 'token-wstx-v2']
-      : tokenOut.split('.');
+    // Use token contract CVs directly from ALEX's runSwap result — they are already
+    // contractPrincipalCV with the correct mainnet addresses. Re-splitting ALEX token
+    // IDs (e.g. 'token-wstx', 'age000-governance-token') would give invalid addresses.
+    const tokenXCV = swapTx.functionArgs[0];   // contractPrincipalCV for token-x
+    const tokenYCV = swapTx.functionArgs[1];   // contractPrincipalCV for token-y
+
     const [feeTokenAddress, feeTokenName] = selectedFeeToken.split('.');
+    if (!feeTokenAddress || !feeTokenName) {
+      throw new Error(`Invalid fee token address: ${selectedFeeToken}. Must be in format 'CONTRACT.NAME'`);
+    }
 
     functionArgs = [
-      Cl.contractPrincipal(tokenXAddress, tokenXName),  // token-x-trait
-      Cl.contractPrincipal(tokenYAddress, tokenYName),  // token-y-trait
+      tokenXCV,                                          // token-x-trait (from ALEX)
+      tokenYCV,                                          // token-y-trait (from ALEX)
       alexFactor,                                        // factor
       alexDx,                                            // dx
       alexMinDy,                                         // min-dy (optional uint)

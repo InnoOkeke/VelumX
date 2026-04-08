@@ -54,6 +54,31 @@ interface SwapState {
   isRegistering: boolean;
 }
 
+// Maps known token symbols/IDs (as stored in developer dashboard) to their
+// mainnet Stacks contract principals. Used to resolve gas tokens returned
+// by the relayer that may be stored as symbols rather than contract addresses.
+const KNOWN_TOKEN_CONTRACTS: Record<string, string> = {
+  'ALEX':                    'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+  'age000-governance-token': 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+  'token-alex':              'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+  'USDCx':                   'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+  'usdcx':                   'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+  'aeUSDC':                  'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
+  'token-aeusdc':            'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
+  'sBTC':                    'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token',
+  'sbtc-token':              'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token',
+};
+
+/**
+ * Resolves a token identifier (symbol, ALEX ID, or contract principal) to
+ * a full Stacks contract principal. Returns the input unchanged if it already
+ * looks like a principal (contains a dot).
+ */
+function resolveTokenAddress(tokenId: string): string {
+  if (tokenId.includes('.')) return tokenId; // already a contract principal
+  return KNOWN_TOKEN_CONTRACTS[tokenId] || KNOWN_TOKEN_CONTRACTS[tokenId.toLowerCase()] || tokenId;
+}
+
 // Absolute minimal baseline for boot (STX is universal)
 const FALLBACK_STX: Token = {
   symbol: 'STX',
@@ -70,8 +95,15 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
     name: 'Circle USDC',
     address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
     decimals: 6,
-    logoUrl: '', // Use letter avatar fallback
-  }
+    logoUrl: '',
+  },
+  {
+    symbol: 'ALEX',
+    name: 'ALEX Token',
+    address: 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+    decimals: 8,
+    logoUrl: '',
+  },
 ];
 
 export function SwapInterface() {
@@ -130,11 +162,11 @@ export function SwapInterface() {
             const currentAddr = prev.selectedGasToken?.address || '';
             const isCurrentSupported = data.supportedGasTokens.includes(currentAddr);
             if (!isCurrentSupported) {
-              // Find the matching token from our token list, or create a minimal one
-              const firstAddr = data.supportedGasTokens[0];
+              // Resolve symbol/ID to a real contract principal
+              const firstAddr = resolveTokenAddress(data.supportedGasTokens[0]);
               const matchedToken = [FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS].find(
                 t => t.address === firstAddr
-              ) || { symbol: firstAddr.split('.').pop() || 'Token', name: firstAddr, address: firstAddr, decimals: 6 };
+              ) || { symbol: firstAddr.split('.').pop()?.toUpperCase() || 'Token', name: firstAddr, address: firstAddr, decimals: 6 };
               return { ...prev, selectedGasToken: matchedToken };
             }
             return prev;
@@ -173,7 +205,7 @@ export function SwapInterface() {
         .map((t: any) => {
           const contractAddress = t.wrapToken
             ? t.wrapToken.split('::')[0]
-            : (t.id || t.contractAddress || t.address || '');
+            : (t.contractAddress || t.address || '');
           const rawIcon = t.icon || '';
           const logoUrl = rawIcon
             ? `/api/image-proxy?url=${encodeURIComponent(rawIcon)}`
@@ -181,7 +213,7 @@ export function SwapInterface() {
           return {
             symbol: t.name || t.symbol || t.id || 'Unknown',
             name: t.name || t.symbol || 'Unknown Token',
-            address: contractAddress || t.id || 'unknown-address',
+            address: contractAddress || 'unknown-address',
             decimals: t.wrapTokenDecimals ?? t.underlyingTokenDecimals ?? t.decimals ?? 8,
             logoUrl,
           };
@@ -687,7 +719,7 @@ export function SwapInterface() {
                        >
                          {tokens
                            .filter(t => t.symbol !== 'STX')
-                           .filter(t => supportedGasTokens.length === 0 || supportedGasTokens.includes(t.address))
+                           .filter(t => supportedGasTokens.length === 0 || supportedGasTokens.map(resolveTokenAddress).includes(t.address))
                            .map(t => (
                            <button
                               key={t.symbol}
