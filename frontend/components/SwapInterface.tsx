@@ -58,9 +58,9 @@ interface SwapState {
 // mainnet Stacks contract principals. Used to resolve gas tokens returned
 // by the relayer that may be stored as symbols rather than contract addresses.
 const KNOWN_TOKEN_CONTRACTS: Record<string, string> = {
-  'ALEX':                    'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
-  'age000-governance-token': 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
-  'token-alex':              'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+  'ALEX':                    'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex',
+  'age000-governance-token': 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex',
+  'token-alex':              'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex',
   'USDCx':                   'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
   'usdcx':                   'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
   'aeUSDC':                  'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
@@ -100,7 +100,7 @@ const VELUMX_PRIORITY_TOKENS: Token[] = [
   {
     symbol: 'ALEX',
     name: 'ALEX Token',
-    address: 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+    address: 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex',
     decimals: 8,
     logoUrl: '',
   },
