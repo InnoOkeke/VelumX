@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useUser } from '@/components/providers/SessionProvider';
 import { Wallet, RefreshCcw, History, Activity } from 'lucide-react';
 import { useWallet } from '@/components/providers/WalletContext';
-
 import { RELAYER_URL } from '@/lib/config';
 
 export default function FundingPage() {
@@ -15,53 +14,37 @@ export default function FundingPage() {
         relayerAddress: 'Loading...',
         relayerStxBalance: '0',
         relayerFeeBalance: '0',
-        feeToken: 'Tokens'
     });
     const [logs, setLogs] = useState<any[]>([]);
     const [isFetching, setIsFetching] = useState(true);
 
     const fetchRelayerStatus = async () => {
         if (!user) return;
-        
         setIsFetching(true);
         try {
             const supabase = (await import('@/lib/supabase/client')).createClient();
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
-
             if (!token) return;
 
-            const res = await fetch(`${RELAYER_URL}/api/dashboard/stats`, { 
-                cache: 'no-store',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const currentStats = data.networks?.[network] || {
-                    relayerAddress: 'Not Configured',
-                    relayerStxBalance: '0',
-                    relayerFeeBalance: '0',
-                    feeToken: 'Tokens'
-                };
+            const [statsRes, logsRes] = await Promise.all([
+                fetch(`${RELAYER_URL}/api/dashboard/stats`, { cache: 'no-store', headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${RELAYER_URL}/api/dashboard/logs?network=${network}`, { cache: 'no-store', headers: { 'Authorization': `Bearer ${token}` } }),
+            ]);
 
+            if (statsRes.ok) {
+                const data = await statsRes.json();
+                const s = data.networks?.[network] || {};
                 setStats({
-                    relayerAddress: currentStats.relayerAddress,
-                    relayerStxBalance: (parseInt(currentStats.relayerStxBalance || '0') / 1_000_000).toFixed(2),
-                    relayerFeeBalance: parseFloat(currentStats.relayerFeeBalance || '0').toFixed(2),
-                    feeToken: 'USD'
+                    relayerAddress: s.relayerAddress || 'Not Configured',
+                    relayerStxBalance: (parseInt(s.relayerStxBalance || '0') / 1_000_000).toFixed(2),
+                    relayerFeeBalance: parseFloat(s.relayerFeeBalance || '0').toFixed(2),
                 });
+            }
 
-                // --- Fetch Recent Logs for History ---
-                const logsRes = await fetch(`${RELAYER_URL}/api/dashboard/logs?network=${network}`, {
-                    cache: 'no-store',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (logsRes.ok) {
-                    const logsData = await logsRes.json();
-                    setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : []);
-                }
-            } else {
-                console.warn('Relayer: Stats API returned non-ok status');
+            if (logsRes.ok) {
+                const logsData = await logsRes.json();
+                setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : []);
             }
         } catch (error) {
             console.error('Error fetching relayer status:', error);
@@ -72,14 +55,8 @@ export default function FundingPage() {
 
     useEffect(() => {
         setIsClient(true);
-        if (!userLoading) {
-            fetchRelayerStatus();
-        }
+        if (!userLoading) fetchRelayerStatus();
     }, [network, user, userLoading]);
-
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-    };
 
     if (!isClient) return null;
 
@@ -108,24 +85,20 @@ export default function FundingPage() {
                                 <span className="px-2 py-1 rounded bg-rose-500/20 text-rose-400 text-[10px] font-bold border border-rose-500/20 uppercase animate-pulse">Low Funds</span>
                             )}
                         </div>
-
                         <div className="mb-8">
                             <div className="flex items-baseline gap-2">
-                                <span className="text-5xl font-black text-white font-mono">
-                                    {isFetching ? '...' : stats.relayerStxBalance}
-                                </span>
+                                <span className="text-5xl font-black text-white font-mono">{isFetching ? '...' : stats.relayerStxBalance}</span>
                                 <span className="text-lg text-white/40 font-bold">STX</span>
                             </div>
                         </div>
                     </div>
-
                     <div className="space-y-4">
                         <div className="p-4 bg-black rounded-xl border border-white/5">
                             <p className="text-[10px] text-white/20 uppercase font-bold mb-2">Relayer Hot Wallet Address</p>
                             <div className="flex items-center justify-between gap-2">
                                 <code className="text-xs text-white/60 truncate font-mono">{stats.relayerAddress}</code>
                                 <button
-                                    onClick={() => copyToClipboard(stats.relayerAddress)}
+                                    onClick={() => navigator.clipboard.writeText(stats.relayerAddress)}
                                     className="text-[10px] font-bold text-white/40 hover:text-white uppercase transition-colors"
                                 >
                                     Copy
@@ -133,13 +106,12 @@ export default function FundingPage() {
                             </div>
                         </div>
                         <p className="text-[10px] text-white/20 leading-relaxed">
-                            Fund this address with STX to keep your Relayer operational.
-                            Every sponsored transaction consumes STX from this balance.
+                            Fund this address with STX to keep your Relayer operational. Every sponsored transaction consumes STX from this balance.
                         </p>
                     </div>
                 </div>
 
-                {/* Fee Revenue Balance */}
+                {/* Collected Fees */}
                 <div className="glass-card p-8 flex flex-col justify-between">
                     <div>
                         <div className="flex items-center gap-3 mb-8">
@@ -147,25 +119,21 @@ export default function FundingPage() {
                                 <RefreshCcw className="w-5 h-5 text-emerald-400" />
                             </div>
                             <div>
-                                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Collected Fees (USD)</h2>
-                                <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">Standardized Revenue Value</p>
+                                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Collected Fees</h2>
+                                <p className="text-[10px] text-white/40 uppercase font-bold tracking-tight">USD equivalent in relayer wallet</p>
                             </div>
                         </div>
-
                         <div className="mb-8">
                             <div className="flex items-baseline gap-2">
-                                <span className="text-5xl font-black text-white font-mono">
-                                    {isFetching ? '...' : stats.relayerFeeBalance}
-                                </span>
+                                <span className="text-5xl font-black text-white font-mono">{isFetching ? '...' : stats.relayerFeeBalance}</span>
                                 <span className="text-lg text-white/40 font-bold">USD</span>
                             </div>
                         </div>
                     </div>
-
                     <div className="p-6 bg-white/[0.02] border border-white/10 rounded-xl">
-                        <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-tight">Reporting Mechanism</h4>
+                        <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-tight">How it works</h4>
                         <p className="text-[10px] text-white/40 leading-relaxed">
-                            While you collect fees in various tokens (ALEX, sBTC), your dashboard reports their total **USDCx Value** for easier financial management and predictability.
+                            Fees collected in any token (ALEX, sBTC, etc.) are converted to their USD equivalent using live oracle prices for a unified view.
                         </p>
                     </div>
                 </div>
@@ -187,7 +155,7 @@ export default function FundingPage() {
                             No recent activity on {network === 'testnet' ? 'Stacks Testnet' : 'Stacks Mainnet'}.
                         </div>
                     ) : logs.map((log) => (
-                        <div key={log.id} className="flex justify-between items-center p-4 bg-white/[0.01] border border-white/5 rounded-xl hover:bg-white/[0.02] transition-colors group">
+                        <div key={log.id} className="flex justify-between items-center p-4 bg-white/[0.01] border border-white/5 rounded-xl hover:bg-white/[0.02] transition-colors">
                             <div className="flex items-center gap-4">
                                 <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
                                     <Activity className="w-3.5 h-3.5 text-white/40" />
@@ -198,14 +166,7 @@ export default function FundingPage() {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-white text-[11px] font-bold font-mono">
-                                    {(() => {
-                                        const cn = (log.feeToken || '').includes('.') ? log.feeToken.split('.').pop() : log.feeToken || '';
-                                        const dec = ({ 'token-alex': 8, 'age000-governance-token': 8, 'sbtc-token': 8 } as Record<string, number>)[cn.toLowerCase()] ?? 6;
-                                        const sym = ({ 'token-alex': 'ALEX', 'usdcx': 'USDCx', 'token-aeusdc': 'aeUSDC', 'sbtc-token': 'sBTC' } as Record<string, string>)[cn.toLowerCase()] || (cn || 'Token').toUpperCase();
-                                        return `${((parseInt(log.feeAmount) || 0) / Math.pow(10, dec)).toFixed(dec > 6 ? 6 : 4)} ${sym}`;
-                                    })()}
-                                </p>
+                                <p className="text-white text-[11px] font-bold font-mono">{log.txid.substring(0, 8)}...</p>
                                 <span className={`text-[9px] font-black uppercase tracking-widest ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>
                                     {log.status}
                                 </span>

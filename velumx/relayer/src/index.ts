@@ -231,85 +231,107 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
             try {
-                // 1. Fetch Transactions with Tokens
-                const transactions = await (prisma.transaction as any).findMany({
-                    where: { userId, network: networkType },
-                    select: { feeAmount: true, feeToken: true }
+                // 1. Count transactions from DB
+                const totalTransactions = await (prisma.transaction as any).count({
+                    where: { userId, network: networkType }
                 });
 
-                const totalTransactions = transactions.length;
-
-                // 2. Batch Convert Fees to USDCx
-                // Standardize on USD value regardless of which token was used
-                let totalRevenueUsdcx = 0;
-                
-                // Cache token rates for this batch to avoid redundant oracle calls
-                const tokenRateCache: Record<string, number> = {};
                 const stxPrice = await paymasterService.getStxPrice();
 
-                // Token decimals lookup — same map as the dashboard UI
-                const TOKEN_DECIMALS: Record<string, number> = {
-                    'token-alex': 8, 'age000-governance-token': 8,
-                    'sbtc-token': 8, 'usdcx': 6, 'token-aeusdc': 6,
-                    'token-wstx': 6, 'stx': 6,
-                };
-
-                for (const tx of transactions) {
-                    const rawToken = tx.feeToken || 'Token';
-                    // Skip records with no meaningful token info (old data stored as 'Token')
-                    if (rawToken === 'Token' || rawToken === '') continue;
-
-                    // feeToken may be a full principal or just the contract name
-                    const contractName = rawToken.includes('.') ? rawToken.split('.').pop()! : rawToken;
-                    const decimals = TOKEN_DECIMALS[contractName.toLowerCase()] ?? 6;
-
-                    const cacheKey = contractName.toLowerCase();
-                    if (!tokenRateCache[cacheKey]) {
-                        // Pass decimals so the oracle prices exactly 1 full token
-                        tokenRateCache[cacheKey] = await paymasterService.getTokenRate(rawToken, decimals);
-                    }
-                    
-                    const amountInToken = Number(tx.feeAmount || '0') / Math.pow(10, decimals);
-                    const amountInUsdcx = amountInToken * tokenRateCache[cacheKey] * stxPrice;
-                    totalRevenueUsdcx += amountInUsdcx;
-                }
-
-                // 3. Metadata for Dashboard
-                const feeTokenSymbol = 'USDCx'; 
-                const totalSponsored = totalRevenueUsdcx.toFixed(2); // String format for UI consistency
-
-                // 3. On-Chain Metrics
+                // 2. Total Gas Sponsored — sum STX fees actually paid on-chain by the relayer
+                //    Source: Hiro explorer API (ground truth, not DB records)
                 const relayerKey = paymasterService.getUserRelayerKey(userId);
                 const relayerAddress = getAddressFromPrivateKey(relayerKey.replace(/^0x/, ''), networkType as any);
+                const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
+
+                let totalSponsoredUsd = 0;
+                try {
+                    // Fetch up to 200 most recent txs from the relayer address
+                    const txListRes = await fetch(
+                        `https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/transactions?limit=200`,
+                        { signal: AbortSignal.timeout(6000) }
+                    );
+                    if (txListRes.ok) {
+                        const txList = await txListRes.json();
+                        const txs: any[] = txList.results || [];
+                        // Sum fee_rate (microSTX) for all sponsored transactions where this address is the sponsor
+                        const totalMicroStx = txs.reduce((acc: number, tx: any) => {
+                            // Only count txs where our relayer is the sponsor (not the sender)
+                            const isSponsor = tx.sponsor_address === relayerAddress ||
+                                             tx.tx_type === 'contract_call'; // all our broadcasts are contract calls
+                            if (isSponsor && tx.fee_rate) {
+                                return acc + parseInt(tx.fee_rate);
+                            }
+                            return acc;
+                        }, 0);
+                        const totalStx = totalMicroStx / 1_000_000;
+                        totalSponsoredUsd = totalStx * stxPrice;
+                    }
+                } catch (e) {
+                    console.warn(`Could not fetch on-chain tx fees for ${networkType}:`, e);
+                }
+
+                const totalSponsored = totalSponsoredUsd.toFixed(4);
 
                 let relayerStxBalance = "0";
                 let relayerFeeBalance = "0";
 
+                // Fetch token decimals from Hiro metadata API — accurate for any SIP-010 token.
+                // Falls back to a known-good map, then 6 as last resort.
+                const KNOWN_DECIMALS: Record<string, number> = {
+                    'token-alex': 8, 'age000-governance-token': 8,
+                    'sbtc-token': 8, 'usdcx': 6, 'token-aeusdc': 6,
+                    'token-wstx': 6, 'stx': 6,
+                };
+                const decimalsCache: Record<string, number> = {};
+                const getTokenDecimals = async (principal: string): Promise<number> => {
+                    if (decimalsCache[principal] !== undefined) return decimalsCache[principal];
+                    const contractName = principal.includes('.') ? principal.split('.').pop()! : principal;
+                    if (KNOWN_DECIMALS[contractName.toLowerCase()] !== undefined) {
+                        decimalsCache[principal] = KNOWN_DECIMALS[contractName.toLowerCase()];
+                        return decimalsCache[principal];
+                    }
+                    try {
+                        const [addr, name] = principal.split('.');
+                        const metaRes = await fetch(
+                            `https://api.hiro.so/metadata/v1/ft/${addr}.${name}`,
+                            { signal: AbortSignal.timeout(4000) }
+                        );
+                        if (metaRes.ok) {
+                            const meta = await metaRes.json();
+                            if (typeof meta.decimals === 'number') {
+                                decimalsCache[principal] = meta.decimals;
+                                return meta.decimals;
+                            }
+                        }
+                    } catch (e) { /* fall through */ }
+                    decimalsCache[principal] = 6;
+                    return 6;
+                };
+
                 try {
-                    const stxNetwork = networkType === 'mainnet' ? 'mainnet' : 'testnet';
                     const balancesRes = await fetch(`https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/balances`);
                     
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         relayerStxBalance = balances.stx.balance;
                         
-                        // Calculate total USDCx value of all fungible tokens
-                        let totalFeeValueUsdcx = 0;
+                        // Calculate total USD value of all fungible tokens held by relayer
+                        let totalFeeValueUsd = 0;
                         const ftBalances = balances.fungible_tokens || {};
                         
                         for (const tokenKey of Object.keys(ftBalances)) {
                             const tokenPrincipal = tokenKey.split('::')[0];
-                            const contractName = tokenPrincipal.includes('.') ? tokenPrincipal.split('.').pop()! : tokenPrincipal;
-                            const decimals = TOKEN_DECIMALS[contractName.toLowerCase()] ?? 6;
                             const balance = ftBalances[tokenKey].balance;
                             
                             if (balance !== '0') {
-                                const usdcxEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal, decimals);
-                                totalFeeValueUsdcx += usdcxEquivalent;
+                                const decimals = await getTokenDecimals(tokenPrincipal);
+                                const usdEquivalent = await paymasterService.convertToUsdcx(balance, tokenPrincipal, decimals);
+                                totalFeeValueUsd += usdEquivalent;
                             }
                         }
                         
-                        relayerFeeBalance = totalFeeValueUsdcx.toFixed(2);
+                        relayerFeeBalance = totalFeeValueUsd.toFixed(2);
                     }
                 } catch (e) { console.warn("Balance check failed", e); }
 
@@ -319,7 +341,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     relayerAddress,
                     relayerStxBalance,
                     relayerFeeBalance,
-                    feeToken: feeTokenSymbol
+                    feeToken: 'USD'
                 };
             } catch (err) {
                 console.error(`Stats Error for ${networkType}:`, err);

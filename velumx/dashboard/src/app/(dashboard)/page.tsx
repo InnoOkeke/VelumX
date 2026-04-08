@@ -193,7 +193,7 @@ export default function DashboardOverview() {
       {/* Main Chart Area */}
       <div className="glass-card w-full h-[400px] p-8 flex flex-col">
         <div className="flex justify-between items-center mb-10">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Sponsorship Volume (USDCx)</h2>
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Sponsorship Volume (Transactions)</h2>
           <select className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-white/20 transition-colors appearance-none outline-none">
             <option>Last 7 Days</option>
             <option>Last 30 Days</option>
@@ -209,18 +209,11 @@ export default function DashboardOverview() {
             });
 
             const dailyTotals = last7Days.map(date => {
-              const dayLogs = logs.filter(log => log.createdAt.startsWith(date));
-              const total = dayLogs.reduce((acc, log) => {
-                const contractName = (log.feeToken || '').includes('.')
-                  ? log.feeToken.split('.').pop()
-                  : log.feeToken || '';
-                const decimals = ({ 'token-alex': 8, 'age000-governance-token': 8, 'sbtc-token': 8 } as Record<string, number>)[contractName.toLowerCase()] ?? 6;
-                return acc + (parseInt(log.feeAmount) || 0) / Math.pow(10, decimals);
-              }, 0);
-              return total;
+              const count = logs.filter(log => log.createdAt.startsWith(date)).length;
+              return count;
             });
 
-            const maxTotal = Math.max(...dailyTotals, 10);
+            const maxTotal = Math.max(...dailyTotals, 1);
 
             return dailyTotals.map((total, i) => {
               const height = (total / maxTotal) * 100;
@@ -231,7 +224,7 @@ export default function DashboardOverview() {
                   className="w-full rounded-sm bg-white/20 hover:bg-white/40 transition-colors relative group"
                 >
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                    {total.toFixed(2)} USD
+                    {total} tx
                   </div>
                 </div>
               );
@@ -270,14 +263,7 @@ export default function DashboardOverview() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-white text-xs font-bold font-mono">
-                  {(() => {
-                    const cn = (log.feeToken || '').includes('.') ? log.feeToken.split('.').pop() : log.feeToken || '';
-                    const dec = ({ 'token-alex': 8, 'age000-governance-token': 8, 'sbtc-token': 8 } as Record<string, number>)[cn.toLowerCase()] ?? 6;
-                    const sym = ({ 'token-alex': 'ALEX', 'usdcx': 'USDCx', 'token-aeusdc': 'aeUSDC', 'sbtc-token': 'sBTC' } as Record<string, string>)[cn.toLowerCase()] || cn.toUpperCase();
-                    return `${((parseInt(log.feeAmount) || 0) / Math.pow(10, dec)).toFixed(dec > 6 ? 6 : 4)} ${sym}`;
-                  })()}
-                </p>
+                <p className="text-white text-xs font-bold font-mono">{log.txid.substring(0, 10)}...</p>
                 <p className={`text-[10px] font-bold mt-0.5 ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>{log.status}</p>
               </div>
             </div>

@@ -7,44 +7,22 @@ import { useWallet } from '@/components/providers/WalletContext';
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_VELUMX_RELAYER_URL || 'http://localhost:4000';
 
-// Maps contract name/principal fragments to display symbol and decimals.
-// feeToken in the DB is stored as the contract name (e.g. "token-alex", "usdcx").
-const TOKEN_META: Record<string, { symbol: string; decimals: number }> = {
-    'token-alex':              { symbol: 'ALEX',   decimals: 8 },
-    'age000-governance-token': { symbol: 'ALEX',   decimals: 8 },
-    'usdcx':                   { symbol: 'USDCx',  decimals: 6 },
-    'token-aeusdc':            { symbol: 'aeUSDC', decimals: 6 },
-    'sbtc-token':              { symbol: 'sBTC',   decimals: 8 },
-    'token-wstx':              { symbol: 'STX',    decimals: 6 },
-    'stx':                     { symbol: 'STX',    decimals: 6 },
-};
-
-function resolveTokenMeta(feeToken: string): { symbol: string; decimals: number } {
-    if (!feeToken) return { symbol: 'Token', decimals: 6 };
-    // feeToken may be a full principal like "SP...contract-name" or just the contract name
-    const contractName = feeToken.includes('.') ? feeToken.split('.').pop()! : feeToken;
-    const key = contractName.toLowerCase();
-    return TOKEN_META[key] || { symbol: contractName.toUpperCase(), decimals: 6 };
-}
-
 export default function TransactionLogsPage() {
     const [isClient, setIsClient] = useState(false);
     const { user, loading: userLoading } = useUser();
     const { network: currentNetwork } = useWallet();
-    const [logs, setLogs] = useState<{ id: string; txid: string; type: string; userAddress: string; feeAmount: string; feeToken: string; status: string; createdAt: string }[]>([]);
+    const [logs, setLogs] = useState<{ id: string; txid: string; type: string; userAddress: string; status: string; createdAt: string; network: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         setIsClient(true);
         const fetchLogs = async () => {
             if (!user) return;
-            
             setIsLoading(true);
             try {
                 const supabase = (await import('@/lib/supabase/client')).createClient();
                 const { data: { session } } = await supabase.auth.getSession();
                 const token = session?.access_token;
-
                 if (!token) return;
 
                 const res = await fetch(`${RELAYER_URL}/api/dashboard/logs?network=${currentNetwork}`, {
@@ -60,9 +38,7 @@ export default function TransactionLogsPage() {
             }
         };
 
-        if (!userLoading) {
-            fetchLogs();
-        }
+        if (!userLoading) fetchLogs();
     }, [user, userLoading, currentNetwork]);
 
     if (!isClient) return null;
@@ -99,7 +75,7 @@ export default function TransactionLogsPage() {
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Transaction ID</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Type</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">User Address</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Fee (Token)</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Network</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Status</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">Time</th>
                             </tr>
@@ -121,7 +97,7 @@ export default function TransactionLogsPage() {
                                 <tr key={log.id} className="hover:bg-white/[0.02] cursor-pointer transition-colors group">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
-                                            <span className="font-mono text-xs text-white/60 group-hover:text-white transition-colors uppercase">{log.txid.substring(0, 20)}...</span>
+                                            <span className="font-mono text-xs text-white/60 group-hover:text-white transition-colors">{log.txid.substring(0, 20)}...</span>
                                             <ExternalLink className="w-3 h-3 text-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </div>
                                     </td>
@@ -135,24 +111,16 @@ export default function TransactionLogsPage() {
                                         <code className="text-xs text-white/40 font-mono">{log.userAddress.substring(0, 12)}...</code>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex flex-col">
-                                            {(() => {
-                                                const { symbol, decimals } = resolveTokenMeta(log.feeToken);
-                                                const amount = (parseInt(log.feeAmount) / Math.pow(10, decimals)).toFixed(decimals > 6 ? 6 : 2);
-                                                return (
-                                                    <>
-                                                        <span className="text-xs font-bold font-mono text-white">{amount}</span>
-                                                        <span className="text-[9px] font-bold text-white/40 uppercase">{symbol}</span>
-                                                    </>
-                                                );
-                                            })()}
-                                        </div>
+                                        <span className={`text-[10px] font-bold uppercase ${log.network === 'mainnet' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                            {log.network || currentNetwork}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold border ${log.status === 'Confirmed' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
-                                            log.status === 'Pending' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
-                                                'bg-rose-400/10 text-rose-400 border-rose-400/20'
-                                            }`}>
+                                        <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold border ${
+                                            log.status === 'Confirmed' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
+                                            log.status === 'Pending'   ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
+                                                                         'bg-rose-400/10 text-rose-400 border-rose-400/20'
+                                        }`}>
                                             {log.status.toUpperCase()}
                                         </span>
                                     </td>
