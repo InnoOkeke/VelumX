@@ -166,11 +166,11 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     ];
 
     console.log('swap-gasless args:', {
-      tokenX: JSON.stringify(tokenXCV),
-      tokenY: JSON.stringify(tokenYCV),
-      factor: JSON.stringify(alexFactor),
-      dx: JSON.stringify(alexDx),
-      minDy: JSON.stringify(alexMinDy),
+      tokenX: String(tokenXCV),
+      tokenY: String(tokenYCV),
+      factor: String(alexFactor),
+      dx: String(alexDx),
+      minDy: String(alexMinDy),
       feeAmount,
       relayerAddress,
       feeToken: `${feeTokenAddress}.${feeTokenName}`,
