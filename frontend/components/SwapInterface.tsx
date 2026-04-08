@@ -423,6 +423,8 @@ export function SwapInterface() {
           tokenOut: state.outputToken.symbol === 'STX' ? 'token-wstx' : state.outputToken.address,
           amountIn: amountInMicro,
           minOut: minAmountOutMicro,
+          tokenInDecimals: state.inputToken.decimals,
+          tokenOutDecimals: state.outputToken.decimals,
           feeToken: state.selectedGasToken?.address,
           onProgress: (step) => {
             setState(prev => ({ ...prev, success: step }));
