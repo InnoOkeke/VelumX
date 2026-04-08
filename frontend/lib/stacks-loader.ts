@@ -125,8 +125,8 @@ export const getNetworkInstance = async (isMainnetOverride?: boolean): Promise<a
         };
         network.bnsLookupUrl = isMainnet ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so';
 
-        // Versioning (Testnet = 128, Mainnet = 0/1)
-        const version = isMainnet ? 1 : 128;
+        // Versioning: Mainnet = 0, Testnet = 128 (per @stacks/network TransactionVersion enum)
+        const version = isMainnet ? 0 : 128;
         network.transactionVersion = version;
         network.version = version;
 
@@ -136,7 +136,7 @@ export const getNetworkInstance = async (isMainnetOverride?: boolean): Promise<a
         // Minimal fallback object if class instantiation fails
         return {
             chainId: isMainnet ? 0x00000001 : 0x80000000,
-            transactionVersion: isMainnet ? 1 : 128,
+            transactionVersion: isMainnet ? 0 : 128,
             isMainnet: () => isMainnet,
             client: {
                 baseUrl: isMainnet ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so',
