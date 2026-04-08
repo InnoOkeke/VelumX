@@ -159,38 +159,15 @@ export class PricingOracleService {
 
         const sources: TokenRateSource[] = [
             {
-                name: 'ALEX SDK',
-                getRate: async (token: string) => {
-                    try {
-                        const unitInMicro = BigInt(10 ** tokenDecimals);
-                        const amountOut = await this.alex.getAmountTo(
-                            token as any,
-                            unitInMicro,
-                            'token-wstx' as any
-                        );
-
-                        if (amountOut) {
-                            // wSTX always has 6 decimals, so divide output by 1_000_000
-                            const rate = Number(amountOut) / 1_000_000;
-                            console.log(`Token rate from ALEX: ${token} = ${rate} STX (decimals=${tokenDecimals})`);
-                            return rate;
-                        }
-                        return null;
-                    } catch (e) {
-                        console.warn(`ALEX SDK rate fetch failed for ${token}:`, e);
-                        return null;
-                    }
-                }
-            },
-            {
                 name: 'CoinGecko',
                 getRate: async (token: string) => {
-                    // Map ALEX SDK IDs to CoinGecko IDs for direct USD price
+                    // CoinGecko gives real market USD price — most accurate source
                     const COINGECKO_IDS: Record<string, string> = {
                         'age000-governance-token': 'alexgo',
                         'token-wbtc': 'bitcoin',
                         'token-susdt': 'tether',
                         'token-aeusdc': 'usd-coin',
+                        'sbtc-token': 'bitcoin',
                     };
                     const cgId = COINGECKO_IDS[token];
                     if (!cgId) return null;
@@ -203,10 +180,9 @@ export class PricingOracleService {
                             const data = await res.json();
                             const usdPrice = data[cgId]?.usd;
                             if (usdPrice && usdPrice > 0) {
-                                // Convert USD price to STX rate: stxRate = usdPrice / stxUsdPrice
                                 const stxUsd = await this.getStxPrice();
                                 const stxRate = usdPrice / stxUsd;
-                                console.log(`Token rate from CoinGecko: ${token} = ${stxRate} STX (${usdPrice} USD)`);
+                                console.log(`Token rate from CoinGecko: ${token} = ${stxRate} STX ($${usdPrice} USD)`);
                                 return stxRate;
                             }
                         }
@@ -217,11 +193,31 @@ export class PricingOracleService {
                 }
             },
             {
+                name: 'ALEX SDK',
+                getRate: async (token: string) => {
+                    // ALEX DEX price — fallback only, DEX price can diverge from market
+                    try {
+                        const unitInMicro = BigInt(10 ** tokenDecimals);
+                        const amountOut = await this.alex.getAmountTo(
+                            token as any,
+                            unitInMicro,
+                            'token-wstx' as any
+                        );
+                        if (amountOut) {
+                            const rate = Number(amountOut) / 1_000_000;
+                            console.log(`Token rate from ALEX SDK: ${token} = ${rate} STX (decimals=${tokenDecimals})`);
+                            return rate;
+                        }
+                        return null;
+                    } catch (e) {
+                        console.warn(`ALEX SDK rate fetch failed for ${token}:`, e);
+                        return null;
+                    }
+                }
+            },
+            {
                 name: 'Hardcoded Fallback',
                 getRate: async (token: string) => {
-                    // Last resort: assume 1 token = 1 STX equivalent
-                    // This is intentionally conservative — better to overcharge slightly
-                    // than to use a stale hardcoded rate that could be wildly wrong.
                     console.warn(`All oracle sources failed for ${token}, using 1:1 STX fallback`);
                     return 1.0;
                 }

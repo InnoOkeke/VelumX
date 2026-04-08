@@ -255,10 +255,12 @@ export class PaymasterService {
 
         const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
 
-        // Get token USD price via STX as bridge, passing decimals so the oracle
-        // prices exactly 1 full token (not 1_000_000 micro units which assumes 6 decimals).
+        // Get token USD price directly — CoinGecko returns USD price converted to STX rate,
+        // so we multiply back by STX price to get USD. But simpler: fetch USD price directly.
         const tokenRateInSTX = await this.getTokenRate(feeToken, tokenDecimals);
         const stxUsdPrice = await this.getStxPrice();
+        // tokenRateInSTX = USD_price_of_token / stxUsdPrice (from CoinGecko source)
+        // So tokenUsdPrice = tokenRateInSTX * stxUsdPrice = USD_price_of_token ✓
         const tokenUsdPrice = tokenRateInSTX * stxUsdPrice;
 
         // Calculate fee with markup, then enforce the minimum floor
