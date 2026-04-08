@@ -380,8 +380,11 @@ export class PaymasterService {
                 console.warn("Relayer: Failed to introspect txHex", introError);
             }
 
-            // Detect network from transaction version (0.00 = Mainnet, 0.80 = Testnet)
-            const targetNetwork = (transaction as any).version === 0x00 ? 'mainnet' : 'testnet';
+            // Detect network from transaction version
+            // Property is 'transactionVersion' in @stacks/transactions 7.x
+            // TransactionVersion.Mainnet = 0, TransactionVersion.Testnet = 128
+            const txVersion = (transaction as any).transactionVersion ?? (transaction as any).version;
+            const targetNetwork = txVersion === 0 ? 'mainnet' : 'testnet';
             const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
 
             // Sign as sponsor
