@@ -246,35 +246,36 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
                 let totalSponsoredUsd = 0;
                 try {
-                    // Fetch up to 200 most recent txs from the relayer address
-                    const txListRes = await fetch(
-                        `https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/transactions?limit=200`,
+                    // Try v2 endpoint first, fall back to v1
+                    let txs: any[] = [];
+                    const v2Res = await fetch(
+                        `https://api.${stxNetwork}.hiro.so/extended/v2/addresses/${relayerAddress}/transactions?limit=200`,
                         { signal: AbortSignal.timeout(6000) }
                     );
-                    if (txListRes.ok) {
-                        const txList = await txListRes.json();
-                        const txs: any[] = txList.results || [];
-                        console.log(`[${networkType}] Fetched ${txs.length} txs for relayer ${relayerAddress}`);
-
-                        // Sum fee_rate (microSTX) only for transactions where this address is the sponsor.
-                        // Fallback: if no sponsor_address field found, sum all txs from this address
-                        // (relayer only broadcasts sponsored transactions).
-                        let sponsoredCount = 0;
-                        let hasSponsorField = txs.some((tx: any) => tx.sponsor_address !== undefined);
-                        const totalMicroStx = txs.reduce((acc: number, tx: any) => {
-                            const isSponsor = hasSponsorField
-                                ? tx.sponsor_address === relayerAddress
-                                : tx.sender_address === relayerAddress; // fallback
-                            if (isSponsor && tx.fee_rate) {
-                                sponsoredCount++;
-                                return acc + parseInt(tx.fee_rate);
-                            }
-                            return acc;
-                        }, 0);
-                        console.log(`[${networkType}] Found ${sponsoredCount} sponsored txs, total microSTX: ${totalMicroStx}`);
-                        const totalStx = totalMicroStx / 1_000_000;
-                        totalSponsoredUsd = totalStx * stxPrice;
+                    if (v2Res.ok) {
+                        const v2Data = await v2Res.json();
+                        txs = v2Data.results || [];
+                    } else {
+                        const v1Res = await fetch(
+                            `https://api.${stxNetwork}.hiro.so/extended/v1/address/${relayerAddress}/transactions?limit=200`,
+                            { signal: AbortSignal.timeout(6000) }
+                        );
+                        if (v1Res.ok) {
+                            const v1Data = await v1Res.json();
+                            txs = v1Data.results || [];
+                        }
                     }
+
+                    console.log(`[${networkType}] Fetched ${txs.length} txs for relayer ${relayerAddress}`);
+
+                    // Sum ALL fees — relayer wallet only ever broadcasts sponsored transactions
+                    const totalMicroStx = txs.reduce((acc: number, tx: any) => {
+                        // v2 wraps the tx under tx.tx, v1 has it directly
+                        const fee = tx.tx?.fee_rate ?? tx.fee_rate;
+                        return acc + (parseInt(fee) || 0);
+                    }, 0);
+                    console.log(`[${networkType}] Total microSTX fees: ${totalMicroStx}`);
+                    totalSponsoredUsd = (totalMicroStx / 1_000_000) * stxPrice;
                 } catch (e) {
                     console.warn(`Could not fetch on-chain tx fees for ${networkType}:`, e);
                 }

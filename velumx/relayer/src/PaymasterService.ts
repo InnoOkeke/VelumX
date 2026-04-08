@@ -229,11 +229,13 @@ export class PaymasterService {
         }
 
         // 3. Universal Pricing (User Pays)
-        // Target fee = $0.02 USD worth of the fee token + developer markup.
+        // Base fee = $0.05 USD worth of the fee token + developer markup.
+        // This covers the relayer's STX cost and ensures a meaningful fee regardless of token.
         const estimatedGas = intent.estimatedGas || 10000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const BASE_FEE_USD = 0.02; // $0.02 USD base fee
+        const BASE_FEE_USD = 0.03;  // $0.05 USD minimum base — covers STX cost + margin
+        const MIN_FEE_USD  = 0.02;  // Hard floor: never collect less than $0.02 equivalent
 
         // Fetch token decimals FIRST — needed for accurate rate calculation
         let tokenDecimals = 6; // safe default
@@ -259,7 +261,12 @@ export class PaymasterService {
         const stxUsdPrice = await this.getStxPrice();
         const tokenUsdPrice = tokenRateInSTX * stxUsdPrice;
 
-        const finalFee = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
+        // Calculate fee with markup, then enforce the minimum floor
+        const feeFromBase = Math.ceil((BASE_FEE_USD / tokenUsdPrice) * markupFactor * tokenMicroUnitsPerToken);
+        const feeFromFloor = Math.ceil((MIN_FEE_USD  / tokenUsdPrice) * tokenMicroUnitsPerToken);
+        const finalFee = Math.max(feeFromBase, feeFromFloor);
+
+        console.log(`Fee estimate: token=${feeToken} decimals=${tokenDecimals} tokenUsdPrice=${tokenUsdPrice} finalFee=${finalFee} microUnits`);
 
         return {
             maxFee: finalFee.toString(),
