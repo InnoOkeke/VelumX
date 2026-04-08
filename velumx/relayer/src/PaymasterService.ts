@@ -21,6 +21,20 @@ import { PricingOracleService } from './services/PricingOracleService.js';
 
 const prisma = new PrismaClient();
 
+// Maps known token symbols/IDs (as stored in developer dashboard) to mainnet contract principals.
+// Allows developers to configure tokens by symbol while the frontend sends full principals.
+const KNOWN_TOKEN_CONTRACTS: Record<string, string> = {
+    'ALEX':                    'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+    'age000-governance-token': 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+    'token-alex':              'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.age000-governance-token',
+    'USDCx':                   'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+    'usdcx':                   'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+    'aeUSDC':                  'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
+    'token-aeusdc':            'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
+    'sBTC':                    'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token',
+    'sbtc-token':              'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token',
+};
+
 // Simple interface matching the SDK
 interface SignedIntent {
     target: string;
@@ -202,8 +216,16 @@ export class PaymasterService {
         }
 
         const supportedTokens = apiKey.supportedGasTokens || [];
-        if (supportedTokens.length > 0 && !supportedTokens.includes(feeToken)) {
-            throw new Error(`Gas token ${feeToken} is not supported by this developer's policy.`);
+        if (supportedTokens.length > 0) {
+            // Normalize both sides: resolve known symbols to contract principals for comparison
+            const resolvedFeeToken = KNOWN_TOKEN_CONTRACTS[feeToken] || feeToken;
+            const isSupported = supportedTokens.some((t: string) => {
+                const resolvedT = KNOWN_TOKEN_CONTRACTS[t] || t;
+                return resolvedT === resolvedFeeToken || t === feeToken || t === resolvedFeeToken;
+            });
+            if (!isSupported) {
+                throw new Error(`Gas token ${feeToken} is not supported by this developer's policy.`);
+            }
         }
 
         // 3. Universal Pricing (User Pays)
