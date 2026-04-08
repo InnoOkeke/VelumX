@@ -124,57 +124,73 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     functionArgs = swapTx.functionArgs;
   } else {
     // Paymaster swap — fee collected in feeToken + ALEX swap executed atomically
-    // swap-gasless(token-x-trait, token-y-trait, factor, dx, min-dy, fee-amount, relayer, fee-token)
     const paymasterAddress = (estimate as any).paymasterAddress || config.stacksPaymasterAddress;
     if (!paymasterAddress) throw new Error('Paymaster address not available from relayer');
     const [pmContract, pmName] = paymasterAddress.split('.');
     contractAddress = pmContract;
     contractName = pmName;
-    functionName = 'swap-gasless';
 
-    // Get relayer address from the estimate response or derive it
-    // The relayer address is returned by the /estimate endpoint
     const relayerAddress = (estimate as any).relayerAddress || config.velumxRelayerAddress;
     if (!relayerAddress) throw new Error('Relayer address not available');
-
-    // Parse ALEX factor from the swap tx args (index 2 in swap-helper)
-    // swap-helper(token-x-trait, token-y-trait, factor, dx, min-dy)
-    const alexFactor = swapTx.functionArgs[2]; // factor uint
-    const alexDx = swapTx.functionArgs[3];     // dx uint
-    const alexMinDy = swapTx.functionArgs[4];  // min-dy (optional uint)
-
-    // Use token contract CVs directly from ALEX's runSwap result — they are already
-    // contractPrincipalCV with the correct mainnet addresses. Re-splitting ALEX token
-    // IDs (e.g. 'token-wstx', 'age000-governance-token') would give invalid addresses.
-    const tokenXCV = swapTx.functionArgs[0];   // contractPrincipalCV for token-x
-    const tokenYCV = swapTx.functionArgs[1];   // contractPrincipalCV for token-y
 
     const [feeTokenAddress, feeTokenName] = selectedFeeToken.split('.');
     if (!feeTokenAddress || !feeTokenName) {
       throw new Error(`Invalid fee token address: ${selectedFeeToken}. Must be in format 'CONTRACT.NAME'`);
     }
+    const feeTokenCV = Cl.contractPrincipal(feeTokenAddress, feeTokenName);
+    const feeAmountCV = uintCV(BigInt(feeAmount));
+    const relayerCV = principalCV(relayerAddress);
 
-    functionArgs = [
-      tokenXCV,                                          // token-x-trait (from ALEX)
-      tokenYCV,                                          // token-y-trait (from ALEX)
-      alexFactor,                                        // factor
-      alexDx,                                            // dx
-      alexMinDy,                                         // min-dy (optional uint)
-      uintCV(BigInt(feeAmount)),                         // fee-amount
-      principalCV(relayerAddress),                       // relayer
-      Cl.contractPrincipal(feeTokenAddress, feeTokenName), // fee-token
-    ];
+    if (swapTx.functionName === 'swap-helper') {
+      // Single-hop: swap-gasless(token-x, token-y, factor, dx, min-dy, fee-amount, relayer, fee-token)
+      functionName = 'swap-gasless';
+      functionArgs = [
+        swapTx.functionArgs[0], // token-x-trait
+        swapTx.functionArgs[1], // token-y-trait
+        swapTx.functionArgs[2], // factor
+        swapTx.functionArgs[3], // dx
+        swapTx.functionArgs[4], // min-dy (optional uint)
+        feeAmountCV,
+        relayerCV,
+        feeTokenCV,
+      ];
+    } else if (swapTx.functionName === 'swap-helper-a') {
+      // Two-hop: swap-gasless-a(token-x, token-y, token-z, factor-x, factor-y, dx, min-dz, fee-amount, relayer, fee-token)
+      functionName = 'swap-gasless-a';
+      functionArgs = [
+        swapTx.functionArgs[0], // token-x-trait
+        swapTx.functionArgs[1], // token-y-trait
+        swapTx.functionArgs[2], // token-z-trait
+        swapTx.functionArgs[3], // factor-x
+        swapTx.functionArgs[4], // factor-y
+        swapTx.functionArgs[5], // dx
+        swapTx.functionArgs[6], // min-dz (optional uint)
+        feeAmountCV,
+        relayerCV,
+        feeTokenCV,
+      ];
+    } else if (swapTx.functionName === 'swap-helper-b') {
+      // Three-hop: swap-gasless-b(token-x, token-y, token-z, token-w, factor-x, factor-y, factor-z, dx, min-dw, fee-amount, relayer, fee-token)
+      functionName = 'swap-gasless-b';
+      functionArgs = [
+        swapTx.functionArgs[0], // token-x-trait
+        swapTx.functionArgs[1], // token-y-trait
+        swapTx.functionArgs[2], // token-z-trait
+        swapTx.functionArgs[3], // token-w-trait
+        swapTx.functionArgs[4], // factor-x
+        swapTx.functionArgs[5], // factor-y
+        swapTx.functionArgs[6], // factor-z
+        swapTx.functionArgs[7], // dx
+        swapTx.functionArgs[8], // min-dw (optional uint)
+        feeAmountCV,
+        relayerCV,
+        feeTokenCV,
+      ];
+    } else {
+      throw new Error(`Unsupported ALEX swap function: ${swapTx.functionName}`);
+    }
 
-    console.log('swap-gasless args:', {
-      tokenX: String(tokenXCV),
-      tokenY: String(tokenYCV),
-      factor: String(alexFactor),
-      dx: String(alexDx),
-      minDy: String(alexMinDy),
-      feeAmount,
-      relayerAddress,
-      feeToken: `${feeTokenAddress}.${feeTokenName}`,
-    });
+    console.log('swap-gasless args:', { fn: functionName, feeAmount, relayerAddress, feeToken: selectedFeeToken });
   }
 
   const transaction = await makeUnsignedContractCall({
@@ -192,8 +208,10 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
     validateWithAbi: false,
   });
 
+  const isDirectSwap = isDeveloperSponsored;
+
   const txHex = transaction.serialize();
-  console.log('Built sponsored tx:', txHex.slice(0, 8), 'length:', txHex.length, isDeveloperSponsored ? '(direct swap)' : '(paymaster swap)');
+  console.log('Built sponsored tx:', txHex.slice(0, 8), 'length:', txHex.length, isDirectSwap ? '(direct swap)' : '(paymaster swap)');
 
   // Step 7: Wallet signs WITHOUT broadcasting
   onProgress?.('Waiting for wallet signature...');
@@ -215,8 +233,8 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
   // Step 8: Relayer co-signs + broadcasts
   onProgress?.('Broadcasting via VelumX...');
   const result = await velumx.sponsor(signedTxHex, {
-    feeToken: isDeveloperSponsored ? undefined : selectedFeeToken,
-    feeAmount: isDeveloperSponsored ? '0' : feeAmount,
+    feeToken: isDirectSwap ? undefined : selectedFeeToken,
+    feeAmount: isDirectSwap ? '0' : feeAmount,
     network: config.stacksNetwork as 'mainnet' | 'testnet'
   });
 

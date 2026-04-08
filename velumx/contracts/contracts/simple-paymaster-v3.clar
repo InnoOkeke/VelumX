@@ -107,6 +107,102 @@
 )
 
 ;; -------------------------------------------------------
+;; swap-gasless-a
+;; Two-hop swap via ALEX amm-pool-v2-01 swap-helper-a.
+;; token-x → token-y → token-z
+;;
+;; Parameters:
+;;   token-x-trait  - Input token
+;;   token-y-trait  - Intermediate token
+;;   token-z-trait  - Output token
+;;   factor-x       - Pool factor for x→y hop
+;;   factor-y       - Pool factor for y→z hop
+;;   dx             - Amount of token-x to swap
+;;   min-dz         - Minimum output amount (slippage protection)
+;;   fee-amount     - Gas fee in fee-token micro units
+;;   relayer        - Authorized VelumX relayer
+;;   fee-token      - SIP-010 token user pays gas with
+;; -------------------------------------------------------
+(define-public (swap-gasless-a
+    (token-x-trait <sip-010-trait>)
+    (token-y-trait <sip-010-trait>)
+    (token-z-trait <sip-010-trait>)
+    (factor-x uint)
+    (factor-y uint)
+    (dx uint)
+    (min-dz (optional uint))
+    (fee-amount uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    (try! (collect-fee-internal fee-token fee-amount relayer))
+    (try! (contract-call? 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.amm-pool-v2-01
+      swap-helper-a
+      token-x-trait
+      token-y-trait
+      token-z-trait
+      factor-x
+      factor-y
+      dx
+      min-dz))
+    (print {
+      event: "swap-gasless-a",
+      user: tx-sender,
+      token-x: (contract-of token-x-trait),
+      token-z: (contract-of token-z-trait),
+      dx: dx,
+      fee-token: (contract-of fee-token),
+      fee-amount: fee-amount
+    })
+    (ok true)
+  )
+)
+
+;; -------------------------------------------------------
+;; swap-gasless-b
+;; Three-hop swap via ALEX amm-pool-v2-01 swap-helper-b.
+;; token-x → token-y → token-z → token-w
+;; -------------------------------------------------------
+(define-public (swap-gasless-b
+    (token-x-trait <sip-010-trait>)
+    (token-y-trait <sip-010-trait>)
+    (token-z-trait <sip-010-trait>)
+    (token-w-trait <sip-010-trait>)
+    (factor-x uint)
+    (factor-y uint)
+    (factor-z uint)
+    (dx uint)
+    (min-dw (optional uint))
+    (fee-amount uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    (try! (collect-fee-internal fee-token fee-amount relayer))
+    (try! (contract-call? 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.amm-pool-v2-01
+      swap-helper-b
+      token-x-trait
+      token-y-trait
+      token-z-trait
+      token-w-trait
+      factor-x
+      factor-y
+      factor-z
+      dx
+      min-dw))
+    (print {
+      event: "swap-gasless-b",
+      user: tx-sender,
+      token-x: (contract-of token-x-trait),
+      token-w: (contract-of token-w-trait),
+      dx: dx,
+      fee-token: (contract-of fee-token),
+      fee-amount: fee-amount
+    })
+    (ok true)
+  )
+)
+
+;; -------------------------------------------------------
 ;; bridge-gasless
 ;; User pays gas fee in any approved SIP-010 token.
 ;; Burns USDCx for cross-chain bridge.

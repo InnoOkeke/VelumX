@@ -31,7 +31,7 @@ export function getConfig(): FrontendConfig {
     stacksUsdcxProtocolAddress: process.env.NEXT_PUBLIC_STACKS_USDCX_PROTOCOL_ADDRESS || (isMainnet ? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx-v1' : 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx-v1'),
     
     // Universal Paymaster (Stacks-Native Sponsored Transactions)
-    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || (isMainnet ? 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.universal-paymaster-v1' : 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.universal-paymaster-v1'),
+    stacksPaymasterAddress: process.env.NEXT_PUBLIC_STACKS_PAYMASTER_ADDRESS || (isMainnet ? 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.simple-paymaster-v3' : 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.simple-paymaster-v3'),
     
     // DEX contracts
     stacksSwapContractAddress: process.env.NEXT_PUBLIC_STACKS_SWAP_CONTRACT_ADDRESS || (isMainnet ? 'SP102V3PRWF9674066V2FWAH0TGQEE5WQZ927S3X1.alex-vault' : 'STKYNF473GQ1V0WWCF24TV7ZR1WYAKTC79V25E3P.swap-v9-stx'), // Default to ALEX for mainnet

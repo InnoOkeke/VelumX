@@ -5,8 +5,8 @@ authors = []
 telemetry = true
 cache_dir = "./.cache"
 
-[contracts.simple-paymaster-v2]
-path = "contracts/simple-paymaster-v2.clar"
+[contracts.simple-paymaster-v3]
+path = "contracts/simple-paymaster-v3.clar"
 clarity_version = 3
 epoch = 3.0
 
