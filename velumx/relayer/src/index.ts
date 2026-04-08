@@ -256,6 +256,9 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
                 for (const tx of transactions) {
                     const rawToken = tx.feeToken || 'Token';
+                    // Skip records with no meaningful token info (old data stored as 'Token')
+                    if (rawToken === 'Token' || rawToken === '') continue;
+
                     // feeToken may be a full principal or just the contract name
                     const contractName = rawToken.includes('.') ? rawToken.split('.').pop()! : rawToken;
                     const decimals = TOKEN_DECIMALS[contractName.toLowerCase()] ?? 6;

@@ -371,6 +371,7 @@ export class PaymasterService {
             // Introspect: Try to find real address and fee
             let userAddress = 'unknown';
             let feeAmount = '0';
+            let feeTokenFromTx = 'Token';
 
             try {
                 // Sender address: Use a more resilient way to find the signer's address
@@ -427,8 +428,8 @@ export class PaymasterService {
                         // Extract Fee Token
                         if (tokenIndex !== -1 && args[tokenIndex] && args[tokenIndex].type === 6) { // 6 = Principal
                             const tokenPrincipal = args[tokenIndex].value.toString();
-                            const ticker = tokenPrincipal.split('.').pop() || 'FT';
-                            console.log(`Relayer: Detected fee token ${ticker} in universal call.`);
+                            feeTokenFromTx = tokenPrincipal;
+                            console.log(`Relayer: Detected fee token ${tokenPrincipal} in universal call.`);
                         }
                     }
                 }
@@ -477,9 +478,9 @@ export class PaymasterService {
                         type: 'Native Sponsorship',
                         userAddress,
                         feeAmount,
-                        feeToken: reportedFee?.includes('.') ? reportedFee.split('.').pop() || 'Token' : 'Token',
+                        feeToken: feeTokenFromTx,
                         status: 'Pending',
-                        network: targetNetwork, // Accurately log the network
+                        network: targetNetwork,
                         userId: userId || null,
                         apiKeyId: apiKeyId || null
                     }
