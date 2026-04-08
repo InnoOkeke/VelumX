@@ -282,7 +282,7 @@ export class PaymasterService {
             network: stxNetwork,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
-            fee: 1000n, // 0.001 STX (microSTX)
+            fee: 10000n, // 0.01 STX (microSTX)
         };
 
         try {
@@ -374,6 +374,12 @@ export class PaymasterService {
                         // swap-gasless(token-x, token-y, factor, dx, min-dy, fee-amount, relayer, fee-token)
                         //   fee-amount at index 5, fee-token at index 7
                         if (functionName === 'swap-gasless') { feeIndex = 5; tokenIndex = 7; }
+                        // swap-gasless-a(token-x, token-y, token-z, factor-x, factor-y, dx, min-dz, fee-amount, relayer, fee-token)
+                        //   fee-amount at index 7, fee-token at index 9
+                        else if (functionName === 'swap-gasless-a') { feeIndex = 7; tokenIndex = 9; }
+                        // swap-gasless-b(token-x, token-y, token-z, token-w, factor-x, factor-y, factor-z, dx, min-dw, fee-amount, relayer, fee-token)
+                        //   fee-amount at index 9, fee-token at index 11
+                        else if (functionName === 'swap-gasless-b') { feeIndex = 9; tokenIndex = 11; }
                         // bridge-gasless(amount, recipient, fee-amount, relayer, fee-token)
                         //   fee-amount at index 2, fee-token at index 4
                         else if (functionName === 'bridge-gasless') { feeIndex = 2; tokenIndex = 4; }
@@ -421,7 +427,7 @@ export class PaymasterService {
             const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
 
             // Sign as sponsor
-            const RELAYER_FEE = 1000n; // 0.001 STX (microSTX)
+            const RELAYER_FEE = 10000n; // 0.01 STX (microSTX)
 
             const signedTx = await sponsorTransaction({
                 transaction,
