@@ -164,6 +164,17 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
       principalCV(relayerAddress),                       // relayer
       Cl.contractPrincipal(feeTokenAddress, feeTokenName), // fee-token
     ];
+
+    console.log('swap-gasless args:', {
+      tokenX: JSON.stringify(tokenXCV),
+      tokenY: JSON.stringify(tokenYCV),
+      factor: JSON.stringify(alexFactor),
+      dx: JSON.stringify(alexDx),
+      minDy: JSON.stringify(alexMinDy),
+      feeAmount,
+      relayerAddress,
+      feeToken: `${feeTokenAddress}.${feeTokenName}`,
+    });
   }
 
   const transaction = await makeUnsignedContractCall({
