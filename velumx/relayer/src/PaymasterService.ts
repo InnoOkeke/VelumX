@@ -370,15 +370,17 @@ export class PaymasterService {
 
             // Save to Database with Multi-tenant association
             try {
+                // Resolve feeToken to full principal for accurate decimal resolution later
+                const resolvedFeeToken = KNOWN_TOKEN_CONTRACTS[intent.feeToken] || intent.feeToken;
                 await (prisma.transaction as any).create({
                     data: {
                         txid,
                         type: 'Intent Sponsorship',
                         userAddress: intent.target,
                         feeAmount: intent.maxFee.toString(),
-                        feeToken: intent.feeToken || 'Token',
+                        feeToken: resolvedFeeToken,
                         status: 'Pending',
-                        network: targetNetwork, // Accurately log the network
+                        network: targetNetwork,
                         userId: userId || null,
                         apiKeyId: apiKeyId || null
                     }
@@ -420,7 +422,7 @@ export class PaymasterService {
             // Introspect: Try to find real address and fee
             let userAddress = 'unknown';
             let feeAmount = '0';
-            let feeTokenFromTx = 'Token';
+            let feeTokenFromTx = ''; // empty = unknown, will be skipped in USD conversion
 
             try {
                 // Sender address: Use a more resilient way to find the signer's address
@@ -500,7 +502,7 @@ export class PaymasterService {
             const stxNetwork = targetNetwork === 'mainnet' ? this.mainnetNetwork : this.testnetNetwork;
 
             // Perform balance validation if a fee amount was detected
-            if (feeAmount !== '0' && feeTokenFromTx !== 'Token' && userAddress !== 'unknown') {
+            if (feeAmount !== '0' && feeTokenFromTx && userAddress !== 'unknown') {
                 const hasBalance = await this.validateUserBalance(userAddress, feeTokenFromTx, BigInt(feeAmount), targetNetwork);
                 if (!hasBalance) {
                     throw new Error(`Insufficient ${feeTokenFromTx} balance in user wallet to cover the sponsorship fee.`);
@@ -529,13 +531,17 @@ export class PaymasterService {
 
             // Save to Database
             try {
+                // Resolve to full principal so decimal lookup works correctly later
+                const resolvedFeeToken = feeTokenFromTx
+                    ? (KNOWN_TOKEN_CONTRACTS[feeTokenFromTx] || feeTokenFromTx)
+                    : 'unknown';
                 await (prisma.transaction as any).create({
                     data: {
                         txid: txid,
                         type: 'Native Sponsorship',
                         userAddress,
                         feeAmount,
-                        feeToken: feeTokenFromTx,
+                        feeToken: resolvedFeeToken,
                         status: 'Pending',
                         network: targetNetwork,
                         userId: userId || null,

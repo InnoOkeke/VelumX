@@ -243,10 +243,12 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     where: { userId, network: networkType, status: { in: ['Success', 'Confirmed'] } }
                 });
 
-                // Total Gas Sponsored — calculate ONLY from successful/mined transactions, 
-                // since dropped/pending transactions haven't consumed gas.
-                // The relayer always pays exactly 10,000 microSTX (0.01 STX) per sponsored tx.
-                const totalSponsoredUsd = (stxPrice || 0) * (successfulTxs.length * 0.01);
+                // Total Gas Sponsored — the relayer pays STX at broadcast time, not confirmation.
+                // Count all non-failed transactions to accurately reflect actual STX spend.
+                const allBroadcastedTxs = await (prisma.transaction as any).count({
+                    where: { userId, network: networkType, status: { notIn: ['Failed'] } }
+                });
+                const totalSponsoredUsd = (stxPrice || 0) * (allBroadcastedTxs * 0.01);
                 const totalSponsored = totalSponsoredUsd.toFixed(6);
 
                 // Relayer address and network needed for STX balance display
@@ -281,8 +283,10 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                 let totalFeeValueUsd = 0;
                 for (const tx of successfulTxs) {
                     if (!tx.feeAmount || tx.feeAmount === '0') continue;
-                    
-                    // convertToUsdcx now auto-resolves decimals correctly
+                    // Skip rows where token is unknown — can't reliably convert without decimals
+                    if (!tx.feeToken || tx.feeToken === 'unknown' || tx.feeToken === 'Token') continue;
+
+                    // convertToUsdcx auto-resolves decimals from the full principal
                     const usdEquivalent = await paymasterService.convertToUsdcx(tx.feeAmount, tx.feeToken);
                     if (usdEquivalent) totalFeeValueUsd += usdEquivalent;
                 }
