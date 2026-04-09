@@ -270,11 +270,18 @@ export class PaymasterService {
         }
 
         // 3. Universal Pricing (User Pays)
-        // Base fee = $0.15 USD floor (or developer markup)
+        // Base fee = actual STX gas cost + 20% margin (or developer markup if higher)
         const estimatedGas = intent.estimatedGas || 100000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        const MIN_FEE_USD  = 0.15;  // $0.15 USD Hard floor
+        // Actual STX gas cost: relayer pays 10,000 microSTX (0.01 STX) per tx
+        const RELAYER_STX_FEE = 0.01; // STX
+        const stxUsdPrice = await this.pricingOracle.getStxPrice();
+        const actualGasCostUsd = stxUsdPrice ? RELAYER_STX_FEE * stxUsdPrice : 0.005;
+
+        // Apply a 20% minimum margin on top of actual gas cost, then apply developer markup
+        const MIN_MARGIN = 1.2;
+        const MIN_FEE_USD = actualGasCostUsd * MIN_MARGIN;
 
         // Fetch token metadata reliably using our centralized Oracle
         const { decimals: tokenDecimals } = await this.pricingOracle.getTokenMetadata(feeToken);

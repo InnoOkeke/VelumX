@@ -240,7 +240,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
 
                 // 2. Fetch all successful transactions to calculate exact revenue and gas
                 const successfulTxs = await (prisma.transaction as any).findMany({
-                    where: { userId, network: networkType, status: 'Success' }
+                    where: { userId, network: networkType, status: { in: ['Success', 'Confirmed'] } }
                 });
 
                 // Total Gas Sponsored — calculate ONLY from successful/mined transactions, 
@@ -302,8 +302,8 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     totalSponsored: totalSponsored.toString(),
                     relayerAddress,
                     relayerStxBalance,
-                    relayerFeeBalance: walletFeeValueUsd.toFixed(2), // Real-time profit in wallet
-                    revenueMainnet: totalFeeValueUsd.toFixed(2),    // Historical log estimate
+                    relayerFeeBalance: totalFeeValueUsd.toFixed(2), // Confirmed collected fees from DB logs
+                    revenueMainnet: walletFeeValueUsd.toFixed(2),   // Live wallet FT balance (audit)
                     feeToken: 'USD'
                 };
             } catch (err) {
