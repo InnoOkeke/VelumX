@@ -148,7 +148,7 @@ export class PaymasterService {
     /**
      * Convert any token amount to its USDCx (USD) equivalent
      */
-    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals: number = 6): Promise<number | null> {
+    public async convertToUsdcx(amount: string | bigint, token: string, tokenDecimals?: number): Promise<number | null> {
         return this.pricingOracle.convertToUsdcx(amount, token, tokenDecimals);
     }
 
