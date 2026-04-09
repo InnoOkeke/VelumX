@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
+import { invalidateStatsCache } from './services/RedisClient.js';
 
 const prisma = new PrismaClient();
 
@@ -48,13 +49,27 @@ export class StatusSyncService {
             // 1. Fetch 'Pending' transactions from the database
             const pendingTxs = await (prisma.transaction as any).findMany({
                 where: { status: 'Pending' },
-                take: 50 // Limit batch size for performance
+                take: 50
             });
 
             if (pendingTxs.length === 0) return;
             console.log(`[StatusSync] Checking ${pendingTxs.length} pending transactions...`);
 
-            for (const tx of pendingTxs) {
+            // Mark transactions older than 2 hours as Failed — they've been silently dropped
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            const stale = pendingTxs.filter((tx: any) => new Date(tx.createdAt) < twoHoursAgo);
+            if (stale.length > 0) {
+                const staleIds = stale.map((tx: any) => tx.id);
+                await (prisma.transaction as any).updateMany({
+                    where: { id: { in: staleIds } },
+                    data: { status: 'Failed' }
+                });
+                console.log(`[StatusSync] Marked ${stale.length} stale transactions as Failed`);
+            }
+
+            // Check remaining non-stale pending transactions against the chain
+            const fresh = pendingTxs.filter((tx: any) => new Date(tx.createdAt) >= twoHoursAgo);
+            for (const tx of fresh) {
                 await this.checkStatus(tx.id, tx.txid);
             }
         } catch (error) {
@@ -81,23 +96,35 @@ export class StatusSyncService {
             }
 
             const data: any = await response.json();
-            const blockchainStatus = data.tx_status; // 'success', 'pending', 'abort_by_mempool', etc.
+            const blockchainStatus = data.tx_status; // 'success', 'pending', 'abort_by_post_condition', 'dropped_*', etc.
 
             // 3. Map blockchain status to dashboard status
+            // Full list: https://docs.hiro.so/stacks/api/transactions/get-transaction
             let newStatus = 'Pending';
             if (blockchainStatus === 'success') {
-                newStatus = 'Success';
-            } else if (blockchainStatus === 'abort_by_post_condition' || blockchainStatus === 'abort_by_mempool') {
+                newStatus = 'Confirmed';
+            } else if (
+                blockchainStatus === 'abort_by_post_condition' ||
+                blockchainStatus === 'abort_by_response' ||
+                blockchainStatus === 'abort_by_mempool' ||
+                blockchainStatus === 'dropped_replace_by_fee' ||
+                blockchainStatus === 'dropped_replace_across_fork' ||
+                blockchainStatus === 'dropped_too_expensive' ||
+                blockchainStatus === 'dropped_stale_garbage_collect' ||
+                blockchainStatus === 'dropped_problematic'
+            ) {
                 newStatus = 'Failed';
             }
 
             // 4. Update the database if the status has changed
             if (newStatus !== 'Pending') {
                 console.log(`[StatusSync] Updating TX ${txid}: ${newStatus}`);
-                await (prisma.transaction as any).update({
+                const updated = await (prisma.transaction as any).update({
                     where: { id },
                     data: { status: newStatus }
                 });
+                // Invalidate dashboard cache for this user so next load is fresh
+                if (updated?.userId) await invalidateStatsCache(updated.userId);
             }
         } catch (error) {
             console.error(`[StatusSync] Failed to check status for ${txid}:`, error);

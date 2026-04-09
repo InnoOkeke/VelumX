@@ -307,13 +307,15 @@ export class PaymasterService {
                 // using a conservative assumption of $0.10/token to avoid overcharging
                 const conservativeTokenPrice = 0.10;
                 const fallbackFee = BigInt(Math.ceil((MIN_FEE_USD / conservativeTokenPrice) * markupFactor * tokenMicroUnitsPerToken));
+                const fallbackFeeUsd = ((Number(fallbackFee) / tokenMicroUnitsPerToken) * conservativeTokenPrice).toFixed(4);
                 console.warn(`[Fee] Full oracle failure for ${feeToken}, using conservative $0.10/token fallback`);
-                return { maxFee: fallbackFee.toString(), maxFeeUsd: MIN_FEE_USD.toFixed(4), feeToken, estimatedGas, policy: "USER_PAYS", oracleFallback: true };
+                return { maxFee: fallbackFee.toString(), maxFeeUsd: fallbackFeeUsd, feeToken, estimatedGas, policy: "USER_PAYS", oracleFallback: true };
             }
 
             const fallbackFee = BigInt(Math.ceil((MIN_FEE_USD / fallbackUsdPrice) * markupFactor * tokenMicroUnitsPerToken));
+            const fallbackFeeUsd = ((Number(fallbackFee) / tokenMicroUnitsPerToken) * fallbackUsdPrice).toFixed(4);
             console.warn(`[Fee] Oracle unavailable for ${feeToken}, using stablecoin $1 fallback`);
-            return { maxFee: fallbackFee.toString(), maxFeeUsd: MIN_FEE_USD.toFixed(4), feeToken, estimatedGas, policy: "USER_PAYS", oracleFallback: true };
+            return { maxFee: fallbackFee.toString(), maxFeeUsd: fallbackFeeUsd, feeToken, estimatedGas, policy: "USER_PAYS", oracleFallback: true };
         }
 
         // 4. Calculate Final Fee

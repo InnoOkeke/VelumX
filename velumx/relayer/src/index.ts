@@ -8,8 +8,8 @@ import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
 import { verifySupabaseToken, AuthRequest } from './auth.js';
 import { createRateLimiters } from './middleware/rateLimiter.js';
-
 import { StatusSyncService } from './StatusSyncService.js';
+import { getCachedStats, setCachedStats, invalidateStatsCache } from './services/RedisClient.js';
 
 dotenv.config();
 
@@ -177,6 +177,8 @@ app.post('/api/v1/sponsor', validateApiKey, rateLimiters.sponsor.middleware(), a
         }
 
         const result = await paymasterService.sponsorIntent(intent, req.apiKeyId, req.userId);
+        // Invalidate dashboard cache so next load reflects the new transaction
+        if (req.userId) await invalidateStatsCache(req.userId);
         res.json(result);
     } catch (error: any) {
         console.error("Sponsorship Error:", error);
@@ -194,6 +196,8 @@ app.post('/api/v1/broadcast', validateApiKey, rateLimiters.broadcast.middleware(
         }
 
         const result = await paymasterService.sponsorRawTransaction(txHex, req.apiKeyId!, userId || req.userId!, feeAmount);
+        // Invalidate dashboard cache so next load reflects the new transaction
+        if (req.userId) await invalidateStatsCache(req.userId);
         res.json(result);
     } catch (error: any) {
         console.error("Broadcast Error:", error);
@@ -228,6 +232,13 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
 app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.middleware(), async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
+
+        // Serve from Redis cache if available (2 min TTL)
+        const cached = await getCachedStats(userId);
+        if (cached) {
+            console.log(`[Dashboard] Serving cached stats for ${userId}`);
+            return res.json(cached);
+        }
 
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
             try {
@@ -291,13 +302,13 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     if (usdEquivalent) totalFeeValueUsd += usdEquivalent;
                 }
 
-                // 5. STX Balance (for gas fuel display)
+                // 5. STX Balance — reuse wallet data already fetched in step 3
                 let relayerStxBalance = "0";
                 try {
                     const balancesRes = await fetch(`${hiroApiBase}/extended/v1/address/${relayerAddress}/balances`);
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
-                        relayerStxBalance = balances.stx.balance;
+                        relayerStxBalance = balances.stx?.balance || "0";
                     }
                 } catch (e) {}
 
@@ -306,8 +317,8 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     totalSponsored: totalSponsored.toString(),
                     relayerAddress,
                     relayerStxBalance,
-                    relayerFeeBalance: totalFeeValueUsd.toFixed(2), // Confirmed collected fees from DB logs
-                    revenueMainnet: walletFeeValueUsd.toFixed(2),   // Live wallet FT balance (audit)
+                    relayerFeeBalance: walletFeeValueUsd.toFixed(2), // Live SIP-010 wallet balance → USD
+                    revenueMainnet: totalFeeValueUsd.toFixed(2),     // DB log estimate (reconciliation)
                     feeToken: 'USD'
                 };
             } catch (err) {
@@ -320,10 +331,15 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
         const testnet = await getNetworkStats('testnet');
         const activeKeysCount = await (prisma.apiKey as any).count({ where: { userId, status: 'Active' } });
 
-        res.json({
+        const response = {
             activeKeys: activeKeysCount,
             networks: { mainnet, testnet }
-        });
+        };
+
+        // Cache for 2 minutes — reduces DB + Hiro API load significantly
+        await setCachedStats(userId, response);
+
+        res.json(response);
     } catch (error: any) {
         console.error("Dashboard Stats Critical Error:", error);
         res.status(500).json({ error: "Internal Server Error during stats generation" });

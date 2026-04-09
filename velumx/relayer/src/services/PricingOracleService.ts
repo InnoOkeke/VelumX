@@ -12,7 +12,6 @@ interface TokenUsdSource {
 }
 
 // Redis-backed cache with in-memory fallback.
-// If REDIS_URL is not set, falls back to a plain Map (single-instance only).
 class PriceCache {
     private redis: Redis | null = null;
     private memory: Map<string, { price: number; timestamp: number }> = new Map();
@@ -29,53 +28,43 @@ class PriceCache {
                 maxRetriesPerRequest: 1,
                 connectTimeout: 3000,
                 lazyConnect: true,
-                enableOfflineQueue: false, // don't queue commands when disconnected
+                enableOfflineQueue: false,
             });
             this.redis.connect().catch(() => {
                 console.warn('[Oracle] Redis connection failed — falling back to in-memory cache');
                 this.redis = null;
             });
-            this.redis.on('error', () => {
-                // Suppress ioredis error events after initial failure
-            });
+            this.redis.on('error', () => {});
         } else {
             console.log('[Oracle] REDIS_URL not set — using in-memory price cache');
         }
     }
 
     async get(key: string): Promise<number | null> {
-        // Try Redis first
         if (this.redis) {
             try {
                 const val = await this.redis.get(`oracle:${key}`);
                 if (val !== null) return parseFloat(val);
-            } catch { /* fall through to memory */ }
+            } catch {}
         }
-
-        // In-memory fallback
         const entry = this.memory.get(key);
         if (entry && Date.now() - entry.timestamp < this.TTL_MS) return entry.price;
         return null;
     }
 
     async set(key: string, price: number): Promise<void> {
-        // Write to Redis with TTL
         if (this.redis) {
             try {
                 await this.redis.set(`oracle:${key}`, price.toString(), 'EX', this.TTL_SECONDS);
-            } catch { /* fall through to memory */ }
+            } catch {}
         }
-
-        // Always write to memory as well (instant reads, Redis-independent)
         this.memory.set(key, { price, timestamp: Date.now() });
     }
 
     async del(key?: string): Promise<void> {
         if (key) {
             this.memory.delete(key);
-            if (this.redis) {
-                try { await this.redis.del(`oracle:${key}`); } catch {}
-            }
+            if (this.redis) { try { await this.redis.del(`oracle:${key}`); } catch {} }
         } else {
             this.memory.clear();
             if (this.redis) {
@@ -94,13 +83,13 @@ class PriceCache {
 
 /**
  * Pricing Oracle Service
- * Source priority: ALEX SDK (on-chain) → Binance → CoinCap → CoinGecko
+ * Token price source order: Binance (CEX, most accurate) → ALEX SDK (DEX) → CoinGecko
+ * STX price source order: Binance → CoinCap → CoinGecko → ALEX SDK (on-chain fallback)
  * Cache: Redis (5 min TTL) with in-memory fallback
  */
 export class PricingOracleService {
     private alex: AlexSDK;
-    // 5-minute TTL — token prices don't move enough in 5 min to affect fee accuracy
-    private readonly cache = new PriceCache(5 * 60 * 1000);
+    private readonly cache = new PriceCache(5 * 60 * 1000); // 5 min TTL
     private metadataCache: Map<string, { symbol: string, decimals: number }> = new Map();
 
     private readonly KNOWN_DECIMALS: Record<string, number> = {
@@ -108,14 +97,16 @@ export class PricingOracleService {
         'sbtc-token': 8, 'token-wbtc': 8,
         'usdcx': 6, 'token-aeusdc': 6, 'aeusdc': 6,
         'token-wstx': 6, 'stx': 6, 'token-susdt': 8,
-        'token-ausd': 8, // aUSD on ALEX DEX
+        'token-ausd': 8,
     };
 
-    // Stablecoins — always $1, no oracle needed
     private readonly STABLECOINS = new Set([
+        // Short names / ALEX SDK IDs
         'token-aeusdc', 'aeusdc', 'token-susdt', 'usdcx', 'token-ausd',
+        // Full Stacks principals
         'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
         'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+        'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-susdt', // sUSDT on Stacks
     ]);
 
     // Full Stacks principal → ALEX SDK internal token ID
@@ -126,10 +117,11 @@ export class PricingOracleService {
         'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx': 'token-susdt',
     };
 
-    // ALEX SDK ID → Binance spot pair
+    // ALEX SDK ID → Binance spot pair (CEX ground truth)
     private readonly ALEX_ID_TO_BINANCE: Record<string, string> = {
-        'age000-governance-token': 'ALEXUSDT',
-        'token-wbtc': 'BTCUSDT',
+        'age000-governance-token': 'ALEXUSDT', // ALEX token
+        'token-wbtc': 'BTCUSDT',               // sBTC = wrapped BTC, same price as BTC
+        'token-wstx': 'STXUSDT',               // wSTX = STX
     };
 
     // ALEX SDK ID → CoinGecko ID
@@ -185,7 +177,7 @@ export class PricingOracleService {
     }
 
     // ── STX Price ─────────────────────────────────────────────────────────────
-    // Order: ALEX SDK (aUSD/wSTX on-chain) → Binance → CoinCap → CoinGecko
+    // Order: Binance → CoinCap → CoinGecko → ALEX SDK (on-chain last resort)
 
     public async getStxPrice(): Promise<number | null> {
         const cacheKey = 'stx-usd';
@@ -193,26 +185,6 @@ export class PricingOracleService {
         if (cached !== null) return cached;
 
         const sources: PriceSource[] = [
-            {
-                // Price 1 aUSD (~$1) against wSTX on ALEX DEX, then invert.
-                // aUSD is the stablecoin available on ALEX DEX (8 decimals).
-                // Fully on-chain — no API keys, no rate limits.
-                name: 'ALEX SDK (aUSD/wSTX)',
-                getPrice: async () => {
-                    try {
-                        const amountOut = await this.alex.getAmountTo(
-                            'token-ausd' as any,
-                            BigInt(1e8), // 1 aUSD (8 decimals)
-                            'token-wstx' as any
-                        );
-                        if (!amountOut || Number(amountOut) <= 0) return null;
-                        // amountOut = micro-wSTX (8 decimals on ALEX)
-                        // 1 aUSD ≈ $1 → STX per $1 = amountOut/1e8 → $/STX = 1/(amountOut/1e8)
-                        const stxPerUsd = Number(amountOut) / 1e8;
-                        return stxPerUsd > 0 ? 1 / stxPerUsd : null;
-                    } catch { return null; }
-                }
-            },
             {
                 name: 'Binance',
                 getPrice: async () => {
@@ -258,6 +230,25 @@ export class PricingOracleService {
                     } catch { return null; }
                 }
             },
+            {
+                // On-chain last resort: price 1 aUSD (~$1) against wSTX on ALEX DEX, then invert.
+                // ALEX SDK always uses 8-decimal scale internally for all tokens.
+                name: 'ALEX SDK (aUSD/wSTX)',
+                getPrice: async () => {
+                    try {
+                        const amountOut = await this.alex.getAmountTo(
+                            'token-ausd' as any,
+                            BigInt(1e8), // 1 aUSD in ALEX's 8-decimal scale
+                            'token-wstx' as any
+                        );
+                        if (!amountOut || Number(amountOut) <= 0) return null;
+                        // amountOut is in ALEX's internal wSTX scale (8 decimals)
+                        // 1 aUSD ≈ $1 → STX per $1 = amountOut/1e8 → $/STX = 1/(amountOut/1e8)
+                        const stxPerUsd = Number(amountOut) / 1e8;
+                        return stxPerUsd > 0 ? 1 / stxPerUsd : null;
+                    } catch { return null; }
+                }
+            },
         ];
 
         for (const source of sources) {
@@ -276,49 +267,28 @@ export class PricingOracleService {
     }
 
     // ── Token USD Price ───────────────────────────────────────────────────────
-    // Order: ALEX SDK → Binance → CoinGecko → aUSD stablecoin fallback
+    // Order: Binance (CEX, ground truth) → ALEX SDK (DEX) → CoinGecko → aUSD fallback
 
     public async getTokenUsdPrice(token: string, tokenDecimals: number = 6): Promise<number | null> {
         const cacheKey = `token-usd-${token}`;
         const cached = await this.cache.get(cacheKey);
         if (cached !== null) return cached;
 
-        // STX/wSTX
         if (token === 'STX' || token.toLowerCase().includes('wstx')) {
             return this.getStxPrice();
         }
 
-        // Stablecoins — always $1, cache and return immediately
         const normalizedToken = token.includes('.') ? token.split('.').pop()!.toLowerCase() : token.toLowerCase();
         if (this.STABLECOINS.has(token) || this.STABLECOINS.has(normalizedToken)) {
             await this.cache.set(cacheKey, 1.0);
             return 1.0;
         }
 
-        // Resolve full principal → ALEX SDK ID
         const alexId = this.PRINCIPAL_TO_ALEX_ID[token] || normalizedToken;
 
         const sources: TokenUsdSource[] = [
             {
-                name: 'ALEX SDK (via wSTX)',
-                getUsdPrice: async (id: string) => {
-                    try {
-                        const unitInMicro = BigInt(10 ** tokenDecimals);
-                        const amountOut = await this.alex.getAmountTo(id as any, unitInMicro, 'token-wstx' as any);
-                        if (!amountOut || Number(amountOut) <= 0) return null;
-                        const stxPerToken = Number(amountOut) / 1e8;
-                        const stxUsd = await this.getStxPrice();
-                        if (!stxUsd) return null;
-                        const usdPrice = stxPerToken * stxUsd;
-                        console.log(`[Oracle] ${id} via ALEX/wSTX: ${stxPerToken} STX = $${usdPrice.toFixed(6)}`);
-                        return usdPrice > 0 ? usdPrice : null;
-                    } catch (e) {
-                        console.warn(`[Oracle] ALEX SDK (wSTX) failed for ${id}:`, (e as Error).message);
-                        return null;
-                    }
-                }
-            },
-            {
+                // Binance is the CEX ground truth — most accurate, no rate limits, real market price
                 name: 'Binance',
                 getUsdPrice: async (id: string) => {
                     const pair = this.ALEX_ID_TO_BINANCE[id];
@@ -338,6 +308,32 @@ export class PricingOracleService {
                         }
                         return null;
                     } catch { return null; }
+                }
+            },
+            {
+                // ALEX SDK DEX price — used for tokens not listed on Binance.
+                // Pass the token's actual native micro-unit amount (10^decimals = 1 full token).
+                // amountOut is in ALEX's internal wSTX scale (8 decimals) → divide by 1e8 to get real STX.
+                name: 'ALEX SDK (via wSTX)',
+                getUsdPrice: async (id: string) => {
+                    try {
+                        const amountOut = await this.alex.getAmountTo(
+                            id as any,
+                            BigInt(10 ** tokenDecimals), // 1 full token in native micro-units
+                            'token-wstx' as any
+                        );
+                        if (!amountOut || Number(amountOut) <= 0) return null;
+                        // amountOut is in ALEX's internal wSTX scale (8 decimals)
+                        const stxPerToken = Number(amountOut) / 1e8;
+                        const stxUsd = await this.getStxPrice();
+                        if (!stxUsd) return null;
+                        const usdPrice = stxPerToken * stxUsd;
+                        console.log(`[Oracle] ${id} via ALEX/wSTX: ${stxPerToken} STX = $${usdPrice.toFixed(8)}`);
+                        return usdPrice > 0 ? usdPrice : null;
+                    } catch (e) {
+                        console.warn(`[Oracle] ALEX SDK (wSTX) failed for ${id}:`, (e as Error).message);
+                        return null;
+                    }
                 }
             },
             {
@@ -374,24 +370,23 @@ export class PricingOracleService {
             } catch {}
         }
 
-        // Last resort: price token directly against aUSD on ALEX DEX.
-        // aUSD is the stablecoin on ALEX DEX (8 decimals), pegged to $1.
-        // This requires no external API — purely on-chain.
+        // Last resort: price token against aUSD on ALEX DEX.
+        // aUSD is pegged to $1. Pass 1 full token in native micro-units.
         try {
             const amountOut = await this.alex.getAmountTo(
                 alexId as any,
-                BigInt(10 ** tokenDecimals),
+                BigInt(10 ** tokenDecimals), // 1 full token in native micro-units
                 'token-ausd' as any
             );
             if (amountOut && Number(amountOut) > 0) {
-                // amountOut is micro-aUSD (8 decimals) → divide by 1e8 to get USD
+                // amountOut is in ALEX's internal aUSD scale (8 decimals) → divide by 1e8 to get USD
                 const usdPrice = Number(amountOut) / 1e8;
-                console.log(`[Oracle] ${alexId} via ALEX/aUSD stablecoin fallback: $${usdPrice.toFixed(6)}`);
+                console.log(`[Oracle] ${alexId} via ALEX/aUSD fallback: $${usdPrice.toFixed(8)}`);
                 await this.cache.set(cacheKey, usdPrice);
                 return usdPrice;
             }
         } catch (e) {
-            console.warn(`[Oracle] aUSD stablecoin fallback failed for ${alexId}:`, (e as Error).message);
+            console.warn(`[Oracle] aUSD fallback failed for ${alexId}:`, (e as Error).message);
         }
 
         console.error(`[Oracle] All sources failed for ${token} (alexId=${alexId})`);
