@@ -276,14 +276,16 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                     if (balancesRes.ok) {
                         const balances = await balancesRes.json();
                         // Iterate through all Fungible Tokens found in the wallet
-                        for (const [tokenPrincipal, balanceInfo] of Object.entries(balances.fungible_tokens || {})) {
+                        for (const [rawKey, balanceInfo] of Object.entries(balances.fungible_tokens || {})) {
                             const balance = (balanceInfo as any).balance;
                             if (balance === '0') continue;
+                            // Hiro API returns keys as "PRINCIPAL::ASSET-NAME" -- strip the ::suffix
+                            const tokenPrincipal = rawKey.includes('::') ? rawKey.split('::')[0] : rawKey;
                             
                             // Convert this token's liquid balance to USD
                             const usdVal = await paymasterService.convertToUsdcx(balance, tokenPrincipal);
                             console.log(`[Stats-Audit] Found ${tokenPrincipal}: balance=${balance}, USD=$${usdVal}`);
-                            if (usdVal) walletFeeValueUsd += usdVal;
+                            if (usdVal && usdVal > 0) walletFeeValueUsd += usdVal;
                         }
                     }
                 } catch (e) {
