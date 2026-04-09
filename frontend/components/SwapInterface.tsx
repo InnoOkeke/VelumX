@@ -500,15 +500,36 @@ export function SwapInterface() {
         setState(prev => ({
           ...prev,
           isProcessing: false,
-          success: `Swap successful! TX: ${txid}. You will receive approximately ${state.outputAmount} ${state.outputToken?.symbol}`,
+          success: `Swap submitted! TX: ${txid}. Waiting for confirmation...`,
           inputAmount: '',
           outputAmount: '',
           quote: null,
         }));
 
-        // Poll balances at 5s, 15s, 30s to catch when tx confirms on-chain
-        if (fetchBalances) {
-          [5000, 15000, 30000].forEach(delay => setTimeout(() => fetchBalances(), delay));
+        // Poll until balance changes or 15 minutes pass (Stacks blocks ~10 min)
+        if (fetchBalances && stacksAddress) {
+          const inputToken = state.inputToken;
+          const prevInputBalance = getBalance(inputToken);
+          const maxAttempts = 60; // 60 × 15s = 15 minutes
+          let attempts = 0;
+
+          const poll = async () => {
+            attempts++;
+            await fetchBalances();
+            const newBalance = getBalance(inputToken);
+            if (newBalance !== prevInputBalance) {
+              setState(prev => ({
+                ...prev,
+                success: `Swap confirmed! TX: ${txid}`,
+              }));
+              return;
+            }
+            if (attempts < maxAttempts) {
+              setTimeout(poll, 15000);
+            }
+          };
+
+          setTimeout(poll, 10000); // first check after 10s
         }
       } else {
         // Standard non-gasless swap via ALEX SDK
@@ -560,13 +581,27 @@ export function SwapInterface() {
             setState(prev => ({
               ...prev,
               isProcessing: false,
-              success: `Swap successful! TX: ${data.txid}`,
+              success: `Swap submitted! TX: ${data.txid}. Waiting for confirmation...`,
               inputAmount: '',
               outputAmount: '',
               quote: null,
             }));
-            if (fetchBalances) {
-              [5000, 15000, 30000].forEach(delay => setTimeout(() => fetchBalances(), delay));
+            if (fetchBalances && stacksAddress) {
+              const inputToken = state.inputToken;
+              const prevInputBalance = getBalance(inputToken);
+              const maxAttempts = 60;
+              let attempts = 0;
+              const poll = async () => {
+                attempts++;
+                await fetchBalances();
+                const newBalance = getBalance(inputToken);
+                if (newBalance !== prevInputBalance) {
+                  setState(prev => ({ ...prev, success: `Swap confirmed! TX: ${data.txid}` }));
+                  return;
+                }
+                if (attempts < maxAttempts) setTimeout(poll, 15000);
+              };
+              setTimeout(poll, 10000);
             }
           },
           onCancel: () => {
