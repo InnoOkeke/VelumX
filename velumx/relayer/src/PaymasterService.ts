@@ -287,10 +287,33 @@ export class PaymasterService {
         const { decimals: tokenDecimals } = await this.pricingOracle.getTokenMetadata(feeToken);
         const tokenMicroUnitsPerToken = Math.pow(10, tokenDecimals);
 
-        // Get USD price of 1 full token directly — no STX bridge conversion
+        // Get USD price of 1 full token directly
         const tokenUsdPrice = await this.pricingOracle.getTokenUsdPrice(feeToken, tokenDecimals);
         if (!tokenUsdPrice || tokenUsdPrice <= 0) {
-            throw new Error(`Pricing oracle unavailable for ${feeToken}. Live market data required.`);
+            // All oracle sources failed — derive a safe fallback from stablecoin peg.
+            // If the fee token IS a stablecoin, it's exactly $1.
+            // Otherwise use MIN_FEE_USD directly in token micro-units as a conservative estimate.
+            const STABLECOINS = new Set([
+                'token-aeusdc', 'aeusdc', 'token-susdt', 'usdcx',
+                'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc',
+                'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx',
+            ]);
+            const normalizedFeeToken = feeToken.includes('.') ? feeToken.split('.').pop()!.toLowerCase() : feeToken.toLowerCase();
+            const isStablecoin = STABLECOINS.has(feeToken) || STABLECOINS.has(normalizedFeeToken);
+            const fallbackUsdPrice = isStablecoin ? 1.0 : null;
+
+            if (!fallbackUsdPrice) {
+                // Non-stablecoin with no price data — charge MIN_FEE_USD worth of micro-units
+                // using a conservative assumption of $0.10/token to avoid overcharging
+                const conservativeTokenPrice = 0.10;
+                const fallbackFee = BigInt(Math.ceil((MIN_FEE_USD / conservativeTokenPrice) * markupFactor * tokenMicroUnitsPerToken));
+                console.warn(`[Fee] Full oracle failure for ${feeToken}, using conservative $0.10/token fallback`);
+                return { maxFee: fallbackFee.toString(), maxFeeUsd: MIN_FEE_USD.toFixed(4), feeToken, estimatedGas, policy: "USER_PAYS", oracleFallback: true };
+            }
+
+            const fallbackFee = BigInt(Math.ceil((MIN_FEE_USD / fallbackUsdPrice) * markupFactor * tokenMicroUnitsPerToken));
+            console.warn(`[Fee] Oracle unavailable for ${feeToken}, using stablecoin $1 fallback`);
+            return { maxFee: fallbackFee.toString(), maxFeeUsd: MIN_FEE_USD.toFixed(4), feeToken, estimatedGas, policy: "USER_PAYS", oracleFallback: true };
         }
 
         // 4. Calculate Final Fee
