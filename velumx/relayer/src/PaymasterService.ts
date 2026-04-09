@@ -274,8 +274,8 @@ export class PaymasterService {
         const estimatedGas = intent.estimatedGas || 100000;
         const markupFactor = 1 + (apiKey.markupPercentage / 100);
 
-        // Actual STX gas cost: relayer pays 10,000 microSTX (0.01 STX) per tx
-        const RELAYER_STX_FEE = 0.01; // STX
+        // Actual STX gas cost: relayer pays 5,000 microSTX (0.005 STX) per tx
+        const RELAYER_STX_FEE = 0.005; // STX
         const stxUsdPrice = await this.pricingOracle.getStxPrice();
         const actualGasCostUsd = stxUsdPrice ? RELAYER_STX_FEE * stxUsdPrice : 0.005;
 
@@ -377,7 +377,7 @@ export class PaymasterService {
             network: stxNetwork,
             anchorMode: AnchorMode.Any,
             postConditionMode: PostConditionMode.Allow,
-            fee: 10000n, // 0.01 STX (microSTX)
+            fee: 5000n, // 0.005 STX (microSTX)
         };
 
         try {
@@ -533,7 +533,7 @@ export class PaymasterService {
             }
 
             // Sign as sponsor
-            const RELAYER_FEE = 10000n; // 0.01 STX (microSTX)
+            const RELAYER_FEE = 5000n; // 0.005 STX (microSTX)
 
             const signedTx = await sponsorTransaction({
                 transaction,

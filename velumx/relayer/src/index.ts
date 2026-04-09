@@ -248,7 +248,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
                 const allBroadcastedTxs = await (prisma.transaction as any).count({
                     where: { userId, network: networkType, status: { notIn: ['Failed'] } }
                 });
-                const totalSponsoredUsd = (stxPrice || 0) * (allBroadcastedTxs * 0.01);
+                const totalSponsoredUsd = (stxPrice || 0) * (allBroadcastedTxs * 0.005);
                 const totalSponsored = totalSponsoredUsd.toFixed(6);
 
                 // Relayer address and network needed for STX balance display
