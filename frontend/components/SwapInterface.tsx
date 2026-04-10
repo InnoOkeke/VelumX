@@ -167,7 +167,7 @@ export function SwapInterface() {
 
   // Fetch developer's supported gas tokens from relayer config
   React.useEffect(() => {
-    fetch('/api/velumx/proxy/config')
+    fetch('/api/velumx/proxy/config', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (data.sponsorshipPolicy) {
