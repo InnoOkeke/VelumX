@@ -40,6 +40,7 @@ export async function POST(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
       body: JSON.stringify(body),
+      cache: 'no-store',
     });
 
     const { data, ok } = await safeJson(response);
@@ -71,6 +72,7 @@ export async function GET(
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers: { 'x-api-key': apiKey },
+      cache: 'no-store', // never cache — policy changes must reflect immediately
     });
 
     const { data, ok } = await safeJson(response);
