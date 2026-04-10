@@ -16,9 +16,11 @@ import React from 'react';
 // Dynamically import interfaces to resolve Turbopack module factory issues with Stacks libraries
 const BridgeInterface = dynamic(() => import('./BridgeInterface').then(mod => mod.BridgeInterface), { ssr: false });
 const SwapInterface = dynamic(() => import('./SwapInterface').then(mod => mod.SwapInterface), { ssr: false });
+const StackingInterface = dynamic(() => import('./StackingInterface').then(mod => mod.StackingInterface), { ssr: false });
+const LiquidityInterface = dynamic(() => import('./LiquidityInterface').then(mod => mod.LiquidityInterface), { ssr: false });
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'history'>('bridge');
+  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'earn' | 'liquidity' | 'history'>('swap');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Initialize dark mode from localStorage
@@ -107,6 +109,8 @@ export default function HomePage() {
               <p className="text-lg font-light leading-relaxed max-w-2xl" style={{ color: 'var(--text-secondary)' }}>
                 {activeTab === 'bridge' && "Securely move your assets across ecosystems with VelumX's robust bridging protocol."}
                 {activeTab === 'swap' && "Trade tokens instantly at the best market rates using our peer-to-peer liquidity protocol."}
+                {activeTab === 'earn' && "Deposit STX and earn BTC yield via Proof of Transfer — stay liquid with stSTX."}
+                {activeTab === 'liquidity' && "Provide liquidity to ALEX pools and earn trading fees, all gasless via VelumX."}
                 {activeTab === 'history' && "Track your recent activity and transaction status in real-time."}
               </p>
             </div>
@@ -121,6 +125,8 @@ export default function HomePage() {
             }}>
               {activeTab === 'bridge' && <BridgeInterface />}
               {activeTab === 'swap' && <SwapInterface />}
+              {activeTab === 'earn' && <StackingInterface />}
+              {activeTab === 'liquidity' && <LiquidityInterface />}
               {activeTab === 'history' && <TransactionHistory />}
             </div>
           </div>
