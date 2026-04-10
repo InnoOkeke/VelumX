@@ -149,6 +149,16 @@ app.get('/api/dashboard/export-key', verifySupabaseToken, async (req: AuthReques
 
 // ── Dashboard Stats ───────────────────────────────────────────────────────────
 
+// Cache bust endpoint — clears stale dashboard cache for the authenticated user
+app.post('/api/dashboard/cache-clear', verifySupabaseToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+        await invalidateStatsCache(req.userId!);
+        res.json({ ok: true });
+    } catch (e) {
+        res.json({ ok: true }); // always succeed
+    }
+});
+
 app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.middleware(), async (req: AuthRequest, res: express.Response) => {
     try {
         const userId = req.userId!;
@@ -157,7 +167,8 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
         const cached = await getCachedStats(userId);
         if (cached) {
             console.log(`[Dashboard] Serving cached stats for ${userId}`);
-            return res.json(cached);
+            res.json(cached);
+            return;
         }
 
         const getNetworkStats = async (networkType: 'mainnet' | 'testnet') => {
@@ -245,6 +256,7 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
         const hasRealData = parseFloat(mainnet.totalSponsored) > 0 || parseFloat(mainnet.relayerFeeBalance) > 0 || mainnet.totalTransactions > 0;
         if (hasRealData) await setCachedStats(userId, response);
         res.json(response);
+        return;
     } catch (error: any) {
         console.error("Dashboard Stats Critical Error:", error);
         res.status(500).json({ error: "Internal Server Error during stats generation" });

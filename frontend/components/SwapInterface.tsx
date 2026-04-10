@@ -113,19 +113,33 @@ export function SwapInterface() {
   const getBalance = (token: Token | null): string => {
     if (!token) return '0';
 
-    // STX is stored by symbol key
+    // STX
     if (token.symbol === 'STX' || token.address === 'token-wstx') {
       return (balances as any).stx || '0';
     }
 
-    // Try contract principal first (most accurate)
+    // Try exact contract principal match first
     const byPrincipal = (balances as any)[token.address];
     if (byPrincipal && byPrincipal !== '0') {
-      // Dynamic balances are stored in micro units — convert to human units
       return (Number(byPrincipal) / Math.pow(10, token.decimals)).toFixed(6);
     }
 
-    // Fallback: symbol lookup for known tokens (usdcx, vex, etc.)
+    // Fuzzy match — find any balance key that starts with the token address
+    // (handles cases where address is a partial principal or ALEX SDK ID)
+    const allKeys = Object.keys(balances as any);
+    const fuzzyKey = allKeys.find(k =>
+      k.startsWith(token.address) ||
+      token.address.startsWith(k) ||
+      k.toLowerCase().includes(token.symbol.toLowerCase())
+    );
+    if (fuzzyKey) {
+      const raw = (balances as any)[fuzzyKey];
+      if (raw && raw !== '0') {
+        return (Number(raw) / Math.pow(10, token.decimals)).toFixed(6);
+      }
+    }
+
+    // Symbol fallback for known named tokens (usdcx, vex, etc.)
     const symbol = token.symbol.toLowerCase();
     return (balances as any)[symbol] || '0';
   };
@@ -203,10 +217,11 @@ export function SwapInterface() {
     const mapTokens = (list: any[]): Token[] =>
       list
         .map((t: any) => {
-          const contractAddress = t.wrapToken
-            ? t.wrapToken.split('::')[0]
-            : (t.contractAddress || t.address || '');
-          // Resolve known ALEX SDK IDs (e.g. 'age000-governance-token') to correct contract principals
+          // wrapToken is the actual Stacks contract principal (e.g. SP...token-alex::token-alex)
+          // Strip the ::asset-name suffix to get the clean principal
+          const wrapPrincipal = t.wrapToken ? t.wrapToken.split('::')[0] : '';
+          const contractAddress = wrapPrincipal || t.contractAddress || t.address || '';
+          // Resolve known ALEX SDK IDs to correct contract principals
           const resolvedAddress = resolveTokenAddress(contractAddress || t.id || '');
           const rawIcon = t.icon || '';
           const logoUrl = rawIcon
