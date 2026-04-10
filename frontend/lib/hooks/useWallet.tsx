@@ -191,6 +191,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               if (meta.decimals !== undefined) {
                 decimalsMap[`decimals:${principal}`] = String(meta.decimals);
               }
+              // Store token name and symbol for SwapInterface to use
+              if (meta.name) decimalsMap[`name:${principal}`] = meta.name;
+              if (meta.symbol) decimalsMap[`symbol:${principal}`] = meta.symbol;
             }
           } catch {}
         }

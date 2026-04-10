@@ -215,16 +215,17 @@ export function SwapInterface() {
   useEffect(() => {
     let isMounted = true;
 
-    const CACHE_KEY = 'velumx_alex_tokens';
+    const CACHE_KEY = 'velumx_alex_tokens_v2';
     const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
     const mapTokens = (list: any[]): Token[] =>
       list
         .map((t: any) => {
           // wrapToken is the actual Stacks contract principal (e.g. SP...token-alex::token-alex)
-          // Strip the ::asset-name suffix to get the clean principal
+          // underlyingToken is the fallback for tokens without a wrap
           const wrapPrincipal = t.wrapToken ? t.wrapToken.split('::')[0] : '';
-          const contractAddress = wrapPrincipal || t.contractAddress || t.address || '';
+          const underlyingPrincipal = t.underlyingToken ? t.underlyingToken.split('::')[0] : '';
+          const contractAddress = wrapPrincipal || underlyingPrincipal || t.contractAddress || t.address || '';
           // Resolve known ALEX SDK IDs to correct contract principals
           const resolvedAddress = resolveTokenAddress(contractAddress || t.id || '');
           const rawIcon = t.icon || '';
@@ -333,6 +334,33 @@ export function SwapInterface() {
     fetchAlexTokens();
     return () => { isMounted = false; };
   }, []);
+
+  // Merge wallet tokens into the token list — adds any token found in the wallet
+  // that isn't already in the ALEX SDK list (e.g. Pepe, Nothing, etc.)
+  useEffect(() => {
+    const allKeys = Object.keys(balances as any);
+    const principalKeys = allKeys.filter(k =>
+      k.includes('.') && !k.startsWith('decimals:') && !k.startsWith('name:') && !k.startsWith('symbol:')
+    );
+    if (principalKeys.length === 0) return;
+
+    setTokens(prev => {
+      const updated = [...prev];
+      let changed = false;
+      for (const principal of principalKeys) {
+        const alreadyExists = updated.some(t => t.address === principal);
+        if (alreadyExists) continue;
+        const rawBalance = (balances as any)[principal];
+        if (!rawBalance || rawBalance === '0') continue; // skip zero-balance tokens
+        const decimals = parseInt((balances as any)[`decimals:${principal}`] || '6');
+        const symbol = (balances as any)[`symbol:${principal}`] || principal.split('.').pop()?.toUpperCase() || 'TOKEN';
+        const name = (balances as any)[`name:${principal}`] || symbol;
+        updated.push({ symbol, name, address: principal, decimals, logoUrl: '' });
+        changed = true;
+      }
+      return changed ? updated : prev;
+    });
+  }, [balances]);
 
   const fetchQuote = async () => {
     if (!state.inputToken || !state.outputToken || !state.inputAmount) return;
