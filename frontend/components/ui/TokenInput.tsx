@@ -21,6 +21,7 @@ interface TokenInputProps {
     isProcessing: boolean;
     onMax?: () => void;
     variant?: 'purple' | 'blue';
+    getTokenBalance?: (token: Token) => string;
 }
 
 export function TokenInput({
@@ -33,7 +34,8 @@ export function TokenInput({
     balance,
     isProcessing,
     onMax,
-    variant = 'purple'
+    variant = 'purple',
+    getTokenBalance,
 }: TokenInputProps) {
     const [isOpen, setIsOpen] = React.useState(false);
     const [search, setSearch] = React.useState('');
@@ -151,7 +153,10 @@ export function TokenInput({
 
                                 {/* List */}
                                 <div className="overflow-y-auto max-h-64" style={{ backgroundColor: 'var(--bg-surface)' }}>
-                                    {filteredTokens.length > 0 ? filteredTokens.map(t => (
+                                    {filteredTokens.length > 0 ? filteredTokens.map(t => {
+                                        const tokenBal = getTokenBalance ? getTokenBalance(t) : '0';
+                                        const hasBalance = parseFloat(tokenBal) > 0;
+                                        return (
                                         <button
                                             key={t.address + t.symbol}
                                             onClick={() => { setToken(t); setIsOpen(false); setSearch(''); }}
@@ -174,11 +179,19 @@ export function TokenInput({
                                                     <div className="text-[10px] truncate max-w-[140px]" style={{ color: 'var(--text-secondary)' }}>{t.name}</div>
                                                 </div>
                                             </div>
-                                            {t.symbol === token?.symbol && (
-                                                <div className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />
-                                            )}
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                {getTokenBalance && (
+                                                    <span className={`text-xs font-mono font-semibold ${hasBalance ? '' : 'opacity-30'}`} style={{ color: 'var(--text-primary)' }}>
+                                                        {hasBalance ? parseFloat(tokenBal).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0'}
+                                                    </span>
+                                                )}
+                                                {t.symbol === token?.symbol && (
+                                                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                                                )}
+                                            </div>
                                         </button>
-                                    )) : (
+                                        );
+                                    }) : (
                                         <div className="p-8 text-center text-sm italic" style={{ color: 'var(--text-secondary)' }}>No tokens found</div>
                                     )}
                                 </div>

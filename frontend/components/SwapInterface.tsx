@@ -783,6 +783,7 @@ export function SwapInterface() {
             isProcessing={state.isProcessing}
             onMax={() => setState(prev => ({ ...prev, inputAmount: getBalance(state.inputToken) }))}
             variant="purple"
+            getTokenBalance={getBalance}
           />
 
           {/* Switch Button */}
@@ -810,6 +811,7 @@ export function SwapInterface() {
             balance={getBalance(state.outputToken)}
             isProcessing={state.isProcessing}
             variant="blue"
+            getTokenBalance={getBalance}
           />
         </div>
 
