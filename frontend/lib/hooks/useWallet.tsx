@@ -163,12 +163,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // e.g. 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex::token-alex' → stored as
       // 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex'
       const dynamicBalances: Record<string, string> = {};
-      for (const [key, val] of Object.entries(fungibleTokens)) {
+      // Also store decimals keyed as 'decimals:{principal}' so getBalance can divide correctly
+      const decimalsMap: Record<string, string> = {};
+
+      // Fetch decimals for unknown tokens in parallel
+      const ftKeys = Object.keys(fungibleTokens);
+      await Promise.all(ftKeys.map(async (key) => {
         const principal = key.split('::')[0];
-        const rawBalance = (val as any).balance || '0';
-        // Store in micro units as string — UI components divide by decimals themselves
+        const rawBalance = (fungibleTokens[key] as any).balance || '0';
         dynamicBalances[principal] = rawBalance;
-      }
+
+        // Try to get decimals from Hiro metadata for tokens we don't know
+        const knownDecimals: Record<string, number> = {
+          'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-alex': 8,
+          'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token': 8,
+          'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx': 6,
+          'SP3Y2ZSH8P7D50B0JLZVGKMBC7PX3RVRGWJKWKY38.token-aeusdc': 6,
+        };
+        if (knownDecimals[principal] !== undefined) {
+          decimalsMap[`decimals:${principal}`] = String(knownDecimals[principal]);
+        } else {
+          try {
+            const [addr, name] = principal.split('.');
+            const metaRes = await fetch(`https://api.hiro.so/metadata/v1/ft/${addr}.${name}`, { signal: AbortSignal.timeout(3000) });
+            if (metaRes.ok) {
+              const meta = await metaRes.json();
+              if (meta.decimals !== undefined) {
+                decimalsMap[`decimals:${principal}`] = String(meta.decimals);
+              }
+            }
+          } catch {}
+        }
+      }));
 
       setState(prev => ({
         ...prev,
@@ -178,6 +204,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           usdcx: formatUnits(usdcx, TOKEN_DECIMALS.usdcx),
           vex: formatUnits(vex, TOKEN_DECIMALS.usdcx),
           ...dynamicBalances,
+          ...decimalsMap, // store decimals alongside balances
         }
       }));
     } catch (error) {

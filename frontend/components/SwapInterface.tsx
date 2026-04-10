@@ -121,12 +121,14 @@ export function SwapInterface() {
     // Try exact contract principal match first
     const byPrincipal = (balances as any)[token.address];
     if (byPrincipal && byPrincipal !== '0') {
-      return (Number(byPrincipal) / Math.pow(10, token.decimals)).toFixed(6);
+      // Use stored decimals if available (fetched from Hiro metadata), else use token.decimals
+      const storedDecimals = (balances as any)[`decimals:${token.address}`];
+      const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
+      return (Number(byPrincipal) / Math.pow(10, decimals)).toFixed(6);
     }
 
     // Fuzzy match — find any balance key that starts with the token address
-    // (handles cases where address is a partial principal or ALEX SDK ID)
-    const allKeys = Object.keys(balances as any);
+    const allKeys = Object.keys(balances as any).filter(k => !k.startsWith('decimals:'));
     const fuzzyKey = allKeys.find(k =>
       k.startsWith(token.address) ||
       token.address.startsWith(k) ||
@@ -135,11 +137,13 @@ export function SwapInterface() {
     if (fuzzyKey) {
       const raw = (balances as any)[fuzzyKey];
       if (raw && raw !== '0') {
-        return (Number(raw) / Math.pow(10, token.decimals)).toFixed(6);
+        const storedDecimals = (balances as any)[`decimals:${fuzzyKey}`];
+        const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
+        return (Number(raw) / Math.pow(10, decimals)).toFixed(6);
       }
     }
 
-    // Symbol fallback for known named tokens (usdcx, vex, etc.)
+    // Symbol fallback
     const symbol = token.symbol.toLowerCase();
     return (balances as any)[symbol] || '0';
   };
