@@ -213,42 +213,13 @@ export class PaymasterService {
 
         // 1. Sponsorship Policy Check (Developer Pays) — check FIRST before any token validation
         if ((apiKey.sponsorshipPolicy as string) === 'DEVELOPER_SPONSORS') {
-            const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-            const monthlyTransactions = await prisma.transaction.findMany({
-                where: {
-                    apiKeyId,
-                    createdAt: { gte: startOfMonth },
-                    status: { notIn: ['Failed'] }
-                },
-                select: { feeAmount: true }
-            });
-
-            const totalMonthlySpend = monthlyTransactions.reduce((acc, tx) => {
-                return acc + BigInt(tx.feeAmount || '0');
-            }, BigInt(0));
-
-            if (totalMonthlySpend < BigInt(100_000_000)) {
-                const sponsoredCount = await prisma.transaction.count({
-                    where: {
-                        apiKeyId,
-                        userAddress,
-                        createdAt: { gte: startOfMonth },
-                        status: { notIn: ['Failed'] }
-                    }
-                });
-
-                if (sponsoredCount < apiKey.maxSponsoredTxsPerUser) {
-                    // Developer sponsors — user pays nothing, skip all token checks
-                    return {
-                        maxFee: "0",
-                        feeToken: feeToken || 'STX',
-                        estimatedGas: intent.estimatedGas || 10000,
-                        policy: "DEVELOPER_SPONSORS"
-                    };
-                }
-            }
+            // Developer sponsors — user pays nothing, return immediately
+            return {
+                maxFee: "0",
+                feeToken: feeToken || 'STX',
+                estimatedGas: intent.estimatedGas || 10000,
+                policy: "DEVELOPER_SPONSORS"
+            };
         }
 
         // 2. Token validation only applies when user pays
