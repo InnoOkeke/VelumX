@@ -117,11 +117,11 @@ export default function TransactionLogsPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold border ${
-                                            log.status === 'Confirmed' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
+                                            (log.status === 'Confirmed' || log.status === 'Success') ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
                                             log.status === 'Pending'   ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
                                                                          'bg-rose-400/10 text-rose-400 border-rose-400/20'
                                         }`}>
-                                            {log.status.toUpperCase()}
+                                            {(log.status === 'Success' ? 'Confirmed' : log.status).toUpperCase()}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-[10px] font-bold text-white/40 text-right uppercase tracking-wider font-mono">
