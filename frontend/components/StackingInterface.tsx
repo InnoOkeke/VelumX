@@ -206,14 +206,31 @@ export function StackingInterface() {
 
         <TransactionStatus error={error} success={success} />
 
-        <button onClick={handleSubmit}
-          disabled={!stacksConnected || isProcessing || !amount || parseFloat(amount) <= 0}
-          className="w-full mt-6 bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-xl shadow-purple-500/20">
-          {isProcessing
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</>
-            : !stacksConnected ? 'Connect Wallet'
-            : <><TrendingUp className="w-5 h-5" /> {mode === 'deposit' ? 'Deposit & Stack' : 'Instant Unstack'}</>}
-        </button>
+        {(() => {
+          const n = parseFloat(amount) || 0;
+          const insufficient = stacksConnected && n > 0 && n > inputBalance;
+          const buttonLabel = !stacksConnected
+            ? 'Connect Wallet'
+            : isProcessing
+            ? null
+            : insufficient
+            ? `Insufficient ${inputSymbol}`
+            : mode === 'deposit' ? 'Deposit & Stack' : 'Instant Unstack';
+
+          return (
+            <button onClick={handleSubmit}
+              disabled={!stacksConnected || isProcessing || !amount || n <= 0 || insufficient}
+              className={`w-full mt-6 font-bold py-4 rounded-2xl transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-xl ${
+                insufficient
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20 disabled:opacity-50'
+              }`}>
+              {isProcessing
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</>
+                : <><TrendingUp className="w-5 h-5" /> {buttonLabel}</>}
+            </button>
+          );
+        })()}
 
         <p className="text-center text-[10px] mt-4" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
           Stacking rewards are earned in BTC via Proof of Transfer
