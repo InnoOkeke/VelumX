@@ -84,7 +84,6 @@ export async function executeSimpleGaslessSwap(params: SimpleGaslessSwapParams):
 
   // Step 3: Get swap params from ALEX SDK
   const swapTx = await alex.runSwap(params.userAddress, alexTokenIn, alexTokenOut, alexAmountIn, alexMinOut);
-  console.log('ALEX swap tx:', { contract: `${swapTx.contractAddress}.${swapTx.contractName}`, fn: swapTx.functionName });
 
   // Step 4: Get public key
   let publicKey = params.userPublicKey || '';

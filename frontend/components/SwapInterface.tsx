@@ -421,8 +421,6 @@ export function SwapInterface() {
         feeToken: state.selectedGasToken.address // Pass the Universal Token address
       });
 
-      console.log('Universal Fee Estimate:', estimate);
-
       if (estimate && estimate.maxFee) {
         const fee = estimate.maxFee;
         const tokenAmount = (Number(fee) / Math.pow(10, state.selectedGasToken?.decimals || 6)).toFixed(4);
