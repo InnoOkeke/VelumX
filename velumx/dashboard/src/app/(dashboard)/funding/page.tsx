@@ -36,6 +36,12 @@ export default function FundingPage() {
             const token = session?.access_token;
             if (!token) return;
 
+            // Always clear stale Redis cache before fetching — ensures fresh data on every page visit
+            await fetch(`${RELAYER_URL}/api/dashboard/cache-clear`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(() => {});
+
             const [statsRes, logsRes] = await Promise.all([
                 fetch(`${RELAYER_URL}/api/dashboard/stats`, { cache: 'no-store', headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch(`${RELAYER_URL}/api/dashboard/logs?network=${network}`, { cache: 'no-store', headers: { 'Authorization': `Bearer ${token}` } }),
