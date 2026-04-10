@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import { Activity } from 'lucide-react';
 import { Users } from 'lucide-react';
 import { BatteryCharging } from 'lucide-react';
-import { ArrowUpRight } from 'lucide-react';
-import { ArrowDownRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUser } from '@/components/providers/SessionProvider';
 import { useWallet } from '@/components/providers/WalletContext';
@@ -109,24 +107,18 @@ export default function DashboardOverview() {
     {
       title: 'Total Gas Sponsored',
       value: `${formatUsd(currentStats.totalSponsored)} USD`,
-      change: '0%',
-      trend: 'up',
       icon: BatteryCharging,
       color: 'bg-white/5'
     },
     {
       title: 'Active API Keys',
       value: statsData.activeKeys.toString(),
-      change: '0%',
-      trend: 'up',
       icon: Activity,
       color: 'bg-white/5'
     },
     {
       title: 'Total Transactions',
       value: currentStats.totalTransactions.toString(),
-      change: '0%',
-      trend: 'up',
       icon: Users,
       color: 'bg-white/5'
     }
@@ -187,13 +179,6 @@ export default function DashboardOverview() {
               <div className={`w-8 h-8 rounded-lg ${stat.color} flex items-center justify-center border border-white/10`}>
                 <stat.icon className="w-4 h-4 text-white/60" />
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`flex items-center text-[10px] font-bold ${stat.trend === 'up' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {stat.trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-                {stat.change}
-              </span>
-              <span className="text-[10px] text-white/20 uppercase font-bold tracking-widest">Growth</span>
             </div>
           </div>
         ))}
@@ -273,7 +258,7 @@ export default function DashboardOverview() {
               </div>
               <div className="text-right">
                 <p className="text-white text-xs font-bold font-mono">{log.txid.substring(0, 10)}...</p>
-                <p className={`text-[10px] font-bold mt-0.5 ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>{log.status}</p>
+                <p className={`text-[10px] font-bold mt-0.5 ${(log.status === 'Confirmed' || log.status === 'Success') ? 'text-emerald-400' : log.status === 'Pending' ? 'text-amber-400' : 'text-rose-400'}`}>{log.status === 'Success' ? 'Confirmed' : log.status}</p>
               </div>
             </div>
           ))}

@@ -176,8 +176,8 @@ export default function FundingPage() {
                             </div>
                             <div className="text-right">
                                 <p className="text-white text-[11px] font-bold font-mono">{log.txid.substring(0, 8)}...</p>
-                                <span className={`text-[9px] font-black uppercase tracking-widest ${log.status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                    {log.status}
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${(log.status === 'Confirmed' || log.status === 'Success') ? 'text-emerald-400' : log.status === 'Pending' ? 'text-amber-400' : 'text-rose-400'}`}>
+                                    {log.status === 'Success' ? 'Confirmed' : log.status}
                                 </span>
                             </div>
                         </div>
