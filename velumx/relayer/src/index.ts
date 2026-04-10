@@ -241,7 +241,9 @@ app.get('/api/dashboard/stats', verifySupabaseToken, rateLimiters.dashboard.midd
         ]);
 
         const response = { activeKeys: activeKeysCount, networks: { mainnet, testnet } };
-        await setCachedStats(userId, response);
+        // Only cache if we got real data — don't cache a cold-start zero response
+        const hasRealData = parseFloat(mainnet.totalSponsored) > 0 || parseFloat(mainnet.relayerFeeBalance) > 0 || mainnet.totalTransactions > 0;
+        if (hasRealData) await setCachedStats(userId, response);
         res.json(response);
     } catch (error: any) {
         console.error("Dashboard Stats Critical Error:", error);
