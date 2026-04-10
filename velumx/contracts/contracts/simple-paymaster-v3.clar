@@ -334,6 +334,179 @@
 )
 
 ;; -------------------------------------------------------
+;; stacking-deposit-gasless
+;; Deposits STX into StackingDAO, minting stSTX for the user.
+;; User pays gas fee in any SIP-010 token.
+;;
+;; Parameters match stacking-dao-core-v6.deposit exactly, plus
+;; the standard fee-amount / relayer / fee-token triplet.
+;; -------------------------------------------------------
+(define-public (stacking-deposit-gasless
+    (reserve <sip-010-trait>)
+    (commission <sip-010-trait>)
+    (staking <sip-010-trait>)
+    (direct-helpers <sip-010-trait>)
+    (stx-amount uint)
+    (referrer (optional principal))
+    (pool (optional principal))
+    (fee-amount uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    ;; 1. Collect gas fee
+    (try! (collect-fee-internal fee-token fee-amount relayer))
+
+    ;; 2. Deposit STX into StackingDAO
+    (try! (contract-call? 'SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.stacking-dao-core-v6
+      deposit
+      reserve
+      commission
+      staking
+      direct-helpers
+      stx-amount
+      referrer
+      pool))
+
+    (print {
+      event: "stacking-deposit-gasless",
+      user: tx-sender,
+      stx-amount: stx-amount,
+      fee-token: (contract-of fee-token),
+      fee-amount: fee-amount
+    })
+
+    (ok true)
+  )
+)
+
+;; -------------------------------------------------------
+;; stacking-withdraw-idle-gasless
+;; Instant unstacking via StackingDAO idle liquidity (1% protocol fee).
+;; User pays VelumX gas fee in any SIP-010 token.
+;; -------------------------------------------------------
+(define-public (stacking-withdraw-idle-gasless
+    (reserve <sip-010-trait>)
+    (direct-helpers <sip-010-trait>)
+    (commission <sip-010-trait>)
+    (staking <sip-010-trait>)
+    (ststx-amount uint)
+    (fee-amount uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    ;; 1. Collect gas fee
+    (try! (collect-fee-internal fee-token fee-amount relayer))
+
+    ;; 2. Instant withdraw from StackingDAO
+    (try! (contract-call? 'SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.stacking-dao-core-v6
+      withdraw-idle
+      reserve
+      direct-helpers
+      commission
+      staking
+      ststx-amount))
+
+    (print {
+      event: "stacking-withdraw-idle-gasless",
+      user: tx-sender,
+      ststx-amount: ststx-amount,
+      fee-token: (contract-of fee-token),
+      fee-amount: fee-amount
+    })
+
+    (ok true)
+  )
+)
+
+;; -------------------------------------------------------
+;; lp-add-gasless
+;; Adds liquidity to an ALEX AMM pool (amm-swap-pool-v1-1).
+;; User pays gas fee in any SIP-010 token.
+;;
+;; Parameters match amm-swap-pool-v1-1.add-to-position exactly.
+;; -------------------------------------------------------
+(define-public (lp-add-gasless
+    (token-x-trait <sip-010-trait>)
+    (token-y-trait <sip-010-trait>)
+    (factor uint)
+    (pool-token <sip-010-trait>)
+    (dx uint)
+    (max-dy (optional uint))
+    (fee-amount uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    ;; 1. Collect gas fee
+    (try! (collect-fee-internal fee-token fee-amount relayer))
+
+    ;; 2. Add liquidity to ALEX pool
+    (try! (contract-call? 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.amm-swap-pool-v1-1
+      add-to-position
+      token-x-trait
+      token-y-trait
+      factor
+      pool-token
+      dx
+      max-dy))
+
+    (print {
+      event: "lp-add-gasless",
+      user: tx-sender,
+      token-x: (contract-of token-x-trait),
+      token-y: (contract-of token-y-trait),
+      dx: dx,
+      fee-token: (contract-of fee-token),
+      fee-amount: fee-amount
+    })
+
+    (ok true)
+  )
+)
+
+;; -------------------------------------------------------
+;; lp-remove-gasless
+;; Removes liquidity from an ALEX AMM pool (amm-swap-pool-v1-1).
+;; User pays gas fee in any SIP-010 token.
+;;
+;; percent: 1e8 = 100%, 5e7 = 50%, etc.
+;; -------------------------------------------------------
+(define-public (lp-remove-gasless
+    (token-x-trait <sip-010-trait>)
+    (token-y-trait <sip-010-trait>)
+    (factor uint)
+    (pool-token <sip-010-trait>)
+    (percent uint)
+    (fee-amount uint)
+    (relayer principal)
+    (fee-token <sip-010-trait>))
+  (begin
+    ;; 1. Collect gas fee
+    (try! (collect-fee-internal fee-token fee-amount relayer))
+
+    ;; 2. Remove liquidity from ALEX pool
+    (try! (contract-call? 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.amm-swap-pool-v1-1
+      reduce-position
+      token-x-trait
+      token-y-trait
+      factor
+      pool-token
+      percent))
+
+    (print {
+      event: "lp-remove-gasless",
+      user: tx-sender,
+      token-x: (contract-of token-x-trait),
+      token-y: (contract-of token-y-trait),
+      percent: percent,
+      fee-token: (contract-of fee-token),
+      fee-amount: fee-amount
+    })
+
+    (ok true)
+  )
+)
+
+;; -------------------------------------------------------
 ;; Admin
 ;; -------------------------------------------------------
 (define-public (set-admin (new-admin principal))
