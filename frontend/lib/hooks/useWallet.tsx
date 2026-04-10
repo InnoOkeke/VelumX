@@ -185,17 +185,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } else {
           try {
             const [addr, name] = principal.split('.');
-            const metaRes = await fetch(`https://api.hiro.so/metadata/v1/ft/${addr}.${name}`, { signal: AbortSignal.timeout(3000) });
+            // Use extended/v1 token metadata which is more reliable for SIP-010 tokens
+            const metaRes = await fetch(
+              `https://api.mainnet.hiro.so/metadata/v1/ft/${addr}.${name}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
             if (metaRes.ok) {
               const meta = await metaRes.json();
               if (meta.decimals !== undefined) {
                 decimalsMap[`decimals:${principal}`] = String(meta.decimals);
+              } else {
+                // Default to 6 if not specified — most SIP-010 meme tokens use 6
+                decimalsMap[`decimals:${principal}`] = '6';
               }
               // Store token name and symbol for SwapInterface to use
               if (meta.name) decimalsMap[`name:${principal}`] = meta.name;
               if (meta.symbol) decimalsMap[`symbol:${principal}`] = meta.symbol;
+            } else {
+              // Metadata endpoint failed — store defaults so token still appears
+              decimalsMap[`decimals:${principal}`] = '6';
+              // Derive a readable symbol from the contract name
+              const contractName = name.replace(/-v\d+.*$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              decimalsMap[`symbol:${principal}`] = name.split('-')[0].toUpperCase();
+              decimalsMap[`name:${principal}`] = contractName;
             }
-          } catch {}
+          } catch {
+            // Network error — store defaults so token still appears
+            decimalsMap[`decimals:${principal}`] = '6';
+            const [, name] = principal.split('.');
+            decimalsMap[`symbol:${principal}`] = name.split('-')[0].toUpperCase();
+            decimalsMap[`name:${principal}`] = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          }
         }
       }));
 

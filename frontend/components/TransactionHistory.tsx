@@ -66,17 +66,28 @@ export function TransactionHistory() {
         const data = await response.json();
 
         if (data.results) {
-          const stacksTxs = data.results.map((tx: any) => ({
-            id: tx.tx_id,
-            type: 'bridge' as const, // Simplified - could parse contract calls to determine type
-            txHash: tx.tx_id,
-            chain: 'stacks' as const,
-            amount: '0', // Would need to parse from tx events
-            status: tx.tx_status === 'success' ? 'success' : tx.tx_status === 'pending' ? 'pending' : 'failed',
-            timestamp: tx.burn_block_time,
-            from: tx.sender_address,
-            to: tx.sender_address,
-          }));
+          const stacksTxs = data.results.map((tx: any) => {
+            // Determine transaction type by inspecting the contract call
+            const contractName: string = tx.contract_call?.contract_id?.split('.')?.[1] || '';
+            const functionName: string = tx.contract_call?.function_name || '';
+            const isSwap =
+              functionName.includes('swap') ||
+              contractName.includes('swap') ||
+              contractName.includes('amm') ||
+              contractName.includes('alex') ||
+              contractName.includes('pool');
+            return {
+              id: tx.tx_id,
+              type: (isSwap ? 'swap' : 'bridge') as 'swap' | 'bridge',
+              txHash: tx.tx_id,
+              chain: 'stacks' as const,
+              amount: '0',
+              status: tx.tx_status === 'success' ? 'success' : tx.tx_status === 'pending' ? 'pending' : 'failed',
+              timestamp: tx.burn_block_time,
+              from: tx.sender_address,
+              to: tx.sender_address,
+            };
+          });
           allTransactions.push(...stacksTxs);
         }
       }

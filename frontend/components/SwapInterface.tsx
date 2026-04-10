@@ -110,25 +110,79 @@ export function SwapInterface() {
   const { stacksAddress, stacksConnected, balances, fetchBalances, stacksPublicKey, recoverPublicKey } = useWallet();
   const config = useConfig();
 
+  // ALEX SDK balances: keyed by ALEX Currency ID (e.g. 'age000-governance-token'),
+  // values are bigint in 1e8 units. Used as primary source for ALEX-listed tokens.
+  const [alexBalances, setAlexBalances] = React.useState<Record<string, bigint>>({});
+  // Map from contract principal → ALEX Currency ID, built from fetchSwappableCurrency
+  const [alexCurrencyMap, setAlexCurrencyMap] = React.useState<Record<string, string>>({});
+
+  // Fetch ALEX SDK balances whenever the wallet address changes
+  const refreshAlexBalances = React.useCallback(async () => {
+    if (!stacksAddress) return;
+    try {
+      const alex = new AlexSDK();
+      const bals = await alex.getBalances(stacksAddress) as Record<string, bigint>;
+      setAlexBalances(bals);
+    } catch (e) {
+      console.warn('ALEX SDK getBalances refresh failed:', e);
+    }
+  }, [stacksAddress]);
+
+  React.useEffect(() => {
+    if (!stacksAddress) return;
+    let cancelled = false;
+    const alex = new AlexSDK();
+    (async () => {
+      try {
+        // Build principal → currencyId map from token list
+        const tokenInfos = await alex.fetchSwappableCurrency();
+        const principalToId: Record<string, string> = {};
+        for (const t of tokenInfos) {
+          const principal = (t.wrapToken || t.underlyingToken || '').split('::')[0];
+          if (principal) principalToId[principal.toLowerCase()] = (t as any).id;
+        }
+        if (!cancelled) setAlexCurrencyMap(principalToId);
+
+        // Fetch balances — returns { [Currency]: bigint } in 1e8 units
+        const bals = await alex.getBalances(stacksAddress) as Record<string, bigint>;
+        if (!cancelled) setAlexBalances(bals);
+      } catch (e) {
+        console.warn('ALEX SDK getBalances failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [stacksAddress]);
+
   const getBalance = (token: Token | null): string => {
     if (!token) return '0';
 
-    // STX
+    // STX — ALEX SDK uses Currency.STX = 'token-wstx', value is bigint in 1e8
     if (token.symbol === 'STX' || token.address === 'token-wstx') {
+      const alexBal = alexBalances['token-wstx'];
+      if (alexBal !== undefined) return (Number(alexBal) / 1e8).toFixed(6);
       return (balances as any).stx || '0';
     }
 
-    // Try exact contract principal match first
-    const byPrincipal = (balances as any)[token.address];
-    if (byPrincipal && byPrincipal !== '0') {
-      // Use stored decimals if available (fetched from Hiro metadata), else use token.decimals
-      const storedDecimals = (balances as any)[`decimals:${token.address}`];
-      const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
-      return (Number(byPrincipal) / Math.pow(10, decimals)).toFixed(6);
+    // Try ALEX SDK balance first — look up by contract principal → Currency ID
+    const currencyId = alexCurrencyMap[token.address.toLowerCase()];
+    if (currencyId) {
+      const alexBal = alexBalances[currencyId];
+      if (alexBal !== undefined) return (Number(alexBal) / 1e8).toFixed(6);
     }
 
-    // Fuzzy match — find any balance key that starts with the token address
-    const allKeys = Object.keys(balances as any).filter(k => !k.startsWith('decimals:'));
+    // Fallback: Hiro API balance (for wallet-only tokens like Pepe, Nothing, etc.)
+    const byPrincipal = (balances as any)[token.address];
+    if (byPrincipal !== undefined && byPrincipal !== null && byPrincipal !== '0') {
+      const storedDecimals = (balances as any)[`decimals:${token.address}`];
+      const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
+      const num = Number(byPrincipal) / Math.pow(10, decimals);
+      return isNaN(num) ? '0' : num.toFixed(6);
+    }
+
+    // Fuzzy match on Hiro balances
+    const allKeys = Object.keys(balances as any).filter(k =>
+      !k.startsWith('decimals:') && !k.startsWith('name:') && !k.startsWith('symbol:')
+    );
     const fuzzyKey = allKeys.find(k =>
       k.startsWith(token.address) ||
       token.address.startsWith(k) ||
@@ -139,13 +193,12 @@ export function SwapInterface() {
       if (raw && raw !== '0') {
         const storedDecimals = (balances as any)[`decimals:${fuzzyKey}`];
         const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
-        return (Number(raw) / Math.pow(10, decimals)).toFixed(6);
+        const num = Number(raw) / Math.pow(10, decimals);
+        return isNaN(num) ? '0' : num.toFixed(6);
       }
     }
 
-    // Symbol fallback
-    const symbol = token.symbol.toLowerCase();
-    return (balances as any)[symbol] || '0';
+    return (balances as any)[token.symbol.toLowerCase()] || '0';
   };
 
   const [tokens, setTokens] = useState<Token[]>([FALLBACK_STX, ...VELUMX_PRIORITY_TOKENS]);
@@ -353,7 +406,13 @@ export function SwapInterface() {
         const rawBalance = (balances as any)[principal];
         if (!rawBalance || rawBalance === '0') continue; // skip zero-balance tokens
         const decimals = parseInt((balances as any)[`decimals:${principal}`] || '6');
-        const symbol = (balances as any)[`symbol:${principal}`] || principal.split('.').pop()?.toUpperCase() || 'TOKEN';
+        // Prefer metadata symbol, then derive a clean symbol from the contract name
+        const contractName = principal.split('.')[1] || '';
+        const derivedSymbol = contractName
+          .replace(/-v\d+[a-z0-9]*$/i, '') // strip version suffix like -v4k68639zxz
+          .split('-')[0]
+          .toUpperCase();
+        const symbol = (balances as any)[`symbol:${principal}`] || derivedSymbol || 'TOKEN';
         const name = (balances as any)[`name:${principal}`] || symbol;
         updated.push({ symbol, name, address: principal, decimals, logoUrl: '' });
         changed = true;
@@ -561,6 +620,7 @@ export function SwapInterface() {
           const poll = async () => {
             attempts++;
             await fetchBalances();
+            await refreshAlexBalances();
             const newBalance = getBalance(inputToken);
             if (newBalance !== prevInputBalance) {
               setState(prev => ({
