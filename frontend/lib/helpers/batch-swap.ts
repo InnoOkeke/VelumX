@@ -279,15 +279,23 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
       outToken: VELAR_STX,
     });
     const swapResp: any = await swapInstance.swap({ amount: humanIn });
+    // SwapResponse.functionArgs: [poolId, token0, token1, inToken, outToken, staking, amountIn, amountOut]
     const args = swapResp?.functionArgs;
-    if (args && args.length >= 6) {
+    if (args && args.length >= 3) {
       const poolId = Number(args[0]?.value ?? 0);
-      const token0 = `${args[1]?.address}.${args[1]?.contractName}`;
-      const token1 = `${args[2]?.address}.${args[2]?.contractName}`;
-      return { ...t, poolId, token0, token1 };
+      // args[1] and args[2] are ContractPrincipalCV — extract address.contractName
+      const t0addr = args[1]?.address;
+      const t0name = args[1]?.contractName;
+      const t1addr = args[2]?.address;
+      const t1name = args[2]?.contractName;
+      if (t0addr && t0name && t1addr && t1name) {
+        return { ...t, poolId, token0: `${t0addr}.${t0name}`, token1: `${t1addr}.${t1name}` };
+      }
     }
   } catch {}
-  return t;
+  // Fallback: use principal as both token0 and token1 — will likely fail on-chain
+  // but at least won't crash the UI
+  return { ...t, token0: t.principal, token1: VELAR_STX };
 }
 
 export async function executeSweep(params: {

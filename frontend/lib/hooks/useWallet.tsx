@@ -195,10 +195,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               if (meta.decimals !== undefined) {
                 decimalsMap[`decimals:${principal}`] = String(meta.decimals);
               } else {
-                // Default to 6 if not specified — most SIP-010 meme tokens use 6
-                decimalsMap[`decimals:${principal}`] = '6';
+                // Hiro metadata has no decimals — call on-chain get-decimals
+                try {
+                  const onChainRes = await fetch(
+                    `https://api.mainnet.hiro.so/v2/contracts/call-read/${addr}/${name}/get-decimals`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ sender: addr, arguments: [] }),
+                      signal: AbortSignal.timeout(5000),
+                    }
+                  );
+                  if (onChainRes.ok) {
+                    const onChainData = await onChainRes.json();
+                    // Result is a Clarity (ok uint) — parse the hex value
+                    const hex = onChainData?.result?.replace(/^0x0[a-z]0*/, '').replace(/^0x/, '');
+                    const onChainDecimals = hex ? parseInt(hex, 16) : 6;
+                    decimalsMap[`decimals:${principal}`] = String(isNaN(onChainDecimals) ? 6 : onChainDecimals);
+                  } else {
+                    decimalsMap[`decimals:${principal}`] = '6';
+                  }
+                } catch {
+                  decimalsMap[`decimals:${principal}`] = '6';
+                }
               }
-              // Store token name and symbol for SwapInterface to use
               if (meta.name) decimalsMap[`name:${principal}`] = meta.name;
               if (meta.symbol) decimalsMap[`symbol:${principal}`] = meta.symbol;
             } else {
