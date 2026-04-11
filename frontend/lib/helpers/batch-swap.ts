@@ -65,6 +65,7 @@ async function getAlexTokenMap(): Promise<Map<string, string>> {
       console.warn('[sweep] ALEX token map failed:', e);
     }
     alexTokenMap = map;
+    console.debug(`[sweep] ALEX token map built: ${map.size} entries`);
     return map;
   })();
   return alexTokenMapPromise;
@@ -99,6 +100,7 @@ async function getVelarSymbolMap(): Promise<Map<string, string>> {
       console.warn('[sweep] Velar symbol map failed:', e);
     }
     velarSymbolMap = map;
+    console.debug(`[sweep] Velar symbol map built: ${map.size} tokens`, Object.fromEntries(map));
     return map;
   })();
   return velarSymbolMapPromise;
@@ -112,12 +114,16 @@ getVelarSymbolMap();
 async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
     const map = await getAlexTokenMap();
-    const idIn = map.get(principal.toLowerCase());
-    if (!idIn) return null;
+    const idIn = map.get(principal.toLowerCase()) ?? map.get(principal.split('.')[1]?.toLowerCase() ?? '');
+    if (!idIn) {
+      console.debug(`[sweep] ALEX: no id for ${principal} — map has ${map.size} entries`);
+      return null;
+    }
+    console.debug(`[sweep] ALEX: quoting ${principal} → id "${idIn}"`);
     const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
     const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx');
     if (out == null) return null;
-    return BigInt(Math.floor(Number(out) / 100)); // 1e8 wSTX → 1e6 STX
+    return BigInt(Math.floor(Number(out) / 100));
   } catch (e) {
     console.warn('[sweep] ALEX quote failed for', principal, e);
     return null;
@@ -128,14 +134,18 @@ async function quoteVelar(principal: string, amountRaw: bigint, decimals: number
   try {
     const map = await getVelarSymbolMap();
     const symIn = map.get(principal.toLowerCase());
-    if (!symIn) return null;
+    if (!symIn) {
+      console.debug(`[sweep] Velar: no symbol for ${principal}`);
+      return null;
+    }
+    console.debug(`[sweep] Velar: trying ${principal} → symbol "${symIn}"`);
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
     const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
     if (!amtOut || amtOut <= 0) return null;
     return BigInt(Math.floor(amtOut * 1e6));
-  } catch (e) {
-    console.warn('[sweep] Velar quote failed for', principal, e);
+  } catch (e: any) {
+    console.warn(`[sweep] Velar quote failed for ${principal} — ${e?.message}`);
     return null;
   }
 }
