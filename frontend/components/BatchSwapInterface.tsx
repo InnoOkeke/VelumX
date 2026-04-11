@@ -151,7 +151,7 @@ export function BatchSwapInterface() {
   // Load tokens from ALEX + Velar
   useEffect(() => {
     let cancelled = false;
-    const CACHE_KEY = 'velumx_sweep_tokens_v3';
+    const CACHE_KEY = 'velumx_sweep_tokens_v4';
 
     const load = async () => {
       setIsLoadingTokens(true);
@@ -189,7 +189,11 @@ export function BatchSwapInterface() {
           const addr = entry.contractAddress;
           if (!addr || !addr.includes('.')) continue;
           const key = addr.toLowerCase();
-          const decimals = entry.tokenDecimalNum ? Math.round(Math.log10(entry.tokenDecimalNum)) : 6;
+          const decimals = entry.tokenDecimalNum != null
+            ? (entry.tokenDecimalNum >= 10
+                ? Math.round(Math.log10(entry.tokenDecimalNum))  // multiplier form e.g. 1000000
+                : entry.tokenDecimalNum)                          // count form e.g. 6
+            : 6;
           if (map.has(key)) {
             map.set(key, { ...map.get(key)!, source: 'both' });
           } else {
