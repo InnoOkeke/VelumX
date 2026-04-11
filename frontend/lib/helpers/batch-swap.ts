@@ -1,45 +1,42 @@
 /**
- * Batch Swap Helper v2
- * Supports ALEX and Velar hops, 2/3/4/5/10 hop counts.
- * Auto best-route: quotes both DEXes per hop, picks the better one.
- * Users pay STX fees + 0.1% protocol fee. No relayer.
+ * Sweep-to-STX Helper v3
+ * Each token swaps independently to STX in one atomic tx.
+ * Supports 1–6 tokens. User signs once.
  */
 
 import { AlexSDK } from 'alex-sdk';
-import { VelarSDK, getTokens } from '@velarprotocol/velar-sdk';
+import { VelarSDK } from '@velarprotocol/velar-sdk';
 import { request } from '@stacks/connect';
 
-export const BATCH_SWAP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.batch-swap';
+export const SWEEP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.velumx-sweep';
 export const DEFAULT_ALEX_FACTOR = 100000000; // 1e8
-// Velar deployer implements share-fee-to-trait
 export const VELAR_SHARE_FEE_TO = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to';
+export const WSTX_PRINCIPAL = 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-wstx';
 
 export type DexType = 'alex' | 'velar';
 
-export interface BatchHop {
-  tokenIn: string;
-  tokenOut: string;
+export interface SweepToken {
+  principal: string;   // contract principal e.g. SP123.my-token
+  amount: string;      // raw amount in token's native decimals (as string)
+  decimals: number;
   dex: DexType;
-  factor?: number;   // ALEX pool factor
-  poolId?: number;   // Velar pool id
-  token0?: string;   // Velar pool token0
-  token1?: string;   // Velar pool token1
+  factor?: number;     // ALEX pool factor (default 1e8)
+  poolId?: number;     // Velar pool id
+  token0?: string;     // Velar pool token0 principal
+  token1?: string;     // Velar pool token1 principal
 }
 
-export interface HopDetail {
-  dex: DexType;
-  tokenIn: string;
-  tokenOut: string;
-  amountOut: string;
-  savings?: string; // how much better vs the other DEX
-}
-
-export interface BatchQuote {
-  amountOut: string;
-  amountOutRaw: bigint;
-  protocolFee: string;
-  route: string[];
-  hopsDetail: HopDetail[];
+export interface SweepQuote {
+  stxOut: string;       // human-readable STX (after fee)
+  stxOutRaw: bigint;    // in STX micro units (1e6)
+  fee: string;          // human-readable protocol fee
+  perToken: {
+    principal: string;
+    stxOut: string;
+    dex: DexType;
+    savings?: string;    // e.g. "+1.2% vs Velar"
+    noLiquidity?: boolean;
+  }[];
 }
 
 const alexSdk = new AlexSDK();
@@ -48,7 +45,7 @@ const velarSdk = new VelarSDK();
 // ---- Token resolution ----
 
 async function resolveAlexId(principal: string): Promise<string | null> {
-  if (principal === 'token-wstx' || principal === 'STX') return 'token-wstx';
+  if (principal === WSTX_PRINCIPAL || principal === 'token-wstx') return 'token-wstx';
   try {
     const tokens = await alexSdk.fetchSwappableCurrency();
     const match = tokens.find((t: any) => {
@@ -73,195 +70,131 @@ function principalToVelarSymbol(principal: string): string {
   return VELAR_SYMBOL_MAP[name] || name.toUpperCase().replace(/-TOKEN$/, '').replace(/^TOKEN-/, '');
 }
 
-// ---- Single-hop quotes ----
+// ---- Per-token quotes ----
 
-async function quoteAlex(tokenIn: string, tokenOut: string, amountIn: bigint, inputDecimals: number): Promise<bigint | null> {
+async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
-    const idIn = await resolveAlexId(tokenIn);
-    const idOut = await resolveAlexId(tokenOut);
-    if (!idIn || !idOut) return null;
-    const amtAlex = BigInt(Math.floor(Number(amountIn) / Math.pow(10, inputDecimals) * 1e8));
+    const idIn = await resolveAlexId(principal);
+    const idOut = 'token-wstx';
+    if (!idIn) return null;
+    // ALEX works in 1e8 units internally
+    const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
     const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, idOut);
-    return out != null ? BigInt(out) : null;
+    if (out == null) return null;
+    // ALEX returns 1e8 wSTX, convert to STX micro (1e6)
+    return BigInt(Math.floor(Number(out) / 100));
   } catch { return null; }
 }
 
-async function quoteVelar(tokenIn: string, tokenOut: string, amountIn: bigint, inputDecimals: number): Promise<bigint | null> {
+async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
-    const symIn = principalToVelarSymbol(tokenIn);
-    const symOut = principalToVelarSymbol(tokenOut);
-    const humanIn = Number(amountIn) / Math.pow(10, inputDecimals);
-    const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: symOut });
+    const symIn = principalToVelarSymbol(principal);
+    const humanIn = Number(amountRaw) / Math.pow(10, decimals);
+    const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
     const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
     if (!amtOut || amtOut <= 0) return null;
-    return BigInt(Math.floor(amtOut * 1e8));
+    // Velar returns human STX, convert to micro (1e6)
+    return BigInt(Math.floor(amtOut * 1e6));
   } catch { return null; }
 }
 
-// ---- Best route: auto-select DEX per hop ----
+/**
+ * Quote all tokens, auto-selecting best DEX per token.
+ * Returns per-token STX output and total.
+ */
+export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]): Promise<SweepQuote> {
+  if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
 
-export async function getBestRouteQuote(
-  hops: { tokenIn: string; tokenOut: string }[],
-  amountIn: string,
-  inputDecimals = 8
-): Promise<BatchQuote> {
-  if (hops.length < 2 || hops.length > 10) throw new Error('Batch swap requires 2–10 hops');
+  const perToken: SweepQuote['perToken'] = [];
+  let totalRaw = 0n;
 
-  const inputRaw = BigInt(amountIn);
-  const feeRaw = inputRaw / 1000n;
-  let currentAmount = inputRaw - feeRaw;
-  let currentDecimals = inputDecimals;
-
-  const hopsDetail: HopDetail[] = [];
-  const resolvedHops: BatchHop[] = [];
-
-  for (const hop of hops) {
-    // Quote both DEXes in parallel
+  await Promise.all(tokens.map(async (t) => {
+    const amountRaw = BigInt(t.amount);
     const [alexOut, velarOut] = await Promise.all([
-      quoteAlex(hop.tokenIn, hop.tokenOut, currentAmount, currentDecimals),
-      quoteVelar(hop.tokenIn, hop.tokenOut, currentAmount, currentDecimals),
+      quoteAlex(t.principal, amountRaw, t.decimals),
+      quoteVelar(t.principal, amountRaw, t.decimals),
     ]);
 
-    let chosenDex: DexType;
-    let chosenOut: bigint;
-
     if (alexOut == null && velarOut == null) {
-      throw new Error(`No liquidity found for ${hop.tokenIn.split('.').pop()} -> ${hop.tokenOut.split('.').pop()} on either DEX`);
-    } else if (alexOut == null) {
-      chosenDex = 'velar'; chosenOut = velarOut!;
-    } else if (velarOut == null) {
-      chosenDex = 'alex'; chosenOut = alexOut;
-    } else {
-      // Pick the better one
-      chosenDex = alexOut >= velarOut ? 'alex' : 'velar';
-      chosenOut = alexOut >= velarOut ? alexOut : velarOut;
+      perToken.push({ principal: t.principal, stxOut: '0', dex: 'alex', noLiquidity: true });
+      return;
     }
 
-    const otherOut = chosenDex === 'alex' ? velarOut : alexOut;
-    const savings = otherOut != null
-      ? `+${((Number(chosenOut - otherOut) / Number(otherOut)) * 100).toFixed(2)}% vs ${chosenDex === 'alex' ? 'Velar' : 'ALEX'}`
+    const dex: DexType = (alexOut ?? 0n) >= (velarOut ?? 0n) ? 'alex' : 'velar';
+    const out = dex === 'alex' ? alexOut! : velarOut!;
+    const other = dex === 'alex' ? velarOut : alexOut;
+    const savings = other != null && other > 0n
+      ? `+${((Number(out - other) / Number(other)) * 100).toFixed(2)}% vs ${dex === 'alex' ? 'Velar' : 'ALEX'}`
       : undefined;
 
-    hopsDetail.push({
-      dex: chosenDex,
-      tokenIn: hop.tokenIn,
-      tokenOut: hop.tokenOut,
-      amountOut: (Number(chosenOut) / 1e8).toFixed(6),
-      savings,
-    });
+    totalRaw += out;
+    perToken.push({ principal: t.principal, stxOut: (Number(out) / 1e6).toFixed(6), dex, savings });
+  }));
 
-    resolvedHops.push({ tokenIn: hop.tokenIn, tokenOut: hop.tokenOut, dex: chosenDex, factor: DEFAULT_ALEX_FACTOR });
-    currentAmount = chosenOut;
-    currentDecimals = 8;
-  }
-
-  const humanOut = (Number(currentAmount) / 1e8).toFixed(6);
-  const humanFee = (Number(feeRaw) / Math.pow(10, inputDecimals)).toFixed(6);
-  const route = [hops[0].tokenIn, ...hops.map(h => h.tokenOut)].map(p => p.split('.').pop() || p);
+  const feeRaw = totalRaw / 1000n;
+  const netRaw = totalRaw - feeRaw;
 
   return {
-    amountOut: humanOut,
-    amountOutRaw: currentAmount,
-    protocolFee: humanFee,
-    route,
-    hopsDetail,
-    // attach resolved hops for execution
-    ...(resolvedHops as any),
-    _resolvedHops: resolvedHops,
-  } as BatchQuote & { _resolvedHops: BatchHop[] };
+    stxOut: (Number(netRaw) / 1e6).toFixed(6),
+    stxOutRaw: netRaw,
+    fee: (Number(feeRaw) / 1e6).toFixed(6),
+    perToken,
+  };
 }
 
-// ---- Manual quote (user-specified DEX per hop) ----
+// ---- Clarity arg builders ----
 
-export async function getBatchQuote(
-  hops: BatchHop[],
-  amountIn: string,
-  inputDecimals = 8
-): Promise<BatchQuote> {
-  if (hops.length < 2 || hops.length > 10) throw new Error('Batch swap requires 2–10 hops');
-
-  const inputRaw = BigInt(amountIn);
-  const feeRaw = inputRaw / 1000n;
-  let currentAmount = inputRaw - feeRaw;
-  const hopsDetail: HopDetail[] = [];
-
-  for (const hop of hops) {
-    let out: bigint | null = null;
-    if (hop.dex === 'alex') {
-      out = await quoteAlex(hop.tokenIn, hop.tokenOut, currentAmount, inputDecimals);
-      if (out == null) throw new Error(`No ALEX liquidity: ${hop.tokenIn} -> ${hop.tokenOut}`);
-    } else {
-      out = await quoteVelar(hop.tokenIn, hop.tokenOut, currentAmount, inputDecimals);
-      if (out == null) throw new Error(`No Velar liquidity: ${hop.tokenIn} -> ${hop.tokenOut}`);
-    }
-    hopsDetail.push({ dex: hop.dex, tokenIn: hop.tokenIn, tokenOut: hop.tokenOut, amountOut: (Number(out) / 1e8).toFixed(6) });
-    currentAmount = out;
-    inputDecimals = 8;
-  }
-
-  const humanOut = (Number(currentAmount) / 1e8).toFixed(6);
-  const humanFee = (Number(feeRaw) / Math.pow(10, inputDecimals)).toFixed(6);
-  const route = [hops[0].tokenIn, ...hops.map(h => h.tokenOut)].map(p => p.split('.').pop() || p);
-
-  return { amountOut: humanOut, amountOutRaw: currentAmount, protocolFee: humanFee, route, hopsDetail };
-}
-
-// ---- Build Clarity args ----
-
-function makeToken(principal: string) {
-  const [addr, name] = principal.split('.');
-  return { type: 'contract', address: addr, contractName: name };
+function makeContract(principal: string) {
+  const [address, contractName] = principal.split('.');
+  return { type: 'contract', address, contractName };
 }
 
 function makeUint(n: number | bigint) {
   return { type: 'uint', value: n.toString() };
 }
 
-function hopArgs(hop: BatchHop) {
-  const dexFlag = makeUint(hop.dex === 'alex' ? 0 : 1);
-  const factor  = makeUint(hop.factor ?? DEFAULT_ALEX_FACTOR);
-  const poolId  = makeUint(hop.poolId ?? 0);
-  const t0 = makeToken(hop.token0 ?? hop.tokenIn);
-  const t1 = makeToken(hop.token1 ?? hop.tokenOut);
-  // fee-to: Velar share-fee-to contract (implements share-fee-to-trait)
-  const [feeAddr, feeName] = VELAR_SHARE_FEE_TO.split('.');
-  const feeTo = { type: 'contract', address: feeAddr, contractName: feeName };
-  return [dexFlag, factor, poolId, t0, t1, feeTo];
+const [feeAddr, feeName] = VELAR_SHARE_FEE_TO.split('.');
+const FEE_TO_ARG = { type: 'contract', address: feeAddr, contractName: feeName };
+
+function tokenArgs(t: SweepToken) {
+  return [
+    makeContract(t.principal),                          // token
+    makeUint(t.dex === 'alex' ? 0 : 1),                // dex flag
+    makeUint(t.factor ?? DEFAULT_ALEX_FACTOR),          // factor
+    makeUint(t.poolId ?? 0),                            // pool-id
+    makeContract(t.token0 ?? t.principal),              // t0
+    makeContract(t.token1 ?? WSTX_PRINCIPAL),           // t1
+    FEE_TO_ARG,                                         // fee-to
+    makeUint(BigInt(t.amount)),                         // amount
+  ];
 }
 
-// ---- Execute ----
-
-export async function executeBatchSwap(params: {
-  hops: BatchHop[];
-  amountIn: string;
-  minAmountOut: string;
+/**
+ * Execute the sweep. Builds args for sweep-to-stx-N and calls the contract.
+ * User signs once, all tokens swap to STX atomically.
+ */
+export async function executeSweep(params: {
+  tokens: SweepToken[];
+  minStxOut: string;   // raw micro-STX as string
   onProgress?: (msg: string) => void;
 }): Promise<string> {
-  const { hops, amountIn, minAmountOut, onProgress } = params;
-  const n = hops.length;
-  if (n < 2 || n > 10 || (n > 5 && n < 10)) {
-    throw new Error('Supported hop counts: 2, 3, 4, 5, 10');
-  }
+  const { tokens, minStxOut, onProgress } = params;
+  const n = tokens.length;
+  if (n < 1 || n > 6) throw new Error('Sweep supports 1–6 tokens');
 
   onProgress?.('Building transaction...');
 
-  const tokenPrincipals = [hops[0].tokenIn, ...hops.map(h => h.tokenOut)];
-  const tokenArgs = tokenPrincipals.map(makeToken);
-  const perHopArgs = hops.flatMap(hopArgs);
-
   const functionArgs = [
-    ...tokenArgs,
-    ...perHopArgs,
-    makeUint(BigInt(amountIn)),
-    makeUint(BigInt(minAmountOut)),
+    ...tokens.flatMap(tokenArgs),
+    makeUint(BigInt(minStxOut)),
   ];
 
   onProgress?.('Waiting for wallet signature...');
 
   return new Promise((resolve, reject) => {
     request('stx_callContract', {
-      contract: BATCH_SWAP_CONTRACT,
-      functionName: `batch-swap-${n}`,
+      contract: SWEEP_CONTRACT,
+      functionName: `sweep-to-stx-${n}`,
       functionArgs,
       network: 'mainnet',
       postConditionMode: 'allow',
@@ -269,13 +202,4 @@ export async function executeBatchSwap(params: {
       onCancel: () => reject(new Error('Cancelled by user')),
     } as any).catch(reject);
   });
-}
-
-export async function getVelarTokens(): Promise<string[]> {
-  try {
-    const t = await getTokens() as any;
-    return Object.keys(t);
-  } catch {
-    return ['STX', 'VELAR', 'aeUSDC', 'WELSH', 'LEO', 'ODIN', 'stSTX', 'PEPE', 'NOT', 'SOME', 'ROCK'];
-  }
 }

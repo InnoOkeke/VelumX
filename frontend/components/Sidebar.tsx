@@ -38,7 +38,6 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
         { id: 'swap', label: 'Swap', icon: Repeat },
         { id: 'batch-swap', label: 'Batch Swap', icon: Layers },
         { id: 'earn', label: 'Earn (stSTX)', icon: TrendingUp },
-        { id: 'liquidity', label: 'Liquidity', icon: Droplets },
         { id: 'history', label: 'History', icon: History },
     ] as const;
 
