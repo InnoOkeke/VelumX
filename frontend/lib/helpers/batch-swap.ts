@@ -227,25 +227,28 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
 }
 
 // ---- Clarity arg builders ----
+// Uses @stacks/transactions Cl helpers to build proper ClarityValues
+import { Cl } from '@stacks/transactions';
+
 function makeContract(principal: string) {
   if (!principal?.includes('.')) {
     const resolved = alexPrincipalMap?.get(principal?.toLowerCase());
     if (resolved?.includes('.')) {
       const dot = resolved.indexOf('.');
-      return { type: 'contract', address: resolved.slice(0, dot), contractName: resolved.slice(dot + 1) };
+      return Cl.contractPrincipal(resolved.slice(0, dot), resolved.slice(dot + 1));
     }
     throw new Error(`makeContract: invalid principal "${principal}" (no dot separator)`);
   }
   const dot = principal.indexOf('.');
-  return { type: 'contract', address: principal.slice(0, dot), contractName: principal.slice(dot + 1) };
+  return Cl.contractPrincipal(principal.slice(0, dot), principal.slice(dot + 1));
 }
 
 function makeUint(n: number | bigint) {
-  return { type: 'uint', value: n.toString() };
+  return Cl.uint(n);
 }
 
 const [feeAddr, feeName] = VELAR_SHARE_FEE_TO.split('.');
-const FEE_TO_ARG = { type: 'contract', address: feeAddr, contractName: feeName };
+const FEE_TO_ARG = Cl.contractPrincipal(feeAddr, feeName);
 
 function tokenArgs(t: SweepToken) {
   if (!t.principal?.includes('.')) throw new Error(`Invalid token principal: "${t.principal}"`);
