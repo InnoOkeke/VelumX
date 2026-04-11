@@ -277,25 +277,20 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
   if (t.dex !== 'velar') return t;
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
+    const wstx = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx'; // inline to avoid closure issues
 
-    const swapInstance: any = await new Promise((resolve, reject) => {
-      try {
-        const inst = velarSdk.getSwapInstance({
-          account: '',
-          inToken: t.principal,
-          outToken: VELAR_WSTX,
-        });
-        Promise.resolve(inst).then(resolve).catch(reject);
-      } catch (e) { reject(e); }
+    const swapInstance = await velarSdk.getSwapInstance({
+      account: '',
+      inToken: t.principal,
+      outToken: wstx,
     });
 
-    const swapResp: any = await swapInstance.swap({ amount: humanIn });
+    const swapResp: any = await (swapInstance as any).swap({ amount: humanIn });
     console.log(`[sweep] enrichVelarToken ${t.principal} swapResp:`, JSON.stringify({
       contractAddress: swapResp?.contractAddress,
       contractName: swapResp?.contractName,
       functionName: swapResp?.functionName,
       argsCount: swapResp?.functionArgs?.length,
-      // Log each arg's type and value to understand the structure
       args: swapResp?.functionArgs?.map((a: any, i: number) => `[${i}] type=${a?.type} value=${JSON.stringify(a?.value)}`),
     }));
 
@@ -305,8 +300,6 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
       return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
     }
 
-    // ContractPrincipalCV from @stacks/transactions has value.address and value.contractName
-    // Try both direct and nested structures
     const getAddr = (cv: any) => cv?.address ?? cv?.value?.address ?? cv?.value?.hash160;
     const getName = (cv: any) => cv?.contractName ?? cv?.value?.contractName ?? cv?.value?.name;
 
