@@ -163,15 +163,15 @@ async function quoteAlex(principal: string, amountRaw: bigint, decimals: number)
   }
 }
 
-// Velar's STX contract address (different from ALEX's wSTX)
-const VELAR_STX = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
+// Velar's STX symbol (used as outToken in getSwapInstance)
+const VELAR_STX_SYMBOL = 'STX';
 
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
     const swapInstance = await velarSdk.getSwapInstance({
       account: '',
       inToken: principal,
-      outToken: VELAR_STX,
+      outToken: VELAR_STX_SYMBOL,
     });
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const result: any = await swapInstance.getComputedAmount({ amount: humanIn });
@@ -273,7 +273,7 @@ function tokenArgs(t: SweepToken) {
  * pool IDs and token addresses. Returns enriched SweepToken or null if failed.
  */
 async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
-  if (!t?.principal?.includes('.')) return { ...t, token0: t?.principal ?? '', token1: VELAR_STX };
+  if (!t?.principal?.includes('.')) return { ...t, token0: t?.principal ?? '', token1: WSTX_PRINCIPAL };
   if (t.dex !== 'velar') return t;
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
@@ -283,7 +283,7 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
         const inst = velarSdk.getSwapInstance({
           account: '',
           inToken: t.principal,
-          outToken: VELAR_STX,
+          outToken: VELAR_STX_SYMBOL,
         });
         Promise.resolve(inst).then(resolve).catch(reject);
       } catch (e) { reject(e); }
@@ -379,7 +379,7 @@ export async function executeSweep(params: {
     console.log('[sweep] humanIn:', humanIn);
     const swapInstance: any = await new Promise((resolve, reject) => {
       try {
-        const inst = velarSdk.getSwapInstance({ account: '', inToken: t.principal, outToken: VELAR_STX });
+        const inst = velarSdk.getSwapInstance({ account: '', inToken: t.principal, outToken: VELAR_STX_SYMBOL });
         Promise.resolve(inst).then(resolve).catch(reject);
       } catch (e) { reject(e); }
     });
