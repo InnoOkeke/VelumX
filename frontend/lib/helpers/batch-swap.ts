@@ -163,15 +163,15 @@ async function quoteAlex(principal: string, amountRaw: bigint, decimals: number)
   }
 }
 
-// Velar's STX symbol (used as outToken in getSwapInstance)
-const VELAR_STX_SYMBOL = 'STX';
+// Velar's wSTX contract address (outToken for STX swaps)
+const VELAR_WSTX = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
 
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
     const swapInstance = await velarSdk.getSwapInstance({
       account: '',
       inToken: principal,
-      outToken: VELAR_STX_SYMBOL,
+      outToken: VELAR_WSTX,
     });
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const result: any = await swapInstance.getComputedAmount({ amount: humanIn });
@@ -283,7 +283,7 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
         const inst = velarSdk.getSwapInstance({
           account: '',
           inToken: t.principal,
-          outToken: VELAR_STX_SYMBOL,
+          outToken: VELAR_WSTX,
         });
         Promise.resolve(inst).then(resolve).catch(reject);
       } catch (e) { reject(e); }
@@ -379,7 +379,7 @@ export async function executeSweep(params: {
     console.log('[sweep] humanIn:', humanIn);
     const swapInstance: any = await new Promise((resolve, reject) => {
       try {
-        const inst = velarSdk.getSwapInstance({ account: '', inToken: t.principal, outToken: VELAR_STX_SYMBOL });
+        const inst = velarSdk.getSwapInstance({ account: '', inToken: t.principal, outToken: VELAR_WSTX });
         Promise.resolve(inst).then(resolve).catch(reject);
       } catch (e) { reject(e); }
     });
