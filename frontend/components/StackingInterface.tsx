@@ -37,10 +37,32 @@ export function StackingInterface() {
   const stSTXBalance = Number(stSTXRaw) / Math.pow(10, stSTXDecimals);
 
   useEffect(() => {
-    fetch('https://api.stackingdao.com/v1/stacking/ratio')
-      .then(r => r.json()).then(d => { if (d?.ratio) setStxPerStSTX(parseFloat(d.ratio)); }).catch(() => {});
-    fetch('https://api.stackingdao.com/v1/stacking/apy')
-      .then(r => r.json()).then(d => { if (d?.apy) setApy(`${(parseFloat(d.apy) * 100).toFixed(1)}%`); }).catch(() => {});
+    // api.stackingdao.com is no longer available — read ratio from on-chain contract
+    const fetchStats = async () => {
+      try {
+        // get-stx-per-ststx returns the ratio as a uint (in 1e6 units)
+        const ratioRes = await fetch(
+          `https://api.mainnet.hiro.so/v2/contracts/call-read/${STACKING_DAO_CORE.split('.')[0]}/${STACKING_DAO_CORE.split('.')[1]}/get-stx-per-ststx`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sender: STACKING_DAO_CORE.split('.')[0], arguments: [] }),
+          }
+        );
+        if (ratioRes.ok) {
+          const data = await ratioRes.json();
+          // result is a Clarity uint in hex — decode it
+          const hex = data?.result?.replace('0x0c', '').replace('0x', '');
+          if (hex) {
+            const ratio = parseInt(hex, 16) / 1_000_000;
+            if (ratio > 0) setStxPerStSTX(ratio);
+          }
+        }
+      } catch {}
+      // APY: use a static reasonable estimate since no public endpoint is available
+      setApy('~8-10%');
+    };
+    fetchStats();
   }, []);
 
   const inputBalance = mode === 'deposit' ? stxBalance : stSTXBalance;
