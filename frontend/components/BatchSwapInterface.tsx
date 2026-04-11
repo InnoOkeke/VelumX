@@ -140,10 +140,12 @@ export function BatchSwapInterface() {
   const getBalance = (token: Token): string => {
     if (!token) return '0';
     const byPrincipal = (balances as any)[token.address];
-    if (byPrincipal && byPrincipal !== '0') {
-      const dec = parseInt((balances as any)['decimals:' + token.address] || String(token.decimals));
-      const num = Number(byPrincipal) / Math.pow(10, dec);
-      return isNaN(num) ? '0' : num.toFixed(4);
+    if (byPrincipal !== undefined && byPrincipal !== null && byPrincipal !== '0') {
+      // Use decimals from wallet hook (on-chain source of truth), fall back to token metadata
+      const storedDecimals = (balances as any)[`decimals:${token.address}`];
+      const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
+      const num = Number(byPrincipal) / Math.pow(10, decimals);
+      return isNaN(num) ? '0' : num.toFixed(6);
     }
     return '0';
   };
@@ -151,7 +153,7 @@ export function BatchSwapInterface() {
   // Load tokens from ALEX + Velar — fully dynamic, no hardcoded maps
   useEffect(() => {
     let cancelled = false;
-    const CACHE_KEY = 'velumx_sweep_tokens_v5';
+    const CACHE_KEY = 'velumx_sweep_tokens_v6';
 
     const load = async () => {
       setIsLoadingTokens(true);
@@ -239,11 +241,15 @@ export function BatchSwapInterface() {
       setIsFetchingQuote(true);
       setError(null);
       try {
-        const inputs = validRows.map(r => ({
-          principal: r.token!.address,
-          amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, r.token!.decimals))).toString(),
-          decimals: r.token!.decimals,
-        }));
+        const inputs = validRows.map(r => {
+          const storedDecimals = (balances as any)[`decimals:${r.token!.address}`];
+          const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : r.token!.decimals;
+          return {
+            principal: r.token!.address,
+            amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, decimals))).toString(),
+            decimals,
+          };
+        });
 
         const result = await quoteSweep(inputs);
 
@@ -295,12 +301,16 @@ export function BatchSwapInterface() {
     setSuccess(null);
 
     try {
-      const sweepTokens: SweepToken[] = validRows.map(r => ({
-        principal: r.token!.address,
-        amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, r.token!.decimals))).toString(),
-        decimals: r.token!.decimals,
-        dex: r.quote!.dex,
-      }));
+      const sweepTokens: SweepToken[] = validRows.map(r => {
+        const storedDecimals = (balances as any)[`decimals:${r.token!.address}`];
+        const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : r.token!.decimals;
+        return {
+          principal: r.token!.address,
+          amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, decimals))).toString(),
+          decimals,
+          dex: r.quote!.dex,
+        };
+      });
 
       // minStxOut in micro-STX (1e6), apply slippage to totalStxOut
       const minStxOut = BigInt(Math.floor(parseFloat(totalStxOut!) * (1 - slippage / 100) * 1e6)).toString();

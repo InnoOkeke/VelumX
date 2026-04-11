@@ -1,7 +1,7 @@
 /**
- * Sweep-to-STX Helper v4
- * Token→symbol mapping built dynamically from Velar SDK at runtime.
- * No hardcoded token maps.
+ * Sweep-to-STX Helper v5
+ * Pre-warms both SDK token lists at module load.
+ * No hardcoded maps. All data from SDKs.
  */
 
 import { AlexSDK } from 'alex-sdk';
@@ -9,7 +9,7 @@ import { VelarSDK } from '@velarprotocol/velar-sdk';
 import { request } from '@stacks/connect';
 
 export const SWEEP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.velumx-sweep';
-export const DEFAULT_ALEX_FACTOR = 100000000; // 1e8
+export const DEFAULT_ALEX_FACTOR = 100000000;
 export const VELAR_SHARE_FEE_TO = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to';
 export const WSTX_PRINCIPAL = 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-wstx';
 
@@ -42,76 +42,110 @@ export interface SweepQuote {
 const alexSdk = new AlexSDK();
 const velarSdk = new VelarSDK();
 
-// ---- Dynamic principal → Velar symbol map ----
-// Built once from getTokensMeta(), keyed by lowercase contract principal.
+// ---- ALEX: principal → internal token id, cached ----
+let alexTokenMap: Map<string, string> | null = null;
+let alexTokenMapPromise: Promise<Map<string, string>> | null = null;
+
+async function getAlexTokenMap(): Promise<Map<string, string>> {
+  if (alexTokenMap) return alexTokenMap;
+  if (alexTokenMapPromise) return alexTokenMapPromise;
+  alexTokenMapPromise = (async () => {
+    const map = new Map<string, string>();
+    try {
+      const tokens = await alexSdk.fetchSwappableCurrency();
+      for (const t of tokens as any[]) {
+        const addr = t.wrapToken ? t.wrapToken.split('::')[0] : '';
+        if (addr) map.set(addr.toLowerCase(), t.id);
+        if (t.id) map.set(t.id.toLowerCase(), t.id);
+      }
+      // STX
+      map.set(WSTX_PRINCIPAL.toLowerCase(), 'token-wstx');
+      map.set('token-wstx', 'token-wstx');
+    } catch (e) {
+      console.warn('[sweep] ALEX token map failed:', e);
+    }
+    alexTokenMap = map;
+    return map;
+  })();
+  return alexTokenMapPromise;
+}
+
+// ---- Velar: principal → symbol, cached ----
 let velarSymbolMap: Map<string, string> | null = null;
+let velarSymbolMapPromise: Promise<Map<string, string>> | null = null;
 
 async function getVelarSymbolMap(): Promise<Map<string, string>> {
   if (velarSymbolMap) return velarSymbolMap;
-  const map = new Map<string, string>();
-  try {
-    const { getTokensMeta } = await import('@velarprotocol/velar-sdk');
-    const meta = await getTokensMeta() as Record<string, any>;
-    for (const entry of Object.values(meta)) {
-      const addr = entry.contractAddress;
-      const sym = entry.symbol;
-      if (addr && sym && addr.includes('.')) {
+  if (velarSymbolMapPromise) return velarSymbolMapPromise;
+  velarSymbolMapPromise = (async () => {
+    const map = new Map<string, string>();
+    try {
+      const { getTokensMeta, getTokens } = await import('@velarprotocol/velar-sdk');
+      const [meta, swappable] = await Promise.all([
+        (getTokensMeta() as Promise<Record<string, any>>),
+        (getTokens() as Promise<any>).catch(() => null),
+      ]);
+      const validSymbols: Set<string> | null = swappable
+        ? new Set(Object.keys(swappable))
+        : null;
+      for (const entry of Object.values(meta)) {
+        const addr = entry.contractAddress;
+        const sym = entry.symbol;
+        if (!addr || !sym || !addr.includes('.')) continue;
+        if (validSymbols && !validSymbols.has(sym)) continue;
         map.set(addr.toLowerCase(), sym);
       }
+    } catch (e) {
+      console.warn('[sweep] Velar symbol map failed:', e);
     }
-  } catch {}
-  velarSymbolMap = map;
-  return map;
+    velarSymbolMap = map;
+    return map;
+  })();
+  return velarSymbolMapPromise;
 }
 
-async function principalToVelarSymbol(principal: string): Promise<string> {
-  if (!principal || !principal.includes('.')) return '';
-  const map = await getVelarSymbolMap();
-  return map.get(principal.toLowerCase()) ?? '';
-}
-
-// ---- ALEX token resolution ----
-async function resolveAlexId(principal: string): Promise<string | null> {
-  if (principal === WSTX_PRINCIPAL || principal === 'token-wstx') return 'token-wstx';
-  try {
-    const tokens = await alexSdk.fetchSwappableCurrency();
-    const match = tokens.find((t: any) => {
-      const addr = t.wrapToken ? t.wrapToken.split('::')[0] : '';
-      return addr.toLowerCase() === principal.toLowerCase() ||
-             t.id?.toLowerCase() === principal.toLowerCase();
-    });
-    if (match) return (match as any).id;
-  } catch {}
-  return null;
-}
+// Pre-warm both maps immediately on module load
+getAlexTokenMap();
+getVelarSymbolMap();
 
 // ---- Per-token quotes ----
 async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
-    const idIn = await resolveAlexId(principal);
+    const map = await getAlexTokenMap();
+    const idIn = map.get(principal.toLowerCase());
     if (!idIn) return null;
     const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
     const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx');
     if (out == null) return null;
-    return BigInt(Math.floor(Number(out) / 100)); // 1e8 → 1e6
-  } catch { return null; }
+    return BigInt(Math.floor(Number(out) / 100)); // 1e8 wSTX → 1e6 STX
+  } catch (e) {
+    console.warn('[sweep] ALEX quote failed for', principal, e);
+    return null;
+  }
 }
 
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
-    const symIn = await principalToVelarSymbol(principal);
+    const map = await getVelarSymbolMap();
+    const symIn = map.get(principal.toLowerCase());
     if (!symIn) return null;
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
     const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
     if (!amtOut || amtOut <= 0) return null;
     return BigInt(Math.floor(amtOut * 1e6));
-  } catch { return null; }
+  } catch (e) {
+    console.warn('[sweep] Velar quote failed for', principal, e);
+    return null;
+  }
 }
 
 // ---- Quote all tokens ----
 export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]): Promise<SweepQuote> {
   if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
+
+  // Ensure maps are ready before quoting
+  await Promise.all([getAlexTokenMap(), getVelarSymbolMap()]);
 
   const perToken: SweepQuote['perToken'] = [];
   let totalRaw = 0n;
@@ -122,6 +156,8 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
       quoteAlex(t.principal, amountRaw, t.decimals),
       quoteVelar(t.principal, amountRaw, t.decimals),
     ]);
+
+    console.debug(`[sweep] ${t.principal} → ALEX: ${alexOut}, Velar: ${velarOut}`);
 
     if (alexOut == null && velarOut == null) {
       perToken.push({ principal: t.principal, stxOut: '0', dex: 'alex', noLiquidity: true });
@@ -152,9 +188,7 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
 
 // ---- Clarity arg builders ----
 function makeContract(principal: string) {
-  if (!principal || !principal.includes('.')) {
-    throw new Error(`Invalid principal: "${principal}"`);
-  }
+  if (!principal?.includes('.')) throw new Error(`Invalid principal: "${principal}"`);
   const dot = principal.indexOf('.');
   return { type: 'contract', address: principal.slice(0, dot), contractName: principal.slice(dot + 1) };
 }
@@ -190,14 +224,12 @@ export async function executeSweep(params: {
   if (n < 1 || n > 6) throw new Error('Sweep supports 1–6 tokens');
 
   onProgress?.('Building transaction...');
-
   const functionArgs = [
     ...tokens.flatMap(tokenArgs),
     makeUint(BigInt(minStxOut)),
   ];
 
   onProgress?.('Waiting for wallet signature...');
-
   return new Promise((resolve, reject) => {
     request('stx_callContract', {
       contract: SWEEP_CONTRACT,
