@@ -269,12 +269,40 @@ function tokenArgs(t: SweepToken) {
 }
 
 /**
- * For Velar tokens, fetch the actual swap args from the SDK to get correct
- * pool IDs and token addresses. Returns enriched SweepToken or null if failed.
+ * Enrich a SweepToken with the correct token0, token1, poolId, and factor
+ * needed by the sweep contract. Handles both ALEX and Velar tokens.
  */
-async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
+async function enrichToken(t: SweepToken): Promise<SweepToken> {
   if (!t?.principal?.includes('.')) return { ...t, token0: t?.principal ?? '', token1: WSTX_PRINCIPAL };
-  if (t.dex !== 'velar') return t;
+
+  // ---- ALEX tokens: set token0/token1 and resolve factor ----
+  if (t.dex !== 'velar') {
+    // For ALEX dex (dex=u0), the contract calls alex-to-stx which only uses
+    // the token trait and factor. But t0/t1 are still passed as trait args,
+    // so they must be valid contract principals.
+    let factor = t.factor ?? DEFAULT_ALEX_FACTOR;
+    try {
+      const tokens = await alexSdk.fetchSwappableCurrency();
+      const match = (tokens as any[]).find((tok: any) => {
+        const addr = tok.wrapToken ? tok.wrapToken.split('::')[0] : '';
+        return addr.toLowerCase() === t.principal.toLowerCase();
+      });
+      if (match?.wrapTokenDecimals != null) {
+        factor = Math.pow(10, match.wrapTokenDecimals);
+      }
+    } catch (e: any) {
+      console.warn(`[sweep] enrichToken: ALEX factor lookup failed for ${t.principal}:`, e?.message);
+    }
+    console.log(`[sweep] enrichToken ALEX ${t.principal}: factor=${factor} token0=${t.principal} token1=${WSTX_PRINCIPAL}`);
+    return {
+      ...t,
+      token0: t.principal,
+      token1: WSTX_PRINCIPAL,
+      factor,
+    };
+  }
+
+  // ---- Velar tokens: fetch pool info from SDK ----
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
 
@@ -288,7 +316,7 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
     });
 
     const swapResp: any = await (swapInstance as any).swap({ amount: humanIn });
-    console.log(`[sweep] enrichVelarToken ${t.principal} swapResp:`, JSON.stringify({
+    console.log(`[sweep] enrichToken Velar ${t.principal} swapResp:`, JSON.stringify({
       contractAddress: swapResp?.contractAddress,
       contractName: swapResp?.contractName,
       functionName: swapResp?.functionName,
@@ -298,8 +326,8 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
 
     const args = swapResp?.functionArgs;
     if (!args || args.length < 3) {
-      console.warn(`[sweep] enrichVelarToken: insufficient args for ${t.principal}`);
-      return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
+      console.warn(`[sweep] enrichToken: insufficient args for ${t.principal}, falling back`);
+      return { ...t, token0: t.principal, token1: WSTX_PRINCIPAL };
     }
 
     const getAddr = (cv: any) => cv?.address ?? cv?.value?.address ?? cv?.value?.hash160;
@@ -311,17 +339,18 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
     const t1addr = getAddr(args[2]);
     const t1name = getName(args[2]);
 
-    console.log(`[sweep] enrichVelarToken ${t.principal}: pool=${poolId} t0=${t0addr}.${t0name} t1=${t1addr}.${t1name}`);
+    console.log(`[sweep] enrichToken Velar ${t.principal}: pool=${poolId} t0=${t0addr}.${t0name} t1=${t1addr}.${t1name}`);
 
     if (t0addr && t0name && t1addr && t1name) {
       return { ...t, poolId, token0: `${t0addr}.${t0name}`, token1: `${t1addr}.${t1name}` };
     }
 
-    console.warn(`[sweep] enrichVelarToken: could not extract token addresses for ${t.principal}`);
+    console.warn(`[sweep] enrichToken: could not extract token addresses for ${t.principal}`);
   } catch (e: any) {
-    console.warn(`[sweep] enrichVelarToken failed for ${t.principal}:`, e?.message);
+    console.warn(`[sweep] enrichToken failed for ${t.principal}:`, e?.message);
   }
-  return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
+  // Keep original dex — don't force-switch to ALEX which may lack pools for this token
+  return { ...t, token0: t.principal, token1: WSTX_PRINCIPAL };
 }
 
 export async function executeSweep(params: {
@@ -343,7 +372,7 @@ export async function executeSweep(params: {
   // If all tokens are ALEX, use our sweep contract (single atomic tx)
   if (velarTokens.length === 0) {
     onProgress?.('Building transaction...');
-    const enriched = (await Promise.all(alexTokens.map(enrichVelarToken)))
+    const enriched = (await Promise.all(alexTokens.map(enrichToken)))
       .filter(t => t?.principal?.includes('.')) as SweepToken[];
     console.log('[sweep] ALEX-only path, enriched tokens:', enriched.map(t => `${t.principal} token0=${t.token0} token1=${t.token1}`));
     const functionArgs = [
@@ -402,7 +431,7 @@ export async function executeSweep(params: {
   // Mixed DEX — use sweep contract for all tokens
   console.log('[sweep] Mixed DEX path');
   onProgress?.('Building transaction...');
-  const enriched = (await Promise.all(tokens.map(enrichVelarToken)))
+  const enriched = (await Promise.all(tokens.map(enrichToken)))
     .filter(t => t?.principal?.includes('.')) as SweepToken[];
   console.log('[sweep] Mixed enriched tokens:', enriched.map(t => `${t.principal} dex=${t.dex} token0=${t.token0} token1=${t.token1}`));
   const functionArgs = [
