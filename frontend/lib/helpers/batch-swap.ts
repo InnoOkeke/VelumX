@@ -163,18 +163,23 @@ async function quoteAlex(principal: string, amountRaw: bigint, decimals: number)
   }
 }
 
+// Velar's STX contract address (different from ALEX's wSTX)
+const VELAR_STX = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
+
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
-    const map = await getVelarSymbolMap();
-    const symIn = map.get(principal.toLowerCase());
-    if (!symIn) return null; // not in Velar map — silent
+    const swapInstance = await velarSdk.getSwapInstance({
+      account: '',
+      inToken: principal,
+      outToken: VELAR_STX,
+    });
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
-    const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
-    const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
-    if (!amtOut || amtOut <= 0) return null;
-    return BigInt(Math.floor(amtOut * 1e6));
+    const result: any = await swapInstance.getComputedAmount({ amount: humanIn });
+    const amtOut = result?.amountOutDecimal ?? result?.amountOut;
+    if (!amtOut || Number(amtOut) <= 0) return null;
+    return BigInt(Math.floor(Number(amtOut) * 1e6));
   } catch {
-    return null; // silently return null — token not swappable on Velar
+    return null;
   }
 }
 
@@ -193,8 +198,6 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
       quoteAlex(t.principal, amountRaw, t.decimals),
       quoteVelar(t.principal, amountRaw, t.decimals),
     ]);
-
-    console.debug(`[sweep] ${t.principal} → ALEX: ${alexOut}, Velar: ${velarOut}`);
 
     if (alexOut == null && velarOut == null) {
       perToken.push({ principal: t.principal, stxOut: '0', dex: 'alex', noLiquidity: true });
@@ -226,7 +229,6 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
 // ---- Clarity arg builders ----
 function makeContract(principal: string) {
   if (!principal?.includes('.')) {
-    // Resolve ALEX short IDs to full principal
     const resolved = alexPrincipalMap?.get(principal.toLowerCase());
     if (resolved?.includes('.')) {
       const dot = resolved.indexOf('.');
@@ -263,6 +265,31 @@ function tokenArgs(t: SweepToken) {
   ];
 }
 
+/**
+ * For Velar tokens, fetch the actual swap args from the SDK to get correct
+ * pool IDs and token addresses. Returns enriched SweepToken or null if failed.
+ */
+async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
+  if (t.dex !== 'velar') return t;
+  try {
+    const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
+    const swapInstance = await velarSdk.getSwapInstance({
+      account: '',
+      inToken: t.principal,
+      outToken: VELAR_STX,
+    });
+    const swapResp: any = await swapInstance.swap({ amount: humanIn });
+    const args = swapResp?.functionArgs;
+    if (args && args.length >= 6) {
+      const poolId = Number(args[0]?.value ?? 0);
+      const token0 = `${args[1]?.address}.${args[1]?.contractName}`;
+      const token1 = `${args[2]?.address}.${args[2]?.contractName}`;
+      return { ...t, poolId, token0, token1 };
+    }
+  } catch {}
+  return t;
+}
+
 export async function executeSweep(params: {
   tokens: SweepToken[];
   minStxOut: string;
@@ -273,8 +300,12 @@ export async function executeSweep(params: {
   if (n < 1 || n > 6) throw new Error('Sweep supports 1–6 tokens');
 
   onProgress?.('Building transaction...');
+
+  // Enrich Velar tokens with correct pool/token args from SDK
+  const enriched = await Promise.all(tokens.map(enrichVelarToken));
+
   const functionArgs = [
-    ...tokens.flatMap(tokenArgs),
+    ...enriched.flatMap(tokenArgs),
     makeUint(BigInt(minStxOut)),
   ];
 
