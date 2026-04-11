@@ -139,6 +139,8 @@ export function BatchSwapInterface() {
 
   const getBalance = (token: Token): string => {
     if (!token) return '0';
+
+    // Primary: exact principal match
     const byPrincipal = (balances as any)[token.address];
     if (byPrincipal !== undefined && byPrincipal !== null && byPrincipal !== '0') {
       const storedDecimals = (balances as any)[`decimals:${token.address}`];
@@ -147,27 +149,29 @@ export function BatchSwapInterface() {
       return isNaN(num) ? '0' : num.toFixed(6);
     }
 
-    // Fuzzy match — same as SwapInterface
-    const allKeys = Object.keys(balances as any).filter(k =>
-      !k.startsWith('decimals:') && !k.startsWith('name:') && !k.startsWith('symbol:')
-    );
-    const fuzzyKey = allKeys.find(k =>
-      k.startsWith(token.address) ||
-      token.address.startsWith(k) ||
-      k.toLowerCase().includes(token.symbol.toLowerCase())
-    );
-    if (fuzzyKey) {
-      const raw = (balances as any)[fuzzyKey];
-      if (raw && raw !== '0') {
-        const storedDecimals = (balances as any)[`decimals:${fuzzyKey}`];
-        const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
-        const num = Number(raw) / Math.pow(10, decimals);
-        return isNaN(num) ? '0' : num.toFixed(6);
+    // Secondary: fuzzy match on principal only (not symbol — avoids false positives)
+    if (token.address.includes('.')) {
+      const allKeys = Object.keys(balances as any).filter(k =>
+        k.includes('.') &&
+        !k.startsWith('decimals:') &&
+        !k.startsWith('name:') &&
+        !k.startsWith('symbol:')
+      );
+      const fuzzyKey = allKeys.find(k =>
+        k.startsWith(token.address) || token.address.startsWith(k)
+      );
+      if (fuzzyKey) {
+        const raw = (balances as any)[fuzzyKey];
+        if (raw && raw !== '0') {
+          const storedDecimals = (balances as any)[`decimals:${fuzzyKey}`];
+          const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : token.decimals;
+          const num = Number(raw) / Math.pow(10, decimals);
+          return isNaN(num) ? '0' : num.toFixed(6);
+        }
       }
     }
 
-    // Last resort: raw symbol lookup (returns undivided raw balance — same as SwapInterface)
-    return (balances as any)[token.symbol.toLowerCase()] || '0';
+    return '0';
   };
 
   // Load tokens from ALEX + Velar — fully dynamic, no hardcoded maps

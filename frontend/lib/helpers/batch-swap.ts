@@ -42,8 +42,9 @@ export interface SweepQuote {
 const alexSdk = new AlexSDK();
 const velarSdk = new VelarSDK();
 
-// ---- ALEX: principal → internal token id, cached ----
-let alexTokenMap: Map<string, string> | null = null;
+// ---- ALEX maps ----
+let alexTokenMap: Map<string, string> | null = null;       // principal/id → ALEX id
+let alexPrincipalMap: Map<string, string> | null = null;   // ALEX id → full principal
 let alexTokenMapPromise: Promise<Map<string, string>> | null = null;
 
 async function getAlexTokenMap(): Promise<Map<string, string>> {
@@ -51,27 +52,32 @@ async function getAlexTokenMap(): Promise<Map<string, string>> {
   if (alexTokenMapPromise) return alexTokenMapPromise;
   alexTokenMapPromise = (async () => {
     const map = new Map<string, string>();
+    const principalMap = new Map<string, string>();
     try {
       const tokens = await alexSdk.fetchSwappableCurrency();
       for (const t of tokens as any[]) {
         const addr = t.wrapToken ? t.wrapToken.split('::')[0] : '';
-        if (addr) map.set(addr.toLowerCase(), t.id);
-        if (t.id) map.set(t.id.toLowerCase(), t.id);
+        if (addr && t.id) {
+          map.set(addr.toLowerCase(), t.id);
+          map.set(t.id.toLowerCase(), t.id);
+          principalMap.set(t.id.toLowerCase(), addr);
+        }
       }
-      // STX
       map.set(WSTX_PRINCIPAL.toLowerCase(), 'token-wstx');
       map.set('token-wstx', 'token-wstx');
+      principalMap.set('token-wstx', WSTX_PRINCIPAL);
     } catch (e) {
       console.warn('[sweep] ALEX token map failed:', e);
     }
     alexTokenMap = map;
+    alexPrincipalMap = principalMap;
     console.debug(`[sweep] ALEX token map built: ${map.size} entries`);
     return map;
   })();
   return alexTokenMapPromise;
 }
 
-// ---- Velar: principal → symbol, cached ----
+// ---- Velar map ----
 let velarSymbolMap: Map<string, string> | null = null;
 let velarSymbolMapPromise: Promise<Map<string, string>> | null = null;
 
@@ -87,54 +93,70 @@ async function getVelarSymbolMap(): Promise<Map<string, string>> {
         (getTokens() as Promise<any>).catch(() => null),
       ]);
 
-      // If getTokens() failed we have no way to know which tokens are actually
-      // swappable — don't include any rather than including invalid ones
-      if (!swappable) {
-        console.warn('[sweep] Velar getTokens() failed — skipping Velar quotes');
-        velarSymbolMap = map;
-        return map;
+      console.debug('[sweep] Velar getTokens result:', swappable);
+
+      // Build valid symbol set — getTokens() may return object or array
+      let validSymbols: Set<string> | null = null;
+      if (swappable) {
+        if (Array.isArray(swappable)) {
+          validSymbols = new Set(swappable.map((t: any) => t.symbol || t).filter(Boolean));
+        } else if (typeof swappable === 'object') {
+          validSymbols = new Set(Object.keys(swappable));
+        }
       }
 
-      const validSymbols = new Set(Object.keys(swappable));      for (const entry of Object.values(meta)) {
+      console.debug(`[sweep] Velar valid symbols (${validSymbols?.size ?? 0}):`, validSymbols ? [...validSymbols].join(', ') : 'none');
+
+      for (const entry of Object.values(meta)) {
         const addr = entry.contractAddress;
         const sym = entry.symbol;
         if (!addr || !sym || !addr.includes('.')) continue;
-        if (!validSymbols.has(sym)) continue; // only include confirmed swappable tokens
+        // Filter by valid symbols if available; otherwise include all from meta
+        if (validSymbols && validSymbols.size > 0 && !validSymbols.has(sym)) continue;
         map.set(addr.toLowerCase(), sym);
       }
     } catch (e) {
       console.warn('[sweep] Velar symbol map failed:', e);
     }
     velarSymbolMap = map;
-    console.debug(`[sweep] Velar symbol map built: ${map.size} tokens`, Object.fromEntries(map));
+    console.debug(`[sweep] Velar symbol map built: ${map.size} tokens`);
     return map;
   })();
   return velarSymbolMapPromise;
 }
 
-// Pre-warm both maps immediately on module load
+// Pre-warm both maps at module load
 getAlexTokenMap();
 getVelarSymbolMap();
 
 // ---- Per-token quotes ----
+
 async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
     const map = await getAlexTokenMap();
-    // Look up by principal, then by contract name part, then fall back to principal directly
-    // (SwapInterface fallback: pass address directly to getAmountTo — works for some tokens)
     const idIn = map.get(principal.toLowerCase())
       ?? map.get(principal.split('.')[1]?.toLowerCase() ?? '')
       ?? principal;
 
-    // ALEX SDK always expects amounts in 1e8 units regardless of token decimals
-    // Convert human amount to 1e8: (rawAmount / 10^decimals) * 1e8
+    // ALEX SDK always expects 1e8 units
     const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
-
     console.debug(`[sweep] ALEX: quoting ${principal} → id "${idIn}", amount ${amtAlex}`);
-    const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx');
+
+    // Try direct route: token → wSTX
+    let out: any = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx').catch(() => null);
+
+    // Multi-hop fallback: token → ALEX → wSTX
+    if (out == null) {
+      const alexId = 'age000-governance-token';
+      const leg1 = await (alexSdk as any).getAmountTo(idIn, amtAlex, alexId).catch(() => null);
+      if (leg1 != null) {
+        out = await (alexSdk as any).getAmountTo(alexId, leg1, 'token-wstx').catch(() => null);
+        if (out != null) console.debug(`[sweep] ALEX multi-hop: ${principal} → ALEX → STX`);
+      }
+    }
+
     if (out == null) return null;
-    // ALEX returns 1e8 wSTX → convert to micro-STX (1e6)
-    return BigInt(Math.floor(Number(out) / 100));
+    return BigInt(Math.floor(Number(out) / 100)); // 1e8 → 1e6
   } catch (e) {
     console.warn('[sweep] ALEX quote failed for', principal, e);
     return null;
@@ -149,7 +171,7 @@ async function quoteVelar(principal: string, amountRaw: bigint, decimals: number
       console.debug(`[sweep] Velar: no symbol for ${principal}`);
       return null;
     }
-    console.debug(`[sweep] Velar: trying ${principal} → symbol "${symIn}"`);
+    console.debug(`[sweep] Velar: quoting ${principal} → symbol "${symIn}"`);
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
     const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
@@ -165,7 +187,6 @@ async function quoteVelar(principal: string, amountRaw: bigint, decimals: number
 export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]): Promise<SweepQuote> {
   if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
 
-  // Ensure maps are ready before quoting
   await Promise.all([getAlexTokenMap(), getVelarSymbolMap()]);
 
   const perToken: SweepQuote['perToken'] = [];
@@ -209,7 +230,15 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
 
 // ---- Clarity arg builders ----
 function makeContract(principal: string) {
-  if (!principal?.includes('.')) throw new Error(`Invalid principal: "${principal}"`);
+  if (!principal?.includes('.')) {
+    // Resolve ALEX short IDs to full principal
+    const resolved = alexPrincipalMap?.get(principal.toLowerCase());
+    if (resolved?.includes('.')) {
+      const dot = resolved.indexOf('.');
+      return { type: 'contract', address: resolved.slice(0, dot), contractName: resolved.slice(dot + 1) };
+    }
+    throw new Error(`Cannot build contract arg from "${principal}" — no dot separator`);
+  }
   const dot = principal.indexOf('.');
   return { type: 'contract', address: principal.slice(0, dot), contractName: principal.slice(dot + 1) };
 }
