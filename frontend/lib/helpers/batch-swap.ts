@@ -167,19 +167,14 @@ async function quoteVelar(principal: string, amountRaw: bigint, decimals: number
   try {
     const map = await getVelarSymbolMap();
     const symIn = map.get(principal.toLowerCase());
-    if (!symIn) {
-      console.debug(`[sweep] Velar: no symbol for ${principal}`);
-      return null;
-    }
-    console.debug(`[sweep] Velar: quoting ${principal} → symbol "${symIn}"`);
+    if (!symIn) return null; // not in Velar map — silent
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
     const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
     if (!amtOut || amtOut <= 0) return null;
     return BigInt(Math.floor(amtOut * 1e6));
-  } catch (e: any) {
-    console.warn(`[sweep] Velar quote failed for ${principal} — ${e?.message}`);
-    return null;
+  } catch {
+    return null; // silently return null — token not swappable on Velar
   }
 }
 
@@ -252,13 +247,17 @@ const FEE_TO_ARG = { type: 'contract', address: feeAddr, contractName: feeName }
 
 function tokenArgs(t: SweepToken) {
   if (!t.principal?.includes('.')) throw new Error(`Invalid token principal: "${t.principal}"`);
+  const token0 = t.token0 ?? t.principal;
+  const token1 = t.token1 ?? WSTX_PRINCIPAL;
+  if (!token0.includes('.')) throw new Error(`Invalid token0: "${token0}" for ${t.principal}`);
+  if (!token1.includes('.')) throw new Error(`Invalid token1: "${token1}" for ${t.principal}`);
   return [
     makeContract(t.principal),
     makeUint(t.dex === 'alex' ? 0 : 1),
     makeUint(t.factor ?? DEFAULT_ALEX_FACTOR),
     makeUint(t.poolId ?? 0),
-    makeContract(t.token0 ?? t.principal),
-    makeContract(t.token1 ?? WSTX_PRINCIPAL),
+    makeContract(token0),
+    makeContract(token1),
     FEE_TO_ARG,
     makeUint(BigInt(t.amount)),
   ];
