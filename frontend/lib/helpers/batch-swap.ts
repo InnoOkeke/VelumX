@@ -145,16 +145,6 @@ async function quoteAlex(principal: string, amountRaw: bigint, decimals: number)
     // Try direct route: token → wSTX
     let out: any = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx').catch(() => null);
 
-    // Multi-hop fallback: token → ALEX → wSTX
-    if (out == null) {
-      const alexId = 'age000-governance-token';
-      const leg1 = await (alexSdk as any).getAmountTo(idIn, amtAlex, alexId).catch(() => null);
-      if (leg1 != null) {
-        out = await (alexSdk as any).getAmountTo(alexId, leg1, 'token-wstx').catch(() => null);
-        if (out != null) console.debug(`[sweep] ALEX multi-hop: ${principal} → ALEX → STX`);
-      }
-    }
-
     if (out == null) return null;
     return BigInt(Math.floor(Number(out) / 100)); // 1e8 → 1e6
   } catch (e) {
@@ -167,6 +157,10 @@ async function quoteAlex(principal: string, amountRaw: bigint, decimals: number)
 const VELAR_WSTX = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
 
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
+  // First verify if a direct pool exists (sweep contract requires 1 hop)
+  const pool = await findVelarPool(principal);
+  if (!pool) return null;
+
   try {
     const swapInstance = await velarSdk.getSwapInstance({
       account: '',
@@ -175,6 +169,13 @@ async function quoteVelar(principal: string, amountRaw: bigint, decimals: number
     });
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const result: any = await swapInstance.getComputedAmount({ amount: humanIn });
+    
+    // Check if the route is multi-hop
+    if (result && result.route && result.route.length > 2) {
+      console.warn(`[sweep] quoteVelar: skipping ${principal} due to multi-hop route`);
+      return null;
+    }
+
     const amtOut = result?.amountOutDecimal ?? result?.amountOut;
     if (!amtOut || Number(amtOut) <= 0) return null;
     return BigInt(Math.floor(Number(amtOut) * 1e6));
