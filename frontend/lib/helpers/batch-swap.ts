@@ -278,7 +278,6 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
 
-    // Wrap in new Promise to catch synchronous throws from the Velar SDK
     const swapInstance: any = await new Promise((resolve, reject) => {
       try {
         const inst = velarSdk.getSwapInstance({
@@ -287,28 +286,47 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
           outToken: VELAR_STX,
         });
         Promise.resolve(inst).then(resolve).catch(reject);
-      } catch (e) {
-        reject(e);
-      }
+      } catch (e) { reject(e); }
     });
 
     const swapResp: any = await swapInstance.swap({ amount: humanIn });
+    console.log(`[sweep] enrichVelarToken ${t.principal} swapResp:`, JSON.stringify({
+      contractAddress: swapResp?.contractAddress,
+      contractName: swapResp?.contractName,
+      functionName: swapResp?.functionName,
+      argsCount: swapResp?.functionArgs?.length,
+      // Log each arg's type and value to understand the structure
+      args: swapResp?.functionArgs?.map((a: any, i: number) => `[${i}] type=${a?.type} value=${JSON.stringify(a?.value)}`),
+    }));
+
     const args = swapResp?.functionArgs;
-    if (args && args.length >= 3) {
-      const poolId = Number(args[0]?.value ?? 0);
-      const t0addr = args[1]?.address;
-      const t0name = args[1]?.contractName;
-      const t1addr = args[2]?.address;
-      const t1name = args[2]?.contractName;
-      if (t0addr && t0name && t1addr && t1name) {
-        return { ...t, poolId, token0: `${t0addr}.${t0name}`, token1: `${t1addr}.${t1name}` };
-      }
+    if (!args || args.length < 3) {
+      console.warn(`[sweep] enrichVelarToken: insufficient args for ${t.principal}`);
+      return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
     }
-  } catch {
-    // Token not supported on Velar — fall back to ALEX
-    return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
+
+    // ContractPrincipalCV from @stacks/transactions has value.address and value.contractName
+    // Try both direct and nested structures
+    const getAddr = (cv: any) => cv?.address ?? cv?.value?.address ?? cv?.value?.hash160;
+    const getName = (cv: any) => cv?.contractName ?? cv?.value?.contractName ?? cv?.value?.name;
+
+    const poolId = Number(args[0]?.value ?? args[0] ?? 0);
+    const t0addr = getAddr(args[1]);
+    const t0name = getName(args[1]);
+    const t1addr = getAddr(args[2]);
+    const t1name = getName(args[2]);
+
+    console.log(`[sweep] enrichVelarToken ${t.principal}: pool=${poolId} t0=${t0addr}.${t0name} t1=${t1addr}.${t1name}`);
+
+    if (t0addr && t0name && t1addr && t1name) {
+      return { ...t, poolId, token0: `${t0addr}.${t0name}`, token1: `${t1addr}.${t1name}` };
+    }
+
+    console.warn(`[sweep] enrichVelarToken: could not extract token addresses for ${t.principal}`);
+  } catch (e: any) {
+    console.warn(`[sweep] enrichVelarToken failed for ${t.principal}:`, e?.message);
   }
-  return { ...t, token0: t.principal, token1: VELAR_STX };
+  return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
 }
 
 export async function executeSweep(params: {
@@ -386,7 +404,7 @@ export async function executeSweep(params: {
     });
   }
 
-  // Mixed DEX — use sweep contract for all, Velar tokens fall back to ALEX routing
+  // Mixed DEX — use sweep contract for all tokens
   console.log('[sweep] Mixed DEX path');
   onProgress?.('Building transaction...');
   const enriched = (await Promise.all(tokens.map(enrichVelarToken)))
