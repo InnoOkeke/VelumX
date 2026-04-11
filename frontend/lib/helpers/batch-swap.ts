@@ -270,6 +270,7 @@ function tokenArgs(t: SweepToken) {
  * pool IDs and token addresses. Returns enriched SweepToken or null if failed.
  */
 async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
+  if (!t?.principal) return t; // guard against undefined/null
   if (t.dex !== 'velar') return t;
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
@@ -279,11 +280,9 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
       outToken: VELAR_STX,
     });
     const swapResp: any = await swapInstance.swap({ amount: humanIn });
-    // SwapResponse.functionArgs: [poolId, token0, token1, inToken, outToken, staking, amountIn, amountOut]
     const args = swapResp?.functionArgs;
     if (args && args.length >= 3) {
       const poolId = Number(args[0]?.value ?? 0);
-      // args[1] and args[2] are ContractPrincipalCV — extract address.contractName
       const t0addr = args[1]?.address;
       const t0name = args[1]?.contractName;
       const t1addr = args[2]?.address;
@@ -293,8 +292,6 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
       }
     }
   } catch {}
-  // Fallback: use principal as both token0 and token1 — will likely fail on-chain
-  // but at least won't crash the UI
   return { ...t, token0: t.principal, token1: VELAR_STX };
 }
 
@@ -310,7 +307,7 @@ export async function executeSweep(params: {
   onProgress?.('Building transaction...');
 
   // Enrich Velar tokens with correct pool/token args from SDK
-  const enriched = await Promise.all(tokens.map(enrichVelarToken));
+  const enriched = (await Promise.all(tokens.map(enrichVelarToken))).filter(t => t?.principal?.includes('.')) as SweepToken[];
 
   const functionArgs = [
     ...enriched.flatMap(tokenArgs),
