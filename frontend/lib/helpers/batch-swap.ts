@@ -308,11 +308,6 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
   return { ...t, token0: t.principal, token1: VELAR_STX };
 }
 
-/**
- * For Velar tokens, the SDK returns a complete SwapResponse that should be
- * passed directly to openContractCall — not to our sweep contract.
- * For ALEX tokens, we use our velumx-sweep contract.
- */
 export async function executeSweep(params: {
   tokens: SweepToken[];
   minStxOut: string;
@@ -322,18 +317,24 @@ export async function executeSweep(params: {
   const n = tokens.length;
   if (n < 1 || n > 6) throw new Error('Sweep supports 1–6 tokens');
 
+  console.log('[sweep] executeSweep called with', n, 'tokens:', tokens.map(t => `${t.principal} (${t.dex})`));
+
   const velarTokens = tokens.filter(t => t.dex === 'velar');
   const alexTokens = tokens.filter(t => t.dex !== 'velar');
+
+  console.log('[sweep] ALEX tokens:', alexTokens.length, '| Velar tokens:', velarTokens.length);
 
   // If all tokens are ALEX, use our sweep contract (single atomic tx)
   if (velarTokens.length === 0) {
     onProgress?.('Building transaction...');
     const enriched = (await Promise.all(alexTokens.map(enrichVelarToken)))
       .filter(t => t?.principal?.includes('.')) as SweepToken[];
+    console.log('[sweep] ALEX-only path, enriched tokens:', enriched.map(t => `${t.principal} token0=${t.token0} token1=${t.token1}`));
     const functionArgs = [
       ...enriched.flatMap(tokenArgs),
       makeUint(BigInt(minStxOut)),
     ];
+    console.log('[sweep] Calling sweep contract:', SWEEP_CONTRACT, `sweep-to-stx-${enriched.length}`);
     onProgress?.('Waiting for wallet signature...');
     return new Promise((resolve, reject) => {
       request('stx_callContract', {
@@ -344,16 +345,17 @@ export async function executeSweep(params: {
         postConditionMode: 'allow',
         onFinish: (data: any) => { onProgress?.('Submitted!'); resolve(data.txid); },
         onCancel: () => reject(new Error('Cancelled by user')),
-      } as any).catch(reject);
+      } as any).catch((e: any) => { console.error('[sweep] request failed:', e); reject(e); });
     });
   }
 
-  // If all tokens are Velar, execute each via Velar's router directly
-  // (Velar SwapResponse is designed for openContractCall)
+  // Single Velar token — use Velar's router directly
   if (alexTokens.length === 0 && velarTokens.length === 1) {
     const t = velarTokens[0];
     onProgress?.('Getting Velar swap route...');
+    console.log('[sweep] Velar-only path for:', t.principal);
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
+    console.log('[sweep] humanIn:', humanIn);
     const swapInstance: any = await new Promise((resolve, reject) => {
       try {
         const inst = velarSdk.getSwapInstance({ account: '', inToken: t.principal, outToken: VELAR_STX });
@@ -361,6 +363,11 @@ export async function executeSweep(params: {
       } catch (e) { reject(e); }
     });
     const swapOptions: any = await swapInstance.swap({ amount: humanIn });
+    console.log('[sweep] Velar swapOptions:', JSON.stringify({
+      contract: `${swapOptions.contractAddress}.${swapOptions.contractName}`,
+      functionName: swapOptions.functionName,
+      argsCount: swapOptions.functionArgs?.length,
+    }));
     onProgress?.('Waiting for wallet signature...');
     return new Promise((resolve, reject) => {
       request('stx_callContract', {
@@ -372,15 +379,16 @@ export async function executeSweep(params: {
         postConditions: swapOptions.postConditions ?? [],
         onFinish: (data: any) => { onProgress?.('Submitted!'); resolve(data.txid); },
         onCancel: () => reject(new Error('Cancelled by user')),
-      } as any).catch(reject);
+      } as any).catch((e: any) => { console.error('[sweep] Velar request failed:', e); reject(e); });
     });
   }
 
-  // Mixed DEX: use our sweep contract for ALEX tokens, execute Velar tokens separately
-  // For now, if mixed, use our sweep contract for all (ALEX routing for Velar tokens as fallback)
+  // Mixed DEX — use sweep contract for all, Velar tokens fall back to ALEX routing
+  console.log('[sweep] Mixed DEX path');
   onProgress?.('Building transaction...');
   const enriched = (await Promise.all(tokens.map(enrichVelarToken)))
     .filter(t => t?.principal?.includes('.')) as SweepToken[];
+  console.log('[sweep] Mixed enriched tokens:', enriched.map(t => `${t.principal} dex=${t.dex} token0=${t.token0} token1=${t.token1}`));
   const functionArgs = [
     ...enriched.flatMap(tokenArgs),
     makeUint(BigInt(minStxOut)),
@@ -395,6 +403,6 @@ export async function executeSweep(params: {
       postConditionMode: 'allow',
       onFinish: (data: any) => { onProgress?.('Submitted!'); resolve(data.txid); },
       onCancel: () => reject(new Error('Cancelled by user')),
-    } as any).catch(reject);
+    } as any).catch((e: any) => { console.error('[sweep] Mixed request failed:', e); reject(e); });
   });
 }
