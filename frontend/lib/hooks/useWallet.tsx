@@ -208,8 +208,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                   );
                   if (onChainRes.ok) {
                     const onChainData = await onChainRes.json();
-                    // Result is a Clarity (ok uint) — parse the hex value
-                    const hex = onChainData?.result?.replace(/^0x0[a-z]0*/, '').replace(/^0x/, '');
+                    // Result format: 0x07 (ok) + 01 (uint) + 16 bytes big-endian
+                    // e.g. "0x070100000000000000000000000000000000" = (ok u0)
+                    const result: string = onChainData?.result ?? '';
+                    // Strip 0x07 (ok) + 01 (uint) prefix = first 6 chars after 0x
+                    const hex = result.replace(/^0x0701/, '').replace(/^0x/, '');
                     const onChainDecimals = hex ? parseInt(hex, 16) : 6;
                     decimalsMap[`decimals:${principal}`] = String(isNaN(onChainDecimals) ? 6 : onChainDecimals);
                   } else {

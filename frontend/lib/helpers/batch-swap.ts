@@ -229,12 +229,12 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
 // ---- Clarity arg builders ----
 function makeContract(principal: string) {
   if (!principal?.includes('.')) {
-    const resolved = alexPrincipalMap?.get(principal.toLowerCase());
+    const resolved = alexPrincipalMap?.get(principal?.toLowerCase());
     if (resolved?.includes('.')) {
       const dot = resolved.indexOf('.');
       return { type: 'contract', address: resolved.slice(0, dot), contractName: resolved.slice(dot + 1) };
     }
-    throw new Error(`Cannot build contract arg from "${principal}" — no dot separator`);
+    throw new Error(`makeContract: invalid principal "${principal}" (no dot separator)`);
   }
   const dot = principal.indexOf('.');
   return { type: 'contract', address: principal.slice(0, dot), contractName: principal.slice(dot + 1) };
@@ -270,15 +270,21 @@ function tokenArgs(t: SweepToken) {
  * pool IDs and token addresses. Returns enriched SweepToken or null if failed.
  */
 async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
-  if (!t?.principal) return t; // guard against undefined/null
+  if (!t?.principal?.includes('.')) return { ...t, token0: t?.principal ?? '', token1: VELAR_STX };
   if (t.dex !== 'velar') return t;
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
-    const swapInstance = await velarSdk.getSwapInstance({
-      account: '',
-      inToken: t.principal,
-      outToken: VELAR_STX,
-    });
+    let swapInstance: any;
+    try {
+      swapInstance = await velarSdk.getSwapInstance({
+        account: '',
+        inToken: t.principal,
+        outToken: VELAR_STX,
+      });
+    } catch {
+      // Token not supported on Velar — fall back to ALEX
+      return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
+    }
     const swapResp: any = await swapInstance.swap({ amount: humanIn });
     const args = swapResp?.functionArgs;
     if (args && args.length >= 3) {
