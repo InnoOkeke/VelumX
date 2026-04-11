@@ -4,7 +4,7 @@
  */
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlexSDK } from 'alex-sdk';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { Plus, Trash2, Loader2, AlertTriangle, Layers, Info, ChevronDown, CheckCircle2, Zap } from 'lucide-react';
@@ -137,7 +137,7 @@ export function BatchSwapInterface() {
   const [success, setSuccess] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
 
-  const getBalance = useCallback((token: Token): string => {
+  const getBalance = (token: Token): string => {
     if (!token) return '0';
     const byPrincipal = (balances as any)[token.address];
     if (byPrincipal && byPrincipal !== '0') {
@@ -146,7 +146,7 @@ export function BatchSwapInterface() {
       return isNaN(num) ? '0' : num.toFixed(4);
     }
     return '0';
-  }, [balances]);
+  };
 
   // Load tokens from ALEX + Velar
   useEffect(() => {
@@ -210,42 +210,46 @@ export function BatchSwapInterface() {
     return () => { cancelled = true; };
   }, []);
 
-  // Quote all rows
-  const fetchQuotes = useCallback(async () => {
+  // Quote all rows — use a stable key to avoid re-triggering on quote updates
+  const rowInputKey = rows.map(r => `${r.token?.address}:${r.amount}`).join('|');
+  const lastKeyRef = useRef('');
+
+  useEffect(() => {
+    if (rowInputKey === lastKeyRef.current) return;
+    lastKeyRef.current = rowInputKey;
+
     const validRows = rows.filter(r => r.token && r.amount && parseFloat(r.amount) > 0);
     if (validRows.length === 0) { setTotalStxOut(null); return; }
 
-    setIsFetchingQuote(true);
-    setError(null);
-    try {
-      const inputs = validRows.map(r => ({
-        principal: r.token!.address,
-        amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, r.token!.decimals))).toString(),
-        decimals: r.token!.decimals,
-      }));
+    const run = async () => {
+      setIsFetchingQuote(true);
+      setError(null);
+      try {
+        const inputs = validRows.map(r => ({
+          principal: r.token!.address,
+          amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, r.token!.decimals))).toString(),
+          decimals: r.token!.decimals,
+        }));
 
-      const result = await quoteSweep(inputs);
+        const result = await quoteSweep(inputs);
 
-      const updated = rows.map(r => {
-        const match = result.perToken.find(p => p.principal === r.token?.address);
-        return match
-          ? { ...r, quote: { stxOut: match.stxOut, dex: match.dex, savings: match.savings, noLiquidity: match.noLiquidity } }
-          : { ...r, quote: null };
-      });
+        setRows(prev => prev.map(r => {
+          const match = result.perToken.find(p => p.principal === r.token?.address);
+          return match
+            ? { ...r, quote: { stxOut: match.stxOut, dex: match.dex, savings: match.savings, noLiquidity: match.noLiquidity } }
+            : { ...r, quote: r.quote }; // preserve existing quote, don't null it
+        }));
+        setTotalStxOut(result.stxOut);
+      } catch (e: any) {
+        setError(e.message || 'Quote failed');
+      } finally {
+        setIsFetchingQuote(false);
+      }
+    };
 
-      setRows(updated);
-      setTotalStxOut(result.stxOut);
-    } catch (e: any) {
-      setError(e.message || 'Quote failed');
-    } finally {
-      setIsFetchingQuote(false);
-    }
-  }, [rows]);
-
-  useEffect(() => {
-    const t = setTimeout(fetchQuotes, 600);
+    const t = setTimeout(run, 600);
     return () => clearTimeout(t);
-  }, [fetchQuotes]);
+  }, [rowInputKey]);
 
   const addRow = () => {
     if (rows.length >= 6) return;

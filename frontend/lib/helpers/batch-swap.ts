@@ -66,7 +66,8 @@ const VELAR_SYMBOL_MAP: Record<string, string> = {
 };
 
 function principalToVelarSymbol(principal: string): string {
-  const name = (principal.split('.')[1] || principal).toLowerCase();
+  if (!principal || !principal.includes('.')) return '';
+  const name = principal.split('.')[1].toLowerCase();
   return VELAR_SYMBOL_MAP[name] || name.toUpperCase().replace(/-TOKEN$/, '').replace(/^TOKEN-/, '');
 }
 
