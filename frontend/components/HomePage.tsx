@@ -18,9 +18,10 @@ const BridgeInterface = dynamic(() => import('./BridgeInterface').then(mod => mo
 const SwapInterface = dynamic(() => import('./SwapInterface').then(mod => mod.SwapInterface), { ssr: false });
 const StackingInterface = dynamic(() => import('./StackingInterface').then(mod => mod.StackingInterface), { ssr: false });
 const LiquidityInterface = dynamic(() => import('./LiquidityInterface').then(mod => mod.LiquidityInterface), { ssr: false });
+const BatchSwapInterface = dynamic(() => import('./BatchSwapInterface').then(mod => mod.BatchSwapInterface), { ssr: false });
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'earn' | 'liquidity' | 'history'>('swap');
+  const [activeTab, setActiveTab] = useState<'bridge' | 'swap' | 'batch-swap' | 'earn' | 'liquidity' | 'history'>('swap');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Initialize dark mode from localStorage
@@ -104,11 +105,12 @@ export default function HomePage() {
 
             <div className="flex flex-col gap-2 relative z-10">
               <h1 className="text-4xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                {activeTab === 'batch-swap' ? 'Batch Swap' : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
               </h1>
               <p className="text-lg font-light leading-relaxed max-w-2xl" style={{ color: 'var(--text-secondary)' }}>
                 {activeTab === 'bridge' && "Securely move your assets across ecosystems with VelumX's robust bridging protocol."}
                 {activeTab === 'swap' && "Trade tokens instantly at the best market rates using our peer-to-peer liquidity protocol."}
+                {activeTab === 'batch-swap' && "Execute multi-hop token routes atomically in a single transaction via ALEX AMM."}
                 {activeTab === 'earn' && "Deposit STX and earn BTC yield via Proof of Transfer — stay liquid with stSTX."}
                 {activeTab === 'liquidity' && "Provide liquidity to ALEX pools and earn trading fees, all gasless via VelumX."}
                 {activeTab === 'history' && "Track your recent activity and transaction status in real-time."}
@@ -125,6 +127,7 @@ export default function HomePage() {
             }}>
               {activeTab === 'bridge' && <BridgeInterface />}
               {activeTab === 'swap' && <SwapInterface />}
+              {activeTab === 'batch-swap' && <BatchSwapInterface />}
               {activeTab === 'earn' && <StackingInterface />}
               {activeTab === 'liquidity' && <LiquidityInterface />}
               {activeTab === 'history' && <TransactionHistory />}

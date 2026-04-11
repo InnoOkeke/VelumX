@@ -16,15 +16,16 @@ import {
     Moon,
     Github,
     Twitter,
-    ExternalLink
+    ExternalLink,
+    Layers
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const WalletButton = dynamic(() => import('./WalletButton').then(mod => mod.WalletButton), { ssr: false });
 
 interface SidebarProps {
-    activeTab: 'bridge' | 'swap' | 'earn' | 'liquidity' | 'history';
-    setActiveTab: (tab: 'bridge' | 'swap' | 'earn' | 'liquidity' | 'history') => void;
+    activeTab: 'bridge' | 'swap' | 'batch-swap' | 'earn' | 'liquidity' | 'history';
+    setActiveTab: (tab: 'bridge' | 'swap' | 'batch-swap' | 'earn' | 'liquidity' | 'history') => void;
     isDarkMode: boolean;
     toggleDarkMode: () => void;
     isOpen?: boolean;
@@ -35,6 +36,7 @@ export function Sidebar({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, i
     const menuItems = [
         { id: 'bridge', label: 'Bridge', icon: ArrowLeftRight },
         { id: 'swap', label: 'Swap', icon: Repeat },
+        { id: 'batch-swap', label: 'Batch Swap', icon: Layers },
         { id: 'earn', label: 'Earn (stSTX)', icon: TrendingUp },
         { id: 'liquidity', label: 'Liquidity', icon: Droplets },
         { id: 'history', label: 'History', icon: History },
