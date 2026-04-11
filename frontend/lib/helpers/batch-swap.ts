@@ -86,14 +86,20 @@ async function getVelarSymbolMap(): Promise<Map<string, string>> {
         (getTokensMeta() as Promise<Record<string, any>>),
         (getTokens() as Promise<any>).catch(() => null),
       ]);
-      const validSymbols: Set<string> | null = swappable
-        ? new Set(Object.keys(swappable))
-        : null;
-      for (const entry of Object.values(meta)) {
+
+      // If getTokens() failed we have no way to know which tokens are actually
+      // swappable — don't include any rather than including invalid ones
+      if (!swappable) {
+        console.warn('[sweep] Velar getTokens() failed — skipping Velar quotes');
+        velarSymbolMap = map;
+        return map;
+      }
+
+      const validSymbols = new Set(Object.keys(swappable));      for (const entry of Object.values(meta)) {
         const addr = entry.contractAddress;
         const sym = entry.symbol;
         if (!addr || !sym || !addr.includes('.')) continue;
-        if (validSymbols && !validSymbols.has(sym)) continue;
+        if (!validSymbols.has(sym)) continue; // only include confirmed swappable tokens
         map.set(addr.toLowerCase(), sym);
       }
     } catch (e) {
@@ -114,15 +120,20 @@ getVelarSymbolMap();
 async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
     const map = await getAlexTokenMap();
-    const idIn = map.get(principal.toLowerCase()) ?? map.get(principal.split('.')[1]?.toLowerCase() ?? '');
-    if (!idIn) {
-      console.debug(`[sweep] ALEX: no id for ${principal} — map has ${map.size} entries`);
-      return null;
-    }
-    console.debug(`[sweep] ALEX: quoting ${principal} → id "${idIn}"`);
+    // Look up by principal, then by contract name part, then fall back to principal directly
+    // (SwapInterface fallback: pass address directly to getAmountTo — works for some tokens)
+    const idIn = map.get(principal.toLowerCase())
+      ?? map.get(principal.split('.')[1]?.toLowerCase() ?? '')
+      ?? principal;
+
+    // ALEX SDK always expects amounts in 1e8 units regardless of token decimals
+    // Convert human amount to 1e8: (rawAmount / 10^decimals) * 1e8
     const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
+
+    console.debug(`[sweep] ALEX: quoting ${principal} → id "${idIn}", amount ${amtAlex}`);
     const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx');
     if (out == null) return null;
+    // ALEX returns 1e8 wSTX → convert to micro-STX (1e6)
     return BigInt(Math.floor(Number(out) / 100));
   } catch (e) {
     console.warn('[sweep] ALEX quote failed for', principal, e);

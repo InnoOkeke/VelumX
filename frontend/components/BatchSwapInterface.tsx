@@ -153,7 +153,8 @@ export function BatchSwapInterface() {
   // Load tokens from ALEX + Velar — fully dynamic, no hardcoded maps
   useEffect(() => {
     let cancelled = false;
-    const CACHE_KEY = 'velumx_sweep_tokens_v6';
+    const CACHE_KEY = 'velumx_sweep_tokens_v7';
+    const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
     const load = async () => {
       setIsLoadingTokens(true);
@@ -161,7 +162,7 @@ export function BatchSwapInterface() {
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
           const { ts, data } = JSON.parse(cached);
-          if (Date.now() - ts < 3600_000 && data?.length > 0 && !cancelled) {
+          if (Date.now() - ts < CACHE_TTL && data?.length > 0 && !cancelled) {
             setTokens(data); setIsLoadingTokens(false);
           }
         }
@@ -293,7 +294,7 @@ export function BatchSwapInterface() {
 
   const handleSwap = async () => {
     if (!stacksAddress) { setError('Connect your wallet first'); return; }
-    const validRows = rows.filter(r => r.token && r.amount && parseFloat(r.amount) > 0 && r.quote);
+    const validRows = rows.filter(r => r.token && r.amount && parseFloat(r.amount) > 0 && r.quote && !r.quote.noLiquidity);
     if (validRows.length === 0) { setError('Add at least one token with an amount'); return; }
 
     setIsProcessing(true);
