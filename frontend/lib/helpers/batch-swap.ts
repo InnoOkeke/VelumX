@@ -277,12 +277,14 @@ async function enrichVelarToken(t: SweepToken): Promise<SweepToken> {
   if (t.dex !== 'velar') return t;
   try {
     const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
-    const wstx = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx'; // inline to avoid closure issues
 
-    const swapInstance = await velarSdk.getSwapInstance({
+    // Use a fresh SDK instance to avoid any stale state issues
+    const { VelarSDK: VelarSDKClass } = await import('@velarprotocol/velar-sdk');
+    const sdk = new VelarSDKClass();
+    const swapInstance = await sdk.getSwapInstance({
       account: '',
       inToken: t.principal,
-      outToken: wstx,
+      outToken: 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx',
     });
 
     const swapResp: any = await (swapInstance as any).swap({ amount: humanIn });
