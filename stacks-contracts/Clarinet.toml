@@ -4,9 +4,17 @@ description = ""
 authors = []
 telemetry = true
 cache_dir = "./.cache"
-requirements = []
-[contracts.paymaster]
-path = "contracts/paymaster.clar"
+requirements = [
+  { contract_id = "SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.trait-sip-010" },
+  { contract_id = "SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.amm-pool-v2-01" },
+  { contract_id = "SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-wstx" },
+  { contract_id = "SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to-trait" },
+  { contract_id = "SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-router" },
+  { contract_id = "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard" }
+]
+
+[contracts.velumx-sweep]
+path = "contracts/velumx-sweep.clar"
 clarity_version = 3
 epoch = 3.0
 
@@ -19,12 +27,6 @@ epoch = 3.0
 path = "contracts/velumx-token.clar"
 clarity_version = 3
 epoch = 3.0
-
-
-[contracts.sip-010-trait-ft-standard]
-path = "contracts/traits/sip-010-trait-ft-standard.clar"
-clarity_version = 2
-epoch = 2.5
 
 [repl.analysis]
 passes = ["check_checker"]

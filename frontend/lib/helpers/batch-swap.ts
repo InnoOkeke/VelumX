@@ -268,6 +268,143 @@ function tokenArgs(t: SweepToken) {
   ];
 }
 
+// ---- Velar pool lookup via API + on-chain pool ID ----
+interface VelarPoolInfo {
+  poolId: number;
+  token0: string;
+  token1: string;
+}
+
+const VELAR_CORE = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-core';
+const velarPoolIdCache = new Map<string, VelarPoolInfo>();
+
+/**
+ * Find the Velar pool for a given token paired with wSTX.
+ * 1. Check the Velar API to confirm the pool exists and get token0/token1 addresses
+ * 2. Call the univ2-core contract's get-pool-id read-only function to get the on-chain pool ID
+ */
+async function findVelarPool(tokenPrincipal: string): Promise<VelarPoolInfo | null> {
+  const cacheKey = tokenPrincipal.toLowerCase();
+  if (velarPoolIdCache.has(cacheKey)) return velarPoolIdCache.get(cacheKey)!;
+
+  try {
+    // Try both orderings: wSTX/token and token/wSTX
+    let poolData: any = null;
+    for (const [t0, t1] of [
+      [VELAR_WSTX, tokenPrincipal],
+      [tokenPrincipal, VELAR_WSTX],
+    ]) {
+      const resp = await fetch(`https://api.velar.co/pools/${t0}/${t1}`);
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json?.token0ContractAddress && json?.token1ContractAddress) {
+          poolData = json;
+          break;
+        }
+      }
+    }
+
+    if (!poolData) {
+      console.warn(`[sweep] findVelarPool: API has no STX pool for ${tokenPrincipal}`);
+      return null;
+    }
+
+    const token0 = poolData.token0ContractAddress;
+    const token1 = poolData.token1ContractAddress;
+
+    // Query on-chain pool ID from the univ2-core contract
+    const [coreAddr, coreName] = VELAR_CORE.split('.');
+    const poolId = await getOnChainPoolId(coreAddr, coreName, token0, token1);
+
+    if (poolId == null) {
+      console.warn(`[sweep] findVelarPool: on-chain pool ID not found for ${tokenPrincipal}`);
+      return null;
+    }
+
+    const info: VelarPoolInfo = { poolId, token0, token1 };
+    velarPoolIdCache.set(cacheKey, info);
+    console.log(`[sweep] findVelarPool: ${tokenPrincipal} → poolId=${poolId} token0=${token0} token1=${token1}`);
+    return info;
+  } catch (e: any) {
+    console.warn(`[sweep] findVelarPool error for ${tokenPrincipal}:`, e?.message);
+    return null;
+  }
+}
+
+/**
+ * Call the Velar univ2-core contract's `get-pool-id` read-only function
+ * to resolve the on-chain pool ID for a token pair.
+ */
+async function getOnChainPoolId(
+  coreAddr: string, coreName: string,
+  token0: string, token1: string
+): Promise<number | null> {
+  try {
+    const url = `https://api.hiro.so/v2/contracts/call-read/${coreAddr}/${coreName}/get-pool-id`;
+    const [t0Addr, t0Name] = token0.split('.');
+    const [t1Addr, t1Name] = token1.split('.');
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender: coreAddr,
+        arguments: [
+          Cl.serialize(Cl.contractPrincipal(t0Addr, t0Name)),
+          Cl.serialize(Cl.contractPrincipal(t1Addr, t1Name)),
+        ],
+      }),
+    });
+
+    const json = await resp.json();
+    if (!json.okay || !json.result) {
+      // Try reversed order
+      const resp2 = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender: coreAddr,
+          arguments: [
+            Cl.serialize(Cl.contractPrincipal(t1Addr, t1Name)),
+            Cl.serialize(Cl.contractPrincipal(t0Addr, t0Name)),
+          ],
+        }),
+      });
+      const json2 = await resp2.json();
+      if (!json2.okay || !json2.result) return null;
+      return parsePoolIdFromResult(json2.result);
+    }
+    return parsePoolIdFromResult(json.result);
+  } catch (e: any) {
+    console.warn(`[sweep] getOnChainPoolId failed:`, e?.message);
+    return null;
+  }
+}
+
+function parsePoolIdFromResult(hex: string): number | null {
+  try {
+    // Deserialize Clarity value — result is (optional uint)
+    const cv = Cl.deserialize(hex) as any;
+    // (some u<n>) → type='some', value has type='uint'
+    if (cv.type === 'some' && cv.value) {
+      return Number(cv.value.value);
+    }
+    // Direct uint (shouldn't happen but handle it)
+    if (cv.type === 'uint') {
+      return Number(cv.value);
+    }
+    // none → pool not found
+    if (cv.type === 'none') {
+      return null;
+    }
+    console.debug('[sweep] parsePoolIdFromResult: unexpected CV type', cv.type, cv);
+    return null;
+  } catch (e: any) {
+    console.warn('[sweep] parsePoolIdFromResult failed:', e?.message);
+    return null;
+  }
+}
+
 /**
  * Enrich a SweepToken with the correct token0, token1, poolId, and factor
  * needed by the sweep contract. Handles both ALEX and Velar tokens.
@@ -302,55 +439,16 @@ async function enrichToken(t: SweepToken): Promise<SweepToken> {
     };
   }
 
-  // ---- Velar tokens: fetch pool info from SDK ----
-  try {
-    const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
-
-    // Use a fresh SDK instance to avoid any stale state issues
-    const { VelarSDK: VelarSDKClass } = await import('@velarprotocol/velar-sdk');
-    const sdk = new VelarSDKClass();
-    const swapInstance = await sdk.getSwapInstance({
-      account: '',
-      inToken: t.principal,
-      outToken: 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx',
-    });
-
-    const swapResp: any = await (swapInstance as any).swap({ amount: humanIn });
-    console.log(`[sweep] enrichToken Velar ${t.principal} swapResp:`, JSON.stringify({
-      contractAddress: swapResp?.contractAddress,
-      contractName: swapResp?.contractName,
-      functionName: swapResp?.functionName,
-      argsCount: swapResp?.functionArgs?.length,
-      args: swapResp?.functionArgs?.map((a: any, i: number) => `[${i}] type=${a?.type} value=${JSON.stringify(a?.value)}`),
-    }));
-
-    const args = swapResp?.functionArgs;
-    if (!args || args.length < 3) {
-      console.warn(`[sweep] enrichToken: insufficient args for ${t.principal}, falling back`);
-      return { ...t, token0: t.principal, token1: WSTX_PRINCIPAL };
-    }
-
-    const getAddr = (cv: any) => cv?.address ?? cv?.value?.address ?? cv?.value?.hash160;
-    const getName = (cv: any) => cv?.contractName ?? cv?.value?.contractName ?? cv?.value?.name;
-
-    const poolId = Number(args[0]?.value ?? args[0] ?? 0);
-    const t0addr = getAddr(args[1]);
-    const t0name = getName(args[1]);
-    const t1addr = getAddr(args[2]);
-    const t1name = getName(args[2]);
-
-    console.log(`[sweep] enrichToken Velar ${t.principal}: pool=${poolId} t0=${t0addr}.${t0name} t1=${t1addr}.${t1name}`);
-
-    if (t0addr && t0name && t1addr && t1name) {
-      return { ...t, poolId, token0: `${t0addr}.${t0name}`, token1: `${t1addr}.${t1name}` };
-    }
-
-    console.warn(`[sweep] enrichToken: could not extract token addresses for ${t.principal}`);
-  } catch (e: any) {
-    console.warn(`[sweep] enrichToken failed for ${t.principal}:`, e?.message);
+  // ---- Velar tokens: look up pool data from Velar API ----
+  const pool = await findVelarPool(t.principal);
+  if (pool) {
+    console.log(`[sweep] enrichToken Velar ${t.principal}: poolId=${pool.poolId} token0=${pool.token0} token1=${pool.token1}`);
+    return { ...t, poolId: pool.poolId, token0: pool.token0, token1: pool.token1 };
   }
-  // Keep original dex — don't force-switch to ALEX which may lack pools for this token
-  return { ...t, token0: t.principal, token1: WSTX_PRINCIPAL };
+
+  console.warn(`[sweep] enrichToken: no Velar pool found for ${t.principal}, falling back to ALEX`);
+  // No pool found — fall back to ALEX routing if possible
+  return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
 }
 
 export async function executeSweep(params: {

@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Stacks smart contracts for VelumX Bridge",
   "scripts": {
-    "deploy": "node deploy-paymaster.js"
+    "deploy": "node deploy-paymaster.js",
+    "deploy:batch-swap": "node deploy-batch-swap.js"
   },
   "dependencies": {
     "@scure/bip32": "^2.0.1",

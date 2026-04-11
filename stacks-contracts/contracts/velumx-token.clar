@@ -1,6 +1,6 @@
 ;; VelumX Token (VEX)
 ;; This contract implements the SIP-010 community-standard Fungible Token trait.
-(impl-trait 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sip-010-trait-ft-standard.sip-010-trait)
+(impl-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; Define the FT, with no maximum supply
 (define-fungible-token velumx-token)
@@ -15,7 +15,7 @@
 (define-constant TOKEN_SYMBOL "VEX")
 (define-constant TOKEN_DECIMALS u6) ;; 6 units displayed past decimal, e.g. 1.000_000 = 1 token
 
-(define-data-var token-uri (string-ascii 256) "https://velumx.vercel.app/metadata.json")
+(define-data-var token-uri (string-utf8 256) u"https://velumx.vercel.app/metadata.json")
 
 ;; SIP-010 function: Get the token balance of a specified principal
 (define-read-only (get-balance (who principal))
@@ -48,14 +48,14 @@
 )
 
 ;; Properly updates token URI by emitting a SIP-019 token metadata update notification
-(define-public (set-token-uri (value (string-ascii 256)))
+(define-public (set-token-uri (value (string-utf8 256)))
     (begin
         (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_OWNER_ONLY)
         (var-set token-uri value)
         (ok (print {
               notification: "token-metadata-update",
               payload: {
-                contract-id: current-contract,
+                contract-id: (as-contract tx-sender),
                 token-class: "ft"
               }
             })
