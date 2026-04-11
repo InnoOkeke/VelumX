@@ -1,7 +1,7 @@
 /**
- * Sweep-to-STX Helper v3
- * Each token swaps independently to STX in one atomic tx.
- * Supports 1–6 tokens. User signs once.
+ * Sweep-to-STX Helper v4
+ * Token→symbol mapping built dynamically from Velar SDK at runtime.
+ * No hardcoded token maps.
  */
 
 import { AlexSDK } from 'alex-sdk';
@@ -16,25 +16,25 @@ export const WSTX_PRINCIPAL = 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-w
 export type DexType = 'alex' | 'velar';
 
 export interface SweepToken {
-  principal: string;   // contract principal e.g. SP123.my-token
-  amount: string;      // raw amount in token's native decimals (as string)
+  principal: string;
+  amount: string;
   decimals: number;
   dex: DexType;
-  factor?: number;     // ALEX pool factor (default 1e8)
-  poolId?: number;     // Velar pool id
-  token0?: string;     // Velar pool token0 principal
-  token1?: string;     // Velar pool token1 principal
+  factor?: number;
+  poolId?: number;
+  token0?: string;
+  token1?: string;
 }
 
 export interface SweepQuote {
-  stxOut: string;       // human-readable STX (after fee)
-  stxOutRaw: bigint;    // in STX micro units (1e6)
-  fee: string;          // human-readable protocol fee
+  stxOut: string;
+  stxOutRaw: bigint;
+  fee: string;
   perToken: {
     principal: string;
     stxOut: string;
     dex: DexType;
-    savings?: string;    // e.g. "+1.2% vs Velar"
+    savings?: string;
     noLiquidity?: boolean;
   }[];
 }
@@ -42,8 +42,35 @@ export interface SweepQuote {
 const alexSdk = new AlexSDK();
 const velarSdk = new VelarSDK();
 
-// ---- Token resolution ----
+// ---- Dynamic principal → Velar symbol map ----
+// Built once from getTokensMeta(), keyed by lowercase contract principal.
+let velarSymbolMap: Map<string, string> | null = null;
 
+async function getVelarSymbolMap(): Promise<Map<string, string>> {
+  if (velarSymbolMap) return velarSymbolMap;
+  const map = new Map<string, string>();
+  try {
+    const { getTokensMeta } = await import('@velarprotocol/velar-sdk');
+    const meta = await getTokensMeta() as Record<string, any>;
+    for (const entry of Object.values(meta)) {
+      const addr = entry.contractAddress;
+      const sym = entry.symbol;
+      if (addr && sym && addr.includes('.')) {
+        map.set(addr.toLowerCase(), sym);
+      }
+    }
+  } catch {}
+  velarSymbolMap = map;
+  return map;
+}
+
+async function principalToVelarSymbol(principal: string): Promise<string> {
+  if (!principal || !principal.includes('.')) return '';
+  const map = await getVelarSymbolMap();
+  return map.get(principal.toLowerCase()) ?? '';
+}
+
+// ---- ALEX token resolution ----
 async function resolveAlexId(principal: string): Promise<string | null> {
   if (principal === WSTX_PRINCIPAL || principal === 'token-wstx') return 'token-wstx';
   try {
@@ -58,51 +85,31 @@ async function resolveAlexId(principal: string): Promise<string | null> {
   return null;
 }
 
-const VELAR_SYMBOL_MAP: Record<string, string> = {
-  'token-wstx': 'STX', 'token-alex': 'ALEX', 'token-aeusdc': 'aeUSDC',
-  'sbtc-token': 'sBTC', 'token-susdt': 'sUSDT', 'velar-token': 'VELAR',
-  'token-welsh': 'WELSH', 'token-leo': 'LEO', 'token-odin': 'ODIN',
-  'ststx-token': 'stSTX', 'token-pepe': 'PEPE', 'token-not': 'NOT',
-};
-
-function principalToVelarSymbol(principal: string): string {
-  if (!principal || !principal.includes('.')) return '';
-  const name = principal.split('.')[1].toLowerCase();
-  return VELAR_SYMBOL_MAP[name] || name.toUpperCase().replace(/-TOKEN$/, '').replace(/^TOKEN-/, '');
-}
-
 // ---- Per-token quotes ----
-
 async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
     const idIn = await resolveAlexId(principal);
-    const idOut = 'token-wstx';
     if (!idIn) return null;
-    // ALEX works in 1e8 units internally
     const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
-    const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, idOut);
+    const out = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx');
     if (out == null) return null;
-    // ALEX returns 1e8 wSTX, convert to STX micro (1e6)
-    return BigInt(Math.floor(Number(out) / 100));
+    return BigInt(Math.floor(Number(out) / 100)); // 1e8 → 1e6
   } catch { return null; }
 }
 
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
   try {
-    const symIn = principalToVelarSymbol(principal);
+    const symIn = await principalToVelarSymbol(principal);
+    if (!symIn) return null;
     const humanIn = Number(amountRaw) / Math.pow(10, decimals);
     const swapInstance = await velarSdk.getSwapInstance({ account: '', inToken: symIn, outToken: 'STX' });
     const amtOut: number = await (swapInstance as any).getComputedAmount({ type: 1, amount: humanIn });
     if (!amtOut || amtOut <= 0) return null;
-    // Velar returns human STX, convert to micro (1e6)
     return BigInt(Math.floor(amtOut * 1e6));
   } catch { return null; }
 }
 
-/**
- * Quote all tokens, auto-selecting best DEX per token.
- * Returns per-token STX output and total.
- */
+// ---- Quote all tokens ----
 export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]): Promise<SweepQuote> {
   if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
 
@@ -144,10 +151,12 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
 }
 
 // ---- Clarity arg builders ----
-
 function makeContract(principal: string) {
-  const [address, contractName] = principal.split('.');
-  return { type: 'contract', address, contractName };
+  if (!principal || !principal.includes('.')) {
+    throw new Error(`Invalid principal: "${principal}"`);
+  }
+  const dot = principal.indexOf('.');
+  return { type: 'contract', address: principal.slice(0, dot), contractName: principal.slice(dot + 1) };
 }
 
 function makeUint(n: number | bigint) {
@@ -158,25 +167,22 @@ const [feeAddr, feeName] = VELAR_SHARE_FEE_TO.split('.');
 const FEE_TO_ARG = { type: 'contract', address: feeAddr, contractName: feeName };
 
 function tokenArgs(t: SweepToken) {
+  if (!t.principal?.includes('.')) throw new Error(`Invalid token principal: "${t.principal}"`);
   return [
-    makeContract(t.principal),                          // token
-    makeUint(t.dex === 'alex' ? 0 : 1),                // dex flag
-    makeUint(t.factor ?? DEFAULT_ALEX_FACTOR),          // factor
-    makeUint(t.poolId ?? 0),                            // pool-id
-    makeContract(t.token0 ?? t.principal),              // t0
-    makeContract(t.token1 ?? WSTX_PRINCIPAL),           // t1
-    FEE_TO_ARG,                                         // fee-to
-    makeUint(BigInt(t.amount)),                         // amount
+    makeContract(t.principal),
+    makeUint(t.dex === 'alex' ? 0 : 1),
+    makeUint(t.factor ?? DEFAULT_ALEX_FACTOR),
+    makeUint(t.poolId ?? 0),
+    makeContract(t.token0 ?? t.principal),
+    makeContract(t.token1 ?? WSTX_PRINCIPAL),
+    FEE_TO_ARG,
+    makeUint(BigInt(t.amount)),
   ];
 }
 
-/**
- * Execute the sweep. Builds args for sweep-to-stx-N and calls the contract.
- * User signs once, all tokens swap to STX atomically.
- */
 export async function executeSweep(params: {
   tokens: SweepToken[];
-  minStxOut: string;   // raw micro-STX as string
+  minStxOut: string;
   onProgress?: (msg: string) => void;
 }): Promise<string> {
   const { tokens, minStxOut, onProgress } = params;

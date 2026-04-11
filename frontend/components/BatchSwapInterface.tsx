@@ -8,7 +8,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AlexSDK } from 'alex-sdk';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { Plus, Trash2, Loader2, AlertTriangle, Layers, Info, ChevronDown, CheckCircle2, Zap } from 'lucide-react';
-import { quoteSweep, executeSweep, type DexType, type SweepToken } from '@/lib/helpers/batch-swap';
+import { quoteSweep, executeSweep, type DexType, type SweepToken, WSTX_PRINCIPAL } from '@/lib/helpers/batch-swap';
 
 interface Token {
   symbol: string;
@@ -148,10 +148,10 @@ export function BatchSwapInterface() {
     return '0';
   };
 
-  // Load tokens from ALEX + Velar
+  // Load tokens from ALEX + Velar — fully dynamic, no hardcoded maps
   useEffect(() => {
     let cancelled = false;
-    const CACHE_KEY = 'velumx_sweep_tokens_v4';
+    const CACHE_KEY = 'velumx_sweep_tokens_v5';
 
     const load = async () => {
       setIsLoadingTokens(true);
@@ -176,10 +176,13 @@ export function BatchSwapInterface() {
       if (alexResult.status === 'fulfilled') {
         for (const t of alexResult.value as any[]) {
           const addr = t.wrapToken ? t.wrapToken.split('::')[0] : '';
-          if (!addr || addr === 'token-wstx') continue;
+          if (!addr || !addr.includes('.') || addr === WSTX_PRINCIPAL) continue;
           map.set(addr.toLowerCase(), {
-            symbol: t.name || t.id, name: t.name || t.id,
-            address: addr, decimals: t.wrapTokenDecimals ?? 8, source: 'alex',
+            symbol: t.name || t.id,
+            name: t.name || t.id,
+            address: addr,
+            decimals: t.wrapTokenDecimals ?? 8,
+            source: 'alex',
           });
         }
       }
@@ -187,22 +190,29 @@ export function BatchSwapInterface() {
       if (velarResult.status === 'fulfilled') {
         for (const entry of Object.values(velarResult.value as Record<string, any>)) {
           const addr = entry.contractAddress;
-          if (!addr || !addr.includes('.')) continue;
+          const sym = entry.symbol;
+          if (!addr || !addr.includes('.') || !sym) continue;
           const key = addr.toLowerCase();
-          const decimals = entry.tokenDecimalNum != null
-            ? (entry.tokenDecimalNum >= 10
-                ? Math.round(Math.log10(entry.tokenDecimalNum))  // multiplier form e.g. 1000000
-                : entry.tokenDecimalNum)                          // count form e.g. 6
+          // decimals: tokenDecimalNum can be the count (e.g. 6) or multiplier (e.g. 1000000)
+          const rawDec = entry.tokenDecimalNum;
+          const decimals = rawDec != null
+            ? (rawDec >= 10 ? Math.round(Math.log10(rawDec)) : rawDec)
             : 6;
           if (map.has(key)) {
             map.set(key, { ...map.get(key)!, source: 'both' });
           } else {
-            map.set(key, { symbol: entry.symbol, name: entry.name || entry.symbol, address: addr, decimals, source: 'velar' });
+            map.set(key, {
+              symbol: sym,
+              name: entry.name || sym,
+              address: addr,
+              decimals,
+              source: 'velar',
+            });
           }
         }
       }
 
-      const merged = Array.from(map.values()).filter(t => t.address && t.symbol);
+      const merged = Array.from(map.values()).filter(t => t.address.includes('.') && t.symbol);
       if (!cancelled && merged.length > 0) {
         setTokens(merged);
         try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: merged })); } catch {}
