@@ -527,10 +527,13 @@ export async function executeSweep(params: {
     });
   }
 
-  // Mixed DEX — use sweep contract for all tokens
+  // Mixed DEX — use sweep contract for all tokens.
+  // The sweep contract's <ft-trait> is SP102V8...trait-sip-010, which Velar's wSTX (SP1Y5...wstx)
+  // does NOT implement. So we must re-route all Velar tokens through ALEX for the sweep contract call.
   console.log('[sweep] Mixed DEX path');
   onProgress?.('Building transaction...');
-  const enriched = (await Promise.all(tokens.map(enrichToken)))
+  const tokensForSweep = tokens.map(t => t.dex === 'velar' ? { ...t, dex: 'alex' as const } : t);
+  const enriched = (await Promise.all(tokensForSweep.map(enrichToken)))
     .filter(t => t?.principal?.includes('.')) as SweepToken[];
   console.log('[sweep] Mixed enriched tokens:', enriched.map(t => `${t.principal} dex=${t.dex} token0=${t.token0} token1=${t.token1}`));
   const functionArgs = [
