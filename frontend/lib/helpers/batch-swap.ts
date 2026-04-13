@@ -31,7 +31,10 @@ export const DEFAULT_ALEX_FACTOR = 100000000;
 
 // ── SDK instance ─────────────────────────────────────────────────────────────
 
-const bitflow = new BitflowSDK({});
+const bitflow = new BitflowSDK({
+  BITFLOW_API_HOST: 'https://api.bitflowapis.finance',
+  READONLY_CALL_API_HOST: 'https://node.bitflowapis.finance',
+});
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
