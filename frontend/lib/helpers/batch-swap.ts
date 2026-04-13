@@ -42,6 +42,7 @@ export type DexType = 'alex' | 'velar' | 'arkadiko' | 'bitflow';
 
 export interface SweepToken {
   principal: string;   // SIP-010 contract principal
+  tokenId: string;     // Bitflow token ID (e.g., 'token-welsh')
   amount: string;      // raw micro-units as string
   decimals: number;
   dex?: DexType;       // populated after quoting
@@ -162,7 +163,7 @@ function tokenArgs(t: SweepToken & { dex: DexType; route: RouteQuote }): ReturnT
 // ── Quote ─────────────────────────────────────────────────────────────────────
 
 export async function quoteSweep(
-  tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]
+  tokens: Pick<SweepToken, 'principal' | 'tokenId' | 'amount' | 'decimals'>[]
 ): Promise<SweepQuote> {
   if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
 
@@ -172,7 +173,7 @@ export async function quoteSweep(
   await Promise.all(tokens.map(async (t) => {
     try {
       const humanAmount = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
-      const result: QuoteResult = await bitflow.getQuoteForRoute(t.principal, STX_TOKEN_ID, humanAmount);
+      const result: QuoteResult = await bitflow.getQuoteForRoute(t.tokenId, STX_TOKEN_ID, humanAmount);
       const best = result.bestRoute;
 
       if (!best || best.quote == null || best.quote <= 0) {
@@ -223,7 +224,7 @@ export async function executeSweep(params: {
   for (const t of tokens) {
     try {
       const humanAmount = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
-      const result: QuoteResult = await bitflow.getQuoteForRoute(t.principal, STX_TOKEN_ID, humanAmount);
+      const result: QuoteResult = await bitflow.getQuoteForRoute(t.tokenId, STX_TOKEN_ID, humanAmount);
       const best = result.bestRoute;
 
       if (!best || best.quote == null || best.quote <= 0) {

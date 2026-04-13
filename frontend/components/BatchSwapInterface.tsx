@@ -10,6 +10,7 @@ import { Plus, Trash2, Loader2, AlertTriangle, Layers, Info, ChevronDown, CheckC
 import { quoteSweep, executeSweep, getAvailableTokens, type DexType, type SweepToken, WSTX_PRINCIPAL } from '@/lib/helpers/batch-swap';
 
 interface Token {
+  tokenId: string;
   symbol: string;
   name: string;
   address: string;
@@ -200,6 +201,7 @@ export function BatchSwapInterface() {
         const mapped: Token[] = bitflowTokens
           .filter(t => t.tokenContract && t.tokenContract.includes('.') && t.tokenContract !== WSTX_PRINCIPAL)
           .map(t => ({
+            tokenId: t.tokenId,
             symbol: t.symbol,
             name: t.name || t.symbol,
             address: t.tokenContract!,
@@ -242,6 +244,7 @@ export function BatchSwapInterface() {
           const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : r.token!.decimals;
           return {
             principal: r.token!.address,
+            tokenId: r.token!.tokenId,
             amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, decimals))).toString(),
             decimals,
           };
@@ -302,6 +305,7 @@ export function BatchSwapInterface() {
         const decimals = storedDecimals !== undefined ? parseInt(storedDecimals) : r.token!.decimals;
         return {
           principal: r.token!.address,
+          tokenId: r.token!.tokenId,
           amount: BigInt(Math.floor(parseFloat(r.amount) * Math.pow(10, decimals))).toString(),
           decimals,
           dex: r.quote!.dex,
