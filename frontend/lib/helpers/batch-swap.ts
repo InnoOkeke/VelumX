@@ -157,6 +157,12 @@ async function quoteAlex(principal: string, amountRaw: bigint, decimals: number)
 const VELAR_WSTX = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
 
 async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
+  // Never route the output token (wSTX) through Velar — it IS the output
+  if (
+    principal.toLowerCase() === WSTX_PRINCIPAL.toLowerCase() ||
+    principal.toLowerCase() === VELAR_WSTX.toLowerCase()
+  ) return null;
+
   // First verify if a direct pool exists (sweep contract requires 1 hop)
   const pool = await findVelarPool(principal);
   if (!pool) return null;
@@ -257,6 +263,9 @@ function tokenArgs(t: SweepToken) {
   const token1 = t.token1 ?? WSTX_PRINCIPAL;
   if (!token0.includes('.')) throw new Error(`Invalid token0: "${token0}" for ${t.principal}`);
   if (!token1.includes('.')) throw new Error(`Invalid token1: "${token1}" for ${t.principal}`);
+  if (t.dex === 'velar' && !t.poolId) {
+    throw new Error(`Velar token ${t.principal} has no poolId — enrichment failed`);
+  }
   return [
     makeContract(t.principal),
     makeUint(t.dex === 'alex' ? 0 : 1),
@@ -412,6 +421,14 @@ function parsePoolIdFromResult(hex: string): number | null {
  */
 async function enrichToken(t: SweepToken): Promise<SweepToken> {
   if (!t?.principal?.includes('.')) return { ...t, token0: t?.principal ?? '', token1: WSTX_PRINCIPAL };
+
+  // wSTX variants should never be routed through Velar as an input token
+  if (
+    t.principal.toLowerCase() === WSTX_PRINCIPAL.toLowerCase() ||
+    t.principal.toLowerCase() === VELAR_WSTX.toLowerCase()
+  ) {
+    return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
+  }
 
   // ---- ALEX tokens: set token0/token1 and resolve factor ----
   if (t.dex !== 'velar') {
