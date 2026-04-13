@@ -8,7 +8,7 @@ import { AlexSDK } from 'alex-sdk';
 import { VelarSDK } from '@velarprotocol/velar-sdk';
 import { request } from '@stacks/connect';
 
-export const SWEEP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.velumx-sweep';
+export const SWEEP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.velumx-sweep-v1';
 export const DEFAULT_ALEX_FACTOR = 100000000;
 export const VELAR_SHARE_FEE_TO = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to';
 export const WSTX_PRINCIPAL = 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-wstx';
@@ -527,13 +527,11 @@ export async function executeSweep(params: {
     });
   }
 
-  // Mixed DEX — use sweep contract for all tokens.
-  // The sweep contract's <ft-trait> is SP102V8...trait-sip-010, which Velar's wSTX (SP1Y5...wstx)
-  // does NOT implement. So we must re-route all Velar tokens through ALEX for the sweep contract call.
+  // Mixed DEX — use sweep contract for all tokens (single atomic tx).
+  // Requires the redeployed velumx-sweep contract that uses SP1Y5...wstx as Velar output.
   console.log('[sweep] Mixed DEX path');
   onProgress?.('Building transaction...');
-  const tokensForSweep = tokens.map(t => t.dex === 'velar' ? { ...t, dex: 'alex' as const } : t);
-  const enriched = (await Promise.all(tokensForSweep.map(enrichToken)))
+  const enriched = (await Promise.all(tokens.map(enrichToken)))
     .filter(t => t?.principal?.includes('.')) as SweepToken[];
   console.log('[sweep] Mixed enriched tokens:', enriched.map(t => `${t.principal} dex=${t.dex} token0=${t.token0} token1=${t.token1}`));
   const functionArgs = [
