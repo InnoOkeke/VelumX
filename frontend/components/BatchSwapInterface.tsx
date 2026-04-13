@@ -1,4 +1,4 @@
-﻿/**
+/**
  * BatchSwapInterface — Sweep to STX
  * Select 1–6 tokens, all swap to STX atomically in one signed transaction.
  */
@@ -252,7 +252,7 @@ export function BatchSwapInterface() {
         setRows(prev => prev.map(r => {
           const match = result.perToken.find(p => p.principal === r.token?.address);
           return match
-            ? { ...r, quote: { stxOut: match.stxOut, dex: match.dex, savings: match.savings, noLiquidity: match.noLiquidity } }
+            ? { ...r, quote: { stxOut: match.stxOut, dex: match.dex, noLiquidity: match.noLiquidity } }
             : { ...r, quote: r.quote }; // preserve existing quote, don't null it
         }));
         setTotalStxOut(result.stxOut);
