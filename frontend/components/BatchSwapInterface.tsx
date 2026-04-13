@@ -5,17 +5,16 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AlexSDK } from 'alex-sdk';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { Plus, Trash2, Loader2, AlertTriangle, Layers, Info, ChevronDown, CheckCircle2, Zap } from 'lucide-react';
-import { quoteSweep, executeSweep, type DexType, type SweepToken, WSTX_PRINCIPAL } from '@/lib/helpers/batch-swap';
+import { quoteSweep, executeSweep, getAvailableTokens, type DexType, type SweepToken, WSTX_PRINCIPAL } from '@/lib/helpers/batch-swap';
 
 interface Token {
   symbol: string;
   name: string;
   address: string;
   decimals: number;
-  source: 'alex' | 'velar' | 'both';
+  source: 'bitflow';
 }
 
 interface SwapRow {
@@ -26,8 +25,10 @@ interface SwapRow {
 }
 
 const DEX_STYLE: Record<DexType, { bg: string; text: string; label: string }> = {
-  alex:  { bg: 'rgba(59,130,246,0.12)', text: '#3b82f6', label: 'ALEX' },
-  velar: { bg: 'rgba(234,88,12,0.12)',  text: '#ea580c', label: 'Velar' },
+  alex:     { bg: 'rgba(59,130,246,0.12)',  text: '#3b82f6', label: 'ALEX' },
+  velar:    { bg: 'rgba(234,88,12,0.12)',   text: '#ea580c', label: 'Velar' },
+  arkadiko: { bg: 'rgba(16,185,129,0.12)',  text: '#10b981', label: 'Arkadiko' },
+  bitflow:  { bg: 'rgba(124,58,237,0.12)',  text: '#7c3aed', label: 'Bitflow' },
 };
 
 // ---- Token Dropdown ----
@@ -108,8 +109,8 @@ function TokenDropdown({ tokens, value, onChange, getBalance, disabled, usedAddr
                     <div className="text-xs font-bold" style={{ color: hasBalance ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
                       {hasBalance ? bal : '0'}
                     </div>
-                    <div className="text-[9px]" style={{ color: t.source === 'velar' ? '#ea580c' : t.source === 'alex' ? '#3b82f6' : '#7c3aed' }}>
-                      {t.source === 'both' ? 'A+V' : t.source === 'alex' ? 'ALEX' : 'Velar'}
+                    <div className="text-[9px]" style={{ color: '#7c3aed' }}>
+                      Bitflow
                     </div>
                   </div>
                 </button>
@@ -174,10 +175,10 @@ export function BatchSwapInterface() {
     return '0';
   };
 
-  // Load tokens from ALEX + Velar — fully dynamic, no hardcoded maps
+  // Load tokens from Bitflow SDK
   useEffect(() => {
     let cancelled = false;
-    const CACHE_KEY = 'velumx_sweep_tokens_v7';
+    const CACHE_KEY = 'velumx_sweep_tokens_v8';
     const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
     const load = async () => {
@@ -192,58 +193,28 @@ export function BatchSwapInterface() {
         }
       } catch {}
 
-      const [alexResult, velarResult] = await Promise.allSettled([
-        new AlexSDK().fetchSwappableCurrency(),
-        import('@velarprotocol/velar-sdk').then(m => m.getTokensMeta()),
-      ]);
-      if (cancelled) return;
+      try {
+        const bitflowTokens = await getAvailableTokens();
+        if (cancelled) return;
 
-      const map = new Map<string, Token>();
+        const mapped: Token[] = bitflowTokens
+          .filter(t => t.tokenContract && t.tokenContract.includes('.') && t.tokenContract !== WSTX_PRINCIPAL)
+          .map(t => ({
+            symbol: t.symbol,
+            name: t.name || t.symbol,
+            address: t.tokenContract!,
+            decimals: t.tokenDecimals ?? 6,
+            source: 'bitflow' as const,
+          }));
 
-      if (alexResult.status === 'fulfilled') {
-        for (const t of alexResult.value as any[]) {
-          const addr = t.wrapToken ? t.wrapToken.split('::')[0] : '';
-          if (!addr || !addr.includes('.') || addr === WSTX_PRINCIPAL) continue;
-          map.set(addr.toLowerCase(), {
-            symbol: t.name || t.id,
-            name: t.name || t.id,
-            address: addr,
-            decimals: t.wrapTokenDecimals ?? 8,
-            source: 'alex',
-          });
+        if (!cancelled && mapped.length > 0) {
+          setTokens(mapped);
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: mapped })); } catch {}
         }
+      } catch (e) {
+        console.warn('[sweep] Failed to load Bitflow tokens:', e);
       }
 
-      if (velarResult.status === 'fulfilled') {
-        for (const entry of Object.values(velarResult.value as Record<string, any>)) {
-          const addr = entry.contractAddress;
-          const sym = entry.symbol;
-          if (!addr || !addr.includes('.') || !sym) continue;
-          const key = addr.toLowerCase();
-          // decimals: tokenDecimalNum can be the count (e.g. 6) or multiplier (e.g. 1000000)
-          const rawDec = entry.tokenDecimalNum;
-          const decimals = rawDec != null
-            ? (rawDec >= 10 ? Math.round(Math.log10(rawDec)) : rawDec)
-            : 6;
-          if (map.has(key)) {
-            map.set(key, { ...map.get(key)!, source: 'both' });
-          } else {
-            map.set(key, {
-              symbol: sym,
-              name: entry.name || sym,
-              address: addr,
-              decimals,
-              source: 'velar',
-            });
-          }
-        }
-      }
-
-      const merged = Array.from(map.values()).filter(t => t.address.includes('.') && t.symbol);
-      if (!cancelled && merged.length > 0) {
-        setTokens(merged);
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: merged })); } catch {}
-      }
       if (!cancelled) setIsLoadingTokens(false);
     };
 
@@ -506,9 +477,8 @@ export function BatchSwapInterface() {
           style={{ backgroundColor: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)' }}>
           <Info className="h-3.5 w-3.5 text-purple-500 flex-shrink-0 mt-0.5" />
           <span style={{ color: 'var(--text-secondary)' }}>
-            All tokens swap to STX atomically in one transaction via the best route on{' '}
-            <span style={{ color: '#3b82f6', fontWeight: 600 }}>ALEX</span> or{' '}
-            <span style={{ color: '#ea580c', fontWeight: 600 }}>Velar</span>. 0.1% protocol fee on total output.
+            All tokens swap to STX atomically in one transaction via{' '}
+            <span style={{ color: '#7c3aed', fontWeight: 600 }}>Bitflow</span>. 0.1% protocol fee on total output.
           </span>
         </div>
 

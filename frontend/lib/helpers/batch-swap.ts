@@ -1,225 +1,194 @@
 /**
- * Sweep-to-STX Helper v5
- * Pre-warms both SDK token lists at module load.
- * No hardcoded maps. All data from SDKs.
+ * Sweep-to-STX Helper v6 — Bitflow SDK only
+ *
+ * Routes all token→STX swaps through Bitflow's wrapper contracts
+ * (wrapper-alex-v-2-1, wrapper-velar-v-1-1, wrapper-arkadiko-v-1-1).
+ * All tokens use Bitflow's unified SIP-010 trait, eliminating the
+ * trait incompatibility that caused wallet rejection in v1.
+ *
+ * Single execution path: always calls velumx-sweep-v2 in one tx.
  */
 
-import { AlexSDK } from 'alex-sdk';
-import { VelarSDK } from '@velarprotocol/velar-sdk';
+import { BitflowSDK, type Token, type QuoteResult, type SelectedSwapRoute, type RouteQuote } from '@bitflowlabs/core-sdk';
+import { Cl } from '@stacks/transactions';
 import { request } from '@stacks/connect';
 
-export const SWEEP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.velumx-sweep-v1';
-export const DEFAULT_ALEX_FACTOR = 100000000;
-export const VELAR_SHARE_FEE_TO = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to';
-export const WSTX_PRINCIPAL = 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-wstx';
+// ── Constants ────────────────────────────────────────────────────────────────
 
-export type DexType = 'alex' | 'velar';
+// Update this after deploying velumx-sweep-v2 to mainnet
+export const SWEEP_CONTRACT = 'SPKYNF473GQ1V0WWCF24TV7ZR1WYAKTC7AM8QGBW.velumx-sweep-v2';
+
+export const WSTX_PRINCIPAL = 'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.token-wstx';
+// Velar uses its own wSTX contract
+export const WSTX_VELAR = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
+export const VELAR_SHARE_FEE_TO = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-share-fee-to';
+
+// Bitflow token ID for STX
+const STX_TOKEN_ID = 'token-stx';
+
+// Default ALEX factor (1e8) — used when Bitflow route is via ALEX wrapper
+export const DEFAULT_ALEX_FACTOR = 100000000;
+
+// ── SDK instance ─────────────────────────────────────────────────────────────
+
+const bitflow = new BitflowSDK({});
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export type DexType = 'alex' | 'velar' | 'arkadiko' | 'bitflow';
 
 export interface SweepToken {
-  principal: string;
-  amount: string;
+  principal: string;   // SIP-010 contract principal
+  amount: string;      // raw micro-units as string
   decimals: number;
-  dex: DexType;
-  factor?: number;
-  poolId?: number;
-  token0?: string;
-  token1?: string;
+  dex?: DexType;       // populated after quoting
+  // Bitflow route data — populated by executeSweep
+  route?: RouteQuote;
 }
 
 export interface SweepQuote {
-  stxOut: string;
-  stxOutRaw: bigint;
-  fee: string;
+  stxOut: string;      // net STX after 0.1% fee, human-readable
+  stxOutRaw: bigint;   // net in micro-STX
+  fee: string;         // protocol fee, human-readable
   perToken: {
     principal: string;
     stxOut: string;
     dex: DexType;
-    savings?: string;
     noLiquidity?: boolean;
   }[];
 }
 
-const alexSdk = new AlexSDK();
-const velarSdk = new VelarSDK();
+// ── Token list ───────────────────────────────────────────────────────────────
 
-// ---- ALEX maps ----
-let alexTokenMap: Map<string, string> | null = null;       // principal/id → ALEX id
-let alexPrincipalMap: Map<string, string> | null = null;   // ALEX id → full principal
-let alexTokenMapPromise: Promise<Map<string, string>> | null = null;
+let availableTokensCache: Token[] | null = null;
+let availableTokensPromise: Promise<Token[]> | null = null;
 
-async function getAlexTokenMap(): Promise<Map<string, string>> {
-  if (alexTokenMap) return alexTokenMap;
-  if (alexTokenMapPromise) return alexTokenMapPromise;
-  alexTokenMapPromise = (async () => {
-    const map = new Map<string, string>();
-    const principalMap = new Map<string, string>();
-    try {
-      const tokens = await alexSdk.fetchSwappableCurrency();
-      for (const t of tokens as any[]) {
-        const addr = t.wrapToken ? t.wrapToken.split('::')[0] : '';
-        if (addr && t.id) {
-          map.set(addr.toLowerCase(), t.id);
-          map.set(t.id.toLowerCase(), t.id);
-          principalMap.set(t.id.toLowerCase(), addr);
-        }
-      }
-      map.set(WSTX_PRINCIPAL.toLowerCase(), 'token-wstx');
-      map.set('token-wstx', 'token-wstx');
-      principalMap.set('token-wstx', WSTX_PRINCIPAL);
-    } catch (e) {
-      console.warn('[sweep] ALEX token map failed:', e);
-    }
-    alexTokenMap = map;
-    alexPrincipalMap = principalMap;
-    console.debug(`[sweep] ALEX token map built: ${map.size} entries`);
-    return map;
-  })();
-  return alexTokenMapPromise;
+export async function getAvailableTokens(): Promise<Token[]> {
+  if (availableTokensCache) return availableTokensCache;
+  if (availableTokensPromise) return availableTokensPromise;
+  availableTokensPromise = bitflow.getAvailableTokens().then(tokens => {
+    availableTokensCache = tokens;
+    return tokens;
+  }).catch(e => {
+    console.warn('[sweep] getAvailableTokens failed:', e);
+    availableTokensPromise = null;
+    return [];
+  });
+  return availableTokensPromise;
 }
 
-// ---- Velar map ----
-let velarSymbolMap: Map<string, string> | null = null;
-let velarSymbolMapPromise: Promise<Map<string, string>> | null = null;
+// Pre-warm at module load
+getAvailableTokens();
 
-async function getVelarSymbolMap(): Promise<Map<string, string>> {
-  if (velarSymbolMap) return velarSymbolMap;
-  if (velarSymbolMapPromise) return velarSymbolMapPromise;
-  velarSymbolMapPromise = (async () => {
-    const map = new Map<string, string>();
-    try {
-      const { getTokensMeta, getTokens } = await import('@velarprotocol/velar-sdk');
-      const [meta, swappable] = await Promise.all([
-        (getTokensMeta() as Promise<Record<string, any>>),
-        (getTokens() as Promise<any>).catch(() => null),
-      ]);
+// ── DEX label from Bitflow route ─────────────────────────────────────────────
 
-      console.debug('[sweep] Velar getTokens result:', swappable);
-
-      // Build valid symbol set — getTokens() may return object or array
-      let validSymbols: Set<string> | null = null;
-      if (swappable) {
-        if (Array.isArray(swappable)) {
-          validSymbols = new Set(swappable.map((t: any) => t.symbol || t).filter(Boolean));
-        } else if (typeof swappable === 'object') {
-          validSymbols = new Set(Object.keys(swappable));
-        }
-      }
-
-      console.debug(`[sweep] Velar valid symbols (${validSymbols?.size ?? 0}):`, validSymbols ? [...validSymbols].join(', ') : 'none');
-
-      for (const entry of Object.values(meta)) {
-        const addr = entry.contractAddress;
-        const sym = entry.symbol;
-        if (!addr || !sym || !addr.includes('.')) continue;
-        // Filter by valid symbols if available; otherwise include all from meta
-        if (validSymbols && validSymbols.size > 0 && !validSymbols.has(sym)) continue;
-        map.set(addr.toLowerCase(), sym);
-      }
-    } catch (e) {
-      console.warn('[sweep] Velar symbol map failed:', e);
-    }
-    velarSymbolMap = map;
-    console.debug(`[sweep] Velar symbol map built: ${map.size} tokens`);
-    return map;
-  })();
-  return velarSymbolMapPromise;
+function dexFromRoute(route: RouteQuote | null | undefined): DexType {
+  if (!route) return 'bitflow';
+  const path = route.dexPath?.[0]?.toLowerCase() ?? route.route?.dex_path?.[0]?.toLowerCase() ?? '';
+  if (path.includes('alex')) return 'alex';
+  if (path.includes('velar')) return 'velar';
+  if (path.includes('arkadiko')) return 'arkadiko';
+  return 'bitflow';
 }
 
-// Pre-warm both maps at module load
-getAlexTokenMap();
-getVelarSymbolMap();
+// ── Clarity arg helpers ───────────────────────────────────────────────────────
 
-// ---- Per-token quotes ----
-
-async function quoteAlex(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
-  try {
-    const map = await getAlexTokenMap();
-    const idIn = map.get(principal.toLowerCase())
-      ?? map.get(principal.split('.')[1]?.toLowerCase() ?? '')
-      ?? principal;
-
-    // ALEX SDK always expects 1e8 units
-    const amtAlex = BigInt(Math.floor(Number(amountRaw) / Math.pow(10, decimals) * 1e8));
-    console.debug(`[sweep] ALEX: quoting ${principal} → id "${idIn}", amount ${amtAlex}`);
-
-    // Try direct route: token → wSTX
-    let out: any = await (alexSdk as any).getAmountTo(idIn, amtAlex, 'token-wstx').catch(() => null);
-
-    if (out == null) return null;
-    return BigInt(Math.floor(Number(out) / 100)); // 1e8 → 1e6
-  } catch (e) {
-    console.warn('[sweep] ALEX quote failed for', principal, e);
-    return null;
-  }
+function makeContract(principal: string) {
+  const dot = principal.indexOf('.');
+  if (dot === -1) throw new Error(`makeContract: invalid principal "${principal}"`);
+  return Cl.contractPrincipal(principal.slice(0, dot), principal.slice(dot + 1));
 }
 
-// Velar's wSTX contract address (outToken for STX swaps)
-const VELAR_WSTX = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx';
-
-async function quoteVelar(principal: string, amountRaw: bigint, decimals: number): Promise<bigint | null> {
-  // Never route the output token (wSTX) through Velar — it IS the output
-  if (
-    principal.toLowerCase() === WSTX_PRINCIPAL.toLowerCase() ||
-    principal.toLowerCase() === VELAR_WSTX.toLowerCase()
-  ) return null;
-
-  // First verify if a direct pool exists (sweep contract requires 1 hop)
-  const pool = await findVelarPool(principal);
-  if (!pool) return null;
-
-  try {
-    const swapInstance = await velarSdk.getSwapInstance({
-      account: '',
-      inToken: principal,
-      outToken: VELAR_WSTX,
-    });
-    const humanIn = Number(amountRaw) / Math.pow(10, decimals);
-    const result: any = await swapInstance.getComputedAmount({ amount: humanIn });
-    
-    // Check if the route is multi-hop
-    if (result && result.route && result.route.length > 2) {
-      console.warn(`[sweep] quoteVelar: skipping ${principal} due to multi-hop route`);
-      return null;
-    }
-
-    const amtOut = result?.amountOutDecimal ?? result?.amountOut;
-    if (!amtOut || Number(amtOut) <= 0) return null;
-    return BigInt(Math.floor(Number(amtOut) * 1e6));
-  } catch {
-    return null;
-  }
+function makeUint(n: number | bigint) {
+  return Cl.uint(n);
 }
 
-// ---- Quote all tokens ----
-export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]): Promise<SweepQuote> {
+const [feeAddr, feeName] = VELAR_SHARE_FEE_TO.split('.');
+const FEE_TO_ARG = Cl.contractPrincipal(feeAddr, feeName);
+
+// Build the per-token args for velumx-sweep-v2.
+// New signature per slot:
+//   token-alex <ft-alex>, token-velar <ft-velar>, token-ark <ft-arkadiko>,
+//   dex uint, factor uint, pool-id uint,
+//   t0 <ft-velar>, t1 <ft-velar>,
+//   fee-to <share-fee-to-trait>,
+//   ty <ft-arkadiko>,
+//   amount uint
+// The contract uses only the token matching the selected dex.
+function tokenArgs(t: SweepToken & { dex: DexType; route: RouteQuote }): ReturnType<typeof Cl.uint>[] {
+  const dexNum = t.dex === 'alex' ? 0 : t.dex === 'velar' ? 1 : 2;
+  const params = t.route.swapData?.parameters ?? t.route.route?.swapData?.parameters ?? {};
+
+  const factor = dexNum === 0 ? (params['factor'] ?? DEFAULT_ALEX_FACTOR) : 0;
+  const poolId = dexNum === 1 ? (params['id'] ?? params['pool-id'] ?? 0) : 0;
+
+  // Known valid tokens on Mainnet that implement the respective DEX SIP-010 traits
+  // This prevents the node typechecker from throwing BadTraitReference during batch swaps
+  const DUMMY_ARK_TOKEN = 'SP2C2YGWMTWH119M16216X2J0X7V4BD7Y2CA3EAC.usda-token';
+
+  // token0/token1 for Velar — from route token_path
+  const tokenPath = t.route.tokenPath ?? t.route.route?.token_path ?? [];
+  const t0Principal = dexNum === 1 ? (tokenPath[0] ?? t.principal) : WSTX_VELAR;
+  const t1Principal = dexNum === 1 ? (tokenPath[1] ?? WSTX_VELAR) : WSTX_VELAR;
+
+  // ty for Arkadiko — the output token
+  const tyPrincipal = dexNum === 2 ? WSTX_PRINCIPAL : DUMMY_ARK_TOKEN;
+
+  // The actual token contract being swept
+  const targetToken = makeContract(t.principal);
+
+  const t0Contract = makeContract(t0Principal.includes('.') ? t0Principal : t.principal);
+  const t1Contract = makeContract(t1Principal.includes('.') ? t1Principal : WSTX_VELAR);
+  const tyContract = makeContract(tyPrincipal);
+
+  return [
+    dexNum === 0 ? targetToken : makeContract(WSTX_PRINCIPAL),                        // token-alex 
+    dexNum === 1 ? targetToken : makeContract(WSTX_VELAR),                            // token-velar
+    dexNum === 2 ? targetToken : makeContract(DUMMY_ARK_TOKEN),                       // token-ark  
+    makeUint(dexNum),                                                                 // dex
+    makeUint(factor),                                                                 // factor
+    makeUint(poolId),                                                                 // pool-id
+    dexNum === 1 ? t0Contract : makeContract(WSTX_VELAR),                             // t0 (must be velar trait)
+    dexNum === 1 ? t1Contract : makeContract(WSTX_VELAR),                             // t1 (must be velar trait)
+    FEE_TO_ARG,                                                                       // fee-to
+    tyContract,                                                                       // ty (must be ark trait)
+    makeUint(BigInt(t.amount)),                                                       // amount
+  ] as any;
+}
+
+// ── Quote ─────────────────────────────────────────────────────────────────────
+
+export async function quoteSweep(
+  tokens: Pick<SweepToken, 'principal' | 'amount' | 'decimals'>[]
+): Promise<SweepQuote> {
   if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
-
-  await Promise.all([getAlexTokenMap(), getVelarSymbolMap()]);
 
   const perToken: SweepQuote['perToken'] = [];
   let totalRaw = 0n;
 
   await Promise.all(tokens.map(async (t) => {
-    const amountRaw = BigInt(t.amount);
-    const [alexOut, velarOut] = await Promise.all([
-      quoteAlex(t.principal, amountRaw, t.decimals),
-      quoteVelar(t.principal, amountRaw, t.decimals),
-    ]);
+    try {
+      const humanAmount = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
+      const result: QuoteResult = await bitflow.getQuoteForRoute(t.principal, STX_TOKEN_ID, humanAmount);
+      const best = result.bestRoute;
 
-    if (alexOut == null && velarOut == null) {
-      perToken.push({ principal: t.principal, stxOut: '0', dex: 'alex', noLiquidity: true });
-      return;
+      if (!best || best.quote == null || best.quote <= 0) {
+        perToken.push({ principal: t.principal, stxOut: '0', dex: 'bitflow', noLiquidity: true });
+        return;
+      }
+
+      // best.quote is in human STX units — convert to micro-STX
+      const stxRaw = BigInt(Math.floor(best.quote * 1e6));
+      totalRaw += stxRaw;
+      perToken.push({
+        principal: t.principal,
+        stxOut: (Number(stxRaw) / 1e6).toFixed(6),
+        dex: dexFromRoute(best),
+      });
+    } catch (e) {
+      console.warn('[sweep] quoteSweep failed for', t.principal, e);
+      perToken.push({ principal: t.principal, stxOut: '0', dex: 'bitflow', noLiquidity: true });
     }
-
-    const dex: DexType = (alexOut ?? 0n) >= (velarOut ?? 0n) ? 'alex' : 'velar';
-    const out = dex === 'alex' ? alexOut! : velarOut!;
-    const other = dex === 'alex' ? velarOut : alexOut;
-    const savings = other != null && other > 0n
-      ? `+${((Number(out - other) / Number(other)) * 100).toFixed(2)}% vs ${dex === 'alex' ? 'Velar' : 'ALEX'}`
-      : undefined;
-
-    totalRaw += out;
-    perToken.push({ principal: t.principal, stxOut: (Number(out) / 1e6).toFixed(6), dex, savings });
   }));
 
   const feeRaw = totalRaw / 1000n;
@@ -233,241 +202,7 @@ export async function quoteSweep(tokens: Pick<SweepToken, 'principal' | 'amount'
   };
 }
 
-// ---- Clarity arg builders ----
-// Uses @stacks/transactions Cl helpers to build proper ClarityValues
-import { Cl } from '@stacks/transactions';
-
-function makeContract(principal: string) {
-  if (!principal?.includes('.')) {
-    const resolved = alexPrincipalMap?.get(principal?.toLowerCase());
-    if (resolved?.includes('.')) {
-      const dot = resolved.indexOf('.');
-      return Cl.contractPrincipal(resolved.slice(0, dot), resolved.slice(dot + 1));
-    }
-    throw new Error(`makeContract: invalid principal "${principal}" (no dot separator)`);
-  }
-  const dot = principal.indexOf('.');
-  return Cl.contractPrincipal(principal.slice(0, dot), principal.slice(dot + 1));
-}
-
-function makeUint(n: number | bigint) {
-  return Cl.uint(n);
-}
-
-const [feeAddr, feeName] = VELAR_SHARE_FEE_TO.split('.');
-const FEE_TO_ARG = Cl.contractPrincipal(feeAddr, feeName);
-
-function tokenArgs(t: SweepToken) {
-  if (!t.principal?.includes('.')) throw new Error(`Invalid token principal: "${t.principal}"`);
-  const token0 = t.token0 ?? t.principal;
-  const token1 = t.token1 ?? WSTX_PRINCIPAL;
-  if (!token0.includes('.')) throw new Error(`Invalid token0: "${token0}" for ${t.principal}`);
-  if (!token1.includes('.')) throw new Error(`Invalid token1: "${token1}" for ${t.principal}`);
-  if (t.dex === 'velar' && !t.poolId) {
-    throw new Error(`Velar token ${t.principal} has no poolId — enrichment failed`);
-  }
-  return [
-    makeContract(t.principal),
-    makeUint(t.dex === 'alex' ? 0 : 1),
-    makeUint(t.factor ?? DEFAULT_ALEX_FACTOR),
-    makeUint(t.poolId ?? 0),
-    makeContract(token0),
-    makeContract(token1),
-    FEE_TO_ARG,
-    makeUint(BigInt(t.amount)),
-  ];
-}
-
-// ---- Velar pool lookup via API + on-chain pool ID ----
-interface VelarPoolInfo {
-  poolId: number;
-  token0: string;
-  token1: string;
-}
-
-const VELAR_CORE = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.univ2-core';
-const velarPoolIdCache = new Map<string, VelarPoolInfo>();
-
-/**
- * Find the Velar pool for a given token paired with wSTX.
- * 1. Check the Velar API to confirm the pool exists and get token0/token1 addresses
- * 2. Call the univ2-core contract's get-pool-id read-only function to get the on-chain pool ID
- */
-async function findVelarPool(tokenPrincipal: string): Promise<VelarPoolInfo | null> {
-  const cacheKey = tokenPrincipal.toLowerCase();
-  if (velarPoolIdCache.has(cacheKey)) return velarPoolIdCache.get(cacheKey)!;
-
-  try {
-    // Try both orderings: wSTX/token and token/wSTX
-    let poolData: any = null;
-    for (const [t0, t1] of [
-      [VELAR_WSTX, tokenPrincipal],
-      [tokenPrincipal, VELAR_WSTX],
-    ]) {
-      const resp = await fetch(`https://api.velar.co/pools/${t0}/${t1}`);
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json?.token0ContractAddress && json?.token1ContractAddress) {
-          poolData = json;
-          break;
-        }
-      }
-    }
-
-    if (!poolData) {
-      console.warn(`[sweep] findVelarPool: API has no STX pool for ${tokenPrincipal}`);
-      return null;
-    }
-
-    const token0 = poolData.token0ContractAddress;
-    const token1 = poolData.token1ContractAddress;
-
-    // Query on-chain pool ID from the univ2-core contract
-    const [coreAddr, coreName] = VELAR_CORE.split('.');
-    const poolId = await getOnChainPoolId(coreAddr, coreName, token0, token1);
-
-    if (poolId == null) {
-      console.warn(`[sweep] findVelarPool: on-chain pool ID not found for ${tokenPrincipal}`);
-      return null;
-    }
-
-    const info: VelarPoolInfo = { poolId, token0, token1 };
-    velarPoolIdCache.set(cacheKey, info);
-    console.log(`[sweep] findVelarPool: ${tokenPrincipal} → poolId=${poolId} token0=${token0} token1=${token1}`);
-    return info;
-  } catch (e: any) {
-    console.warn(`[sweep] findVelarPool error for ${tokenPrincipal}:`, e?.message);
-    return null;
-  }
-}
-
-/**
- * Call the Velar univ2-core contract's `get-pool-id` read-only function
- * to resolve the on-chain pool ID for a token pair.
- */
-async function getOnChainPoolId(
-  coreAddr: string, coreName: string,
-  token0: string, token1: string
-): Promise<number | null> {
-  try {
-    const url = `https://api.hiro.so/v2/contracts/call-read/${coreAddr}/${coreName}/get-pool-id`;
-    const [t0Addr, t0Name] = token0.split('.');
-    const [t1Addr, t1Name] = token1.split('.');
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender: coreAddr,
-        arguments: [
-          Cl.serialize(Cl.contractPrincipal(t0Addr, t0Name)),
-          Cl.serialize(Cl.contractPrincipal(t1Addr, t1Name)),
-        ],
-      }),
-    });
-
-    const json = await resp.json();
-    if (!json.okay || !json.result) {
-      // Try reversed order
-      const resp2 = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender: coreAddr,
-          arguments: [
-            Cl.serialize(Cl.contractPrincipal(t1Addr, t1Name)),
-            Cl.serialize(Cl.contractPrincipal(t0Addr, t0Name)),
-          ],
-        }),
-      });
-      const json2 = await resp2.json();
-      if (!json2.okay || !json2.result) return null;
-      return parsePoolIdFromResult(json2.result);
-    }
-    return parsePoolIdFromResult(json.result);
-  } catch (e: any) {
-    console.warn(`[sweep] getOnChainPoolId failed:`, e?.message);
-    return null;
-  }
-}
-
-function parsePoolIdFromResult(hex: string): number | null {
-  try {
-    // Deserialize Clarity value — result is (optional uint)
-    const cv = Cl.deserialize(hex) as any;
-    // (some u<n>) → type='some', value has type='uint'
-    if (cv.type === 'some' && cv.value) {
-      return Number(cv.value.value);
-    }
-    // Direct uint (shouldn't happen but handle it)
-    if (cv.type === 'uint') {
-      return Number(cv.value);
-    }
-    // none → pool not found
-    if (cv.type === 'none') {
-      return null;
-    }
-    console.debug('[sweep] parsePoolIdFromResult: unexpected CV type', cv.type, cv);
-    return null;
-  } catch (e: any) {
-    console.warn('[sweep] parsePoolIdFromResult failed:', e?.message);
-    return null;
-  }
-}
-
-/**
- * Enrich a SweepToken with the correct token0, token1, poolId, and factor
- * needed by the sweep contract. Handles both ALEX and Velar tokens.
- */
-async function enrichToken(t: SweepToken): Promise<SweepToken> {
-  if (!t?.principal?.includes('.')) return { ...t, token0: t?.principal ?? '', token1: WSTX_PRINCIPAL };
-
-  // wSTX variants should never be routed through Velar as an input token
-  if (
-    t.principal.toLowerCase() === WSTX_PRINCIPAL.toLowerCase() ||
-    t.principal.toLowerCase() === VELAR_WSTX.toLowerCase()
-  ) {
-    return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
-  }
-
-  // ---- ALEX tokens: set token0/token1 and resolve factor ----
-  if (t.dex !== 'velar') {
-    // For ALEX dex (dex=u0), the contract calls alex-to-stx which only uses
-    // the token trait and factor. But t0/t1 are still passed as trait args,
-    // so they must be valid contract principals.
-    let factor = t.factor ?? DEFAULT_ALEX_FACTOR;
-    try {
-      const tokens = await alexSdk.fetchSwappableCurrency();
-      const match = (tokens as any[]).find((tok: any) => {
-        const addr = tok.wrapToken ? tok.wrapToken.split('::')[0] : '';
-        return addr.toLowerCase() === t.principal.toLowerCase();
-      });
-      if (match?.wrapTokenDecimals != null) {
-        factor = Math.pow(10, match.wrapTokenDecimals);
-      }
-    } catch (e: any) {
-      console.warn(`[sweep] enrichToken: ALEX factor lookup failed for ${t.principal}:`, e?.message);
-    }
-    console.log(`[sweep] enrichToken ALEX ${t.principal}: factor=${factor} token0=${t.principal} token1=${WSTX_PRINCIPAL}`);
-    return {
-      ...t,
-      token0: t.principal,
-      token1: WSTX_PRINCIPAL,
-      factor,
-    };
-  }
-
-  // ---- Velar tokens: look up pool data from Velar API ----
-  const pool = await findVelarPool(t.principal);
-  if (pool) {
-    console.log(`[sweep] enrichToken Velar ${t.principal}: poolId=${pool.poolId} token0=${pool.token0} token1=${pool.token1}`);
-    return { ...t, poolId: pool.poolId, token0: pool.token0, token1: pool.token1 };
-  }
-
-  console.warn(`[sweep] enrichToken: no Velar pool found for ${t.principal}, falling back to ALEX`);
-  // No pool found — fall back to ALEX routing if possible
-  return { ...t, dex: 'alex', token0: t.principal, token1: WSTX_PRINCIPAL };
-}
+// ── Execute ───────────────────────────────────────────────────────────────────
 
 export async function executeSweep(params: {
   tokens: SweepToken[];
@@ -475,87 +210,47 @@ export async function executeSweep(params: {
   onProgress?: (msg: string) => void;
 }): Promise<string> {
   const { tokens, minStxOut, onProgress } = params;
-  const n = tokens.length;
-  if (n < 1 || n > 6) throw new Error('Sweep supports 1–6 tokens');
+  if (tokens.length < 1 || tokens.length > 6) throw new Error('Sweep supports 1–6 tokens');
 
-  console.log('[sweep] executeSweep called with', n, 'tokens:', tokens.map(t => `${t.principal} (${t.dex})`));
+  onProgress?.('Getting swap routes...');
 
-  const velarTokens = tokens.filter(t => t.dex === 'velar');
-  const alexTokens = tokens.filter(t => t.dex !== 'velar');
+  // Fetch swap params from Bitflow for each token
+  const enriched: (SweepToken & { dex: DexType; route: RouteQuote })[] = [];
 
-  console.log('[sweep] ALEX tokens:', alexTokens.length, '| Velar tokens:', velarTokens.length);
+  for (const t of tokens) {
+    try {
+      const humanAmount = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
+      const result: QuoteResult = await bitflow.getQuoteForRoute(t.principal, STX_TOKEN_ID, humanAmount);
+      const best = result.bestRoute;
 
-  // If all tokens are ALEX, use our sweep contract (single atomic tx)
-  if (velarTokens.length === 0) {
-    onProgress?.('Building transaction...');
-    const enriched = (await Promise.all(alexTokens.map(enrichToken)))
-      .filter(t => t?.principal?.includes('.')) as SweepToken[];
-    console.log('[sweep] ALEX-only path, enriched tokens:', enriched.map(t => `${t.principal} token0=${t.token0} token1=${t.token1}`));
-    const functionArgs = [
-      ...enriched.flatMap(tokenArgs),
-      makeUint(BigInt(minStxOut)),
-    ];
-    console.log('[sweep] Calling sweep contract:', SWEEP_CONTRACT, `sweep-to-stx-${enriched.length}`);
-    onProgress?.('Waiting for wallet signature...');
-    return new Promise((resolve, reject) => {
-      request('stx_callContract', {
-        contract: SWEEP_CONTRACT,
-        functionName: `sweep-to-stx-${enriched.length}`,
-        functionArgs,
-        network: 'mainnet',
-        postConditionMode: 'allow',
-        onFinish: (data: any) => { onProgress?.('Submitted!'); resolve(data.txid); },
-        onCancel: () => reject(new Error('Cancelled by user')),
-      } as any).catch((e: any) => { console.error('[sweep] request failed:', e); reject(e); });
-    });
+      if (!best || best.quote == null || best.quote <= 0) {
+        console.warn('[sweep] No route for', t.principal, '— skipping');
+        continue;
+      }
+
+      enriched.push({
+        ...t,
+        dex: dexFromRoute(best),
+        route: best,
+      });
+    } catch (e) {
+      console.warn('[sweep] getQuoteForRoute failed for', t.principal, e);
+    }
   }
 
-  // Single Velar token — use Velar's router directly
-  if (alexTokens.length === 0 && velarTokens.length === 1) {
-    const t = velarTokens[0];
-    onProgress?.('Getting Velar swap route...');
-    console.log('[sweep] Velar-only path for:', t.principal);
-    const humanIn = Number(BigInt(t.amount)) / Math.pow(10, t.decimals);
-    console.log('[sweep] humanIn:', humanIn);
-    const swapInstance: any = await new Promise((resolve, reject) => {
-      try {
-        const inst = velarSdk.getSwapInstance({ account: '', inToken: t.principal, outToken: VELAR_WSTX });
-        Promise.resolve(inst).then(resolve).catch(reject);
-      } catch (e) { reject(e); }
-    });
-    const swapOptions: any = await swapInstance.swap({ amount: humanIn });
-    console.log('[sweep] Velar swapOptions:', JSON.stringify({
-      contract: `${swapOptions.contractAddress}.${swapOptions.contractName}`,
-      functionName: swapOptions.functionName,
-      argsCount: swapOptions.functionArgs?.length,
-    }));
-    onProgress?.('Waiting for wallet signature...');
-    return new Promise((resolve, reject) => {
-      request('stx_callContract', {
-        contract: `${swapOptions.contractAddress}.${swapOptions.contractName}`,
-        functionName: swapOptions.functionName,
-        functionArgs: swapOptions.functionArgs,
-        network: 'mainnet',
-        postConditionMode: 'allow',
-        postConditions: swapOptions.postConditions ?? [],
-        onFinish: (data: any) => { onProgress?.('Submitted!'); resolve(data.txid); },
-        onCancel: () => reject(new Error('Cancelled by user')),
-      } as any).catch((e: any) => { console.error('[sweep] Velar request failed:', e); reject(e); });
-    });
-  }
+  if (enriched.length === 0) throw new Error('No valid routes found for any token');
 
-  // Mixed DEX — use sweep contract for all tokens (single atomic tx).
-  // Requires the redeployed velumx-sweep contract that uses SP1Y5...wstx as Velar output.
-  console.log('[sweep] Mixed DEX path');
   onProgress?.('Building transaction...');
-  const enriched = (await Promise.all(tokens.map(enrichToken)))
-    .filter(t => t?.principal?.includes('.')) as SweepToken[];
-  console.log('[sweep] Mixed enriched tokens:', enriched.map(t => `${t.principal} dex=${t.dex} token0=${t.token0} token1=${t.token1}`));
+
   const functionArgs = [
     ...enriched.flatMap(tokenArgs),
     makeUint(BigInt(minStxOut)),
   ];
+
+  console.log('[sweep] Calling', SWEEP_CONTRACT, `sweep-to-stx-${enriched.length}`, 'with', enriched.length, 'tokens');
+
   onProgress?.('Waiting for wallet signature...');
+
   return new Promise((resolve, reject) => {
     request('stx_callContract', {
       contract: SWEEP_CONTRACT,
@@ -565,6 +260,6 @@ export async function executeSweep(params: {
       postConditionMode: 'allow',
       onFinish: (data: any) => { onProgress?.('Submitted!'); resolve(data.txid); },
       onCancel: () => reject(new Error('Cancelled by user')),
-    } as any).catch((e: any) => { console.error('[sweep] Mixed request failed:', e); reject(e); });
+    } as any).catch((e: any) => { console.error('[sweep] request failed:', e); reject(e); });
   });
 }
