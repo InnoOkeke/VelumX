@@ -108,10 +108,19 @@ export async function POST(req: Request, { params }) {
 
 ## 6. Understanding Revenue & Fees
 
-1. **User Pays Your Fee**: The user pays your dApp's specific fee (e.g. 0.25 USDCx) as part of their transaction logic.
+The transaction flow depends on your selected **Sponsorship Policy**:
+
+### With USER_PAYS (Revenue Model)
+1. **User Pays Fee**: The user pays your dApp's specific fee (e.g. 0.25 USDCx) as part of their transaction logic.
 2. **SDK Reports Fee**: When you call `.sponsor(txHex, { feeAmount: '250000' })`, the SDK reports this volume to the Relayer.
-3. **DashBoard Analytics**: The Relayer matches your API Key to the reported fee. Your **USDCx Revenue** chart on the dashboard will update in real-time.
-4. **Relayer Pays Gas**: The relayer node uses its STX (0.001 STX per sponsor) to broadcast the transaction.
+3. **Dashboard Analytics**: The Relayer matches your API Key to the reported fee. Your **USDCx Revenue** chart on the dashboard will update in real-time.
+4. **Relayer Pays Gas**: The relayer node uses its STX to broadcast the transaction.
+
+### With DEVELOPER_SPONSORS (Growth Model)
+1. **User Pays Nothing**: The `feeAmount` is automatically ignored or set to `0` by the Relayer logic.
+2. **Zero-Token UX**: The user's wallet confirmation will show a total cost of 0 tokens and 0 STX.
+3. **Gas Expenditure**: Each transaction consumes a small amount of STX (typically 0.005 STX) from your Relayer Node's balance.
+4. **Volume Tracking**: Your Dashboard will track the **number of sponsored transactions** and total STX spent instead of token revenue.
 
 ---
 
