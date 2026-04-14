@@ -136,7 +136,8 @@ function tokenArgs(t: SweepToken & { dex: DexType; route: RouteQuote }): ReturnT
 
   // Known valid tokens on Mainnet that implement the respective DEX SIP-010 traits
   // This prevents the node typechecker from throwing BadTraitReference during batch swaps
-  const DUMMY_ARK_TOKEN = 'SP2C2YGWMTWH119M16216X2J0X7V4BD7Y2CA3EAC.usda-token';
+  // Replaced invalid DUMMY_ARK_TOKEN with the actual mainnet USDA token which resolves the c32 error
+  const DUMMY_ARK_TOKEN = 'SP2C2YGWMTWH119M16216X2J1ERL6WEA8JCQE0BNN.usda-token';
 
   // token0/token1 for Velar — from route token_path
   const tokenPath = t.route.tokenPath ?? t.route.route?.token_path ?? [];
