@@ -99,8 +99,16 @@ function dexFromRoute(route: RouteQuote | null | undefined): DexType {
 
 function makeContract(principal: string) {
   const dot = principal.indexOf('.');
-  if (dot === -1) throw new Error(`makeContract: invalid principal "${principal}"`);
-  return Cl.contractPrincipal(principal.slice(0, dot), principal.slice(dot + 1));
+  if (dot === -1) throw new Error(`makeContract: invalid principal "${principal}" (no dot)`);
+  
+  const addr = principal.slice(0, dot);
+  const name = principal.slice(dot + 1);
+  try {
+    return Cl.contractPrincipal(addr, name);
+  } catch (e: any) {
+    console.error(`Invalid C32 String! Failed to parse principal: "${principal}" => Addr: "${addr}"`);
+    throw new Error(`makeContract failed on principal: "${principal}". Error: ${e.message}`);
+  }
 }
 
 function makeUint(n: number | bigint) {
