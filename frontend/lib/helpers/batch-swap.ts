@@ -98,17 +98,14 @@ function dexFromRoute(route: RouteQuote | null | undefined): DexType {
 // ── Clarity arg helpers ───────────────────────────────────────────────────────
 
 function makeContract(principal: string) {
+  if (!principal || typeof principal !== 'string') return makeContract(WSTX_PRINCIPAL);
   const dot = principal.indexOf('.');
-  if (dot === -1) throw new Error(`makeContract: invalid principal "${principal}" (no dot)`);
-  
-  const addr = principal.slice(0, dot);
-  const name = principal.slice(dot + 1);
-  try {
-    return Cl.contractPrincipal(addr, name);
-  } catch (e: any) {
-    console.error(`Invalid C32 String! Failed to parse principal: "${principal}" => Addr: "${addr}"`);
-    throw new Error(`makeContract failed on principal: "${principal}". Error: ${e.message}`);
+  if (dot === -1) {
+    // If it's just "STX" or "stx", use the canonical wSTX principal as fallback
+    if (principal.toLowerCase() === 'stx') return makeContract(WSTX_PRINCIPAL);
+    throw new Error(`makeContract: invalid principal "${principal}" (no dot and not "STX")`);
   }
+  return Cl.contractPrincipal(principal.slice(0, dot), principal.slice(dot + 1));
 }
 
 function makeUint(n: number | bigint) {
@@ -136,8 +133,7 @@ function tokenArgs(t: SweepToken & { dex: DexType; route: RouteQuote }): ReturnT
 
   // Known valid tokens on Mainnet that implement the respective DEX SIP-010 traits
   // This prevents the node typechecker from throwing BadTraitReference during batch swaps
-  // Replaced invalid DUMMY_ARK_TOKEN with the actual mainnet USDA token which resolves the c32 error
-  const DUMMY_ARK_TOKEN = 'SP2C2YGWMTWH119M16216X2J1ERL6WEA8JCQE0BNN.usda-token';
+  const DUMMY_ARK_TOKEN = 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR.usda-token';
 
   // token0/token1 for Velar — from route token_path
   const tokenPath = t.route.tokenPath ?? t.route.route?.token_path ?? [];
@@ -150,9 +146,9 @@ function tokenArgs(t: SweepToken & { dex: DexType; route: RouteQuote }): ReturnT
   // The actual token contract being swept
   const targetToken = makeContract(t.principal);
 
-  const t0Contract = makeContract(t0Principal.includes('.') ? t0Principal : t.principal);
-  const t1Contract = makeContract(t1Principal.includes('.') ? t1Principal : WSTX_VELAR);
-  const tyContract = makeContract(tyPrincipal);
+  const t0Contract = makeContract(t0Principal && t0Principal.includes('.') ? t0Principal : WSTX_VELAR);
+  const t1Contract = makeContract(t1Principal && t1Principal.includes('.') ? t1Principal : WSTX_VELAR);
+  const tyContract = makeContract(tyPrincipal && tyPrincipal.includes('.') ? tyPrincipal : DUMMY_ARK_TOKEN);
 
   return [
     dexNum === 0 ? targetToken : makeContract(WSTX_PRINCIPAL),                        // token-alex 
@@ -161,10 +157,10 @@ function tokenArgs(t: SweepToken & { dex: DexType; route: RouteQuote }): ReturnT
     makeUint(dexNum),                                                                 // dex
     makeUint(factor),                                                                 // factor
     makeUint(poolId),                                                                 // pool-id
-    dexNum === 1 ? t0Contract : makeContract(WSTX_VELAR),                             // t0 (must be velar trait)
-    dexNum === 1 ? t1Contract : makeContract(WSTX_VELAR),                             // t1 (must be velar trait)
+    t0Contract,                                                                       // t0
+    t1Contract,                                                                       // t1
     FEE_TO_ARG,                                                                       // fee-to
-    tyContract,                                                                       // ty (must be ark trait)
+    tyContract,                                                                       // ty
     makeUint(BigInt(t.amount)),                                                       // amount
   ] as any;
 }
